@@ -19,11 +19,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Generate Gradle Wrapper if missing
+      - name: Generate Gradle Wrapper in isolation
         run: |
           if [ ! -f "gradlew" ]; then
-            echo "⚙️ gradlew not found, generating wrapper..."
+            echo "⚙️ gradlew not found, generating wrapper in isolated temp dir..."
+            mkdir -p /tmp/gradle-wrapper-gen
+            cd /tmp/gradle-wrapper-gen
             gradle wrapper --gradle-version 8.5
+            cp gradlew "$GITHUB_WORKSPACE/gradlew"
+            cp gradlew.bat "$GITHUB_WORKSPACE/gradlew.bat"
+            mkdir -p "$GITHUB_WORKSPACE/gradle/wrapper"
+            cp gradle/wrapper/gradle-wrapper.jar "$GITHUB_WORKSPACE/gradle/wrapper/gradle-wrapper.jar"
+            echo "✅ Wrapper generated and copied successfully."
           fi
 
       - name: Make gradlew executable
