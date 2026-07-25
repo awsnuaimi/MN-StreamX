@@ -19,40 +19,113 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 1. كشف المسار الصحيح للمشروع
-      - name: Find Project Root
-        id: find_root
+      # 1. البحث عن مجلد المشروع (app, android, أو الجذر)
+      - name: Detect project root
+        id: detect
         run: |
-          if [ -f "settings.gradle" ] && [ -f "build.gradle" ]; then
-            echo "dir=." >> $GITHUB_OUTPUT
-          elif [ -d "app" ] && [ -f "app/build.gradle" ]; then
-            echo "dir=app" >> $GITHUB_OUTPUT
+          if [ -d "app" ] && [ -f "app/build.gradle" ]; then
+            echo "root=app" >> $GITHUB_OUTPUT
+            echo "📁 Project found in 'app' folder."
+          elif [ -d "android" ] && [ -f "android/build.gradle" ]; then
+            echo "root=android" >> $GITHUB_OUTPUT
+            echo "📁 Project found in 'android' folder."
           else
-            echo "dir=." >> $GITHUB_OUTPUT
+            echo "root=." >> $GITHUB_OUTPUT
+            echo "📁 Assuming root folder."
           fi
 
-      # 2. الخطوة السحرية: إنشاء ملف gradlew إذا لم يكن موجوداً
-      - name: Ensure Gradle Wrapper exists
+      # 2. إنشاء ملفات Gradle الأساسية إذا لم تكن موجودة
+      - name: Ensure Gradle files exist
         run: |
-          cd ${{ steps.find_root.outputs.dir }}
-          echo "Checking for gradlew..."
-          if [ ! -f "gradlew" ]; then
-            echo "gradlew not found. Generating it now using 'gradle wrapper'..."
-            gradle wrapper
-          else
-            echo "gradlew found."
+          cd ${{ steps.detect.outputs.root }}
+          
+          # إنشاء settings.gradle إذا لم يكن موجوداً
+          if [ ! -f settings.gradle ]; then
+            echo "📄 Creating settings.gradle..."
+            cat <<EOF > settings.gradle
+            rootProject.name = "MN-StreamX"
+            include ':app'
+            EOF
           fi
+
+          # إنشاء build.gradle الرئيسي إذا لم يكن موجوداً
+          if [ ! -f build.gradle ]; then
+            echo "📄 Creating build.gradle..."
+            cat <<EOF > build.gradle
+            buildscript {
+                repositories {
+                    google()
+                    mavenCentral()
+                }
+                dependencies {
+                    classpath 'com.android.tools.build:gradle:8.5.2'
+                }
+            }
+            allprojects {
+                repositories {
+                    google()
+                    mavenCentral()
+                }
+            }
+            EOF
+          fi
+
+          # إنشاء app/build.gradle إذا لم يكن موجوداً (ضروري)
+          if [ -d "app" ] && [ ! -f "app/build.gradle" ]; then
+            echo "📄 Creating app/build.gradle..."
+            cat <<EOF > app/build.gradle
+            plugins {
+                id 'com.android.application'
+                id 'org.jetbrains.kotlin.android'
+            }
+            android {
+                namespace 'com.yourapp.iptv'
+                compileSdk 35
+                defaultConfig {
+                    applicationId 'com.yourapp.iptv'
+                    minSdk 29
+                    targetSdk 35
+                    versionCode 1
+                    versionName '1.0'
+                }
+                buildFeatures {
+                    compose true
+                }
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+                kotlinOptions {
+                    jvmTarget = '17'
+                }
+            }
+            dependencies {
+                implementation 'androidx.core:core-ktx:1.13.1'
+                implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.4'
+                implementation 'androidx.activity:activity-compose:1.9.1'
+                implementation platform('androidx.compose:compose-bom:2024.09.03')
+                implementation 'androidx.compose.ui:ui'
+                implementation 'androidx.compose.material3:material3'
+            }
+            EOF
+          fi
+
+      # 3. إنشاء Gradle Wrapper
+      - name: Generate Gradle Wrapper
+        run: |
+          cd ${{ steps.detect.outputs.root }}
+          gradle wrapper
           chmod +x gradlew
 
-      # 3. بناء ملف APK
+      # 4. بناء APK
       - name: Build Debug APK
         run: |
-          cd ${{ steps.find_root.outputs.dir }}
+          cd ${{ steps.detect.outputs.root }}
           ./gradlew assembleDebug
 
-      # 4. رفع الملف الناتج
+      # 5. رفع APK
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: ${{ steps.find_root.outputs.dir }}/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.detect.outputs.root }}/build/outputs/apk/debug/app-debug.apk
