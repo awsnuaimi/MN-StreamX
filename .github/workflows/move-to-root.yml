@@ -58,3 +58,20 @@ jobs:
             git commit -m "Move project contents from IPTVPlayer/ to repo root"
             git push
           fi
+          name: One-time - Move project to root
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
