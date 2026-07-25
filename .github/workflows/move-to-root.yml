@@ -3,6 +3,9 @@ name: One-time - Move project to root
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   move:
     runs-on: ubuntu-latest
@@ -11,6 +14,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Move IPTVPlayer contents to root
         run: |
@@ -22,7 +26,6 @@ jobs:
           echo "📂 Contents of IPTVPlayer before move:"
           ls -la IPTVPlayer
 
-          # نقل كل شيء (بما فيها الملفات المخفية) إلى الجذر
           shopt -s dotglob
           for item in IPTVPlayer/*; do
             name=$(basename "$item")
@@ -34,7 +37,6 @@ jobs:
           done
           shopt -u dotglob
 
-          # حذف المجلد إذا صار فاضي
           if [ -z "$(ls -A IPTVPlayer 2>/dev/null)" ]; then
             rmdir IPTVPlayer
             echo "✅ IPTVPlayer folder removed (was empty after move)."
@@ -58,20 +60,3 @@ jobs:
             git commit -m "Move project contents from IPTVPlayer/ to repo root"
             git push
           fi
-          name: One-time - Move project to root
-
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  move:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
