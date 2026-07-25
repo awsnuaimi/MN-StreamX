@@ -31,8 +31,8 @@ jobs:
             echo "dir=." >> $GITHUB_OUTPUT
           fi
 
-      # 2. إنشاء ملفات Gradle الناقصة (بأسلوب echo الآمن، لا يوجد هنا <<EOF)
-      - name: Ensure Gradle files exist
+      # 2. إنشاء ملفات Gradle صحيحة تماماً (هذا هو الحل السحري)
+      - name: Create correct Gradle files
         run: |
           cd ${{ steps.find_root.outputs.dir }}
           
@@ -41,69 +41,73 @@ jobs:
             mkdir app
           fi
 
-          # إنشاء settings.gradle إذا كان مفقوداً
-          if [ ! -f settings.gradle ]; then
-            echo "rootProject.name = \"MN-StreamX\"" > settings.gradle
-            echo "include ':app'" >> settings.gradle
-          fi
+          # ---- 1. إنشاء settings.gradle ----
+          echo "rootProject.name = \"MN-StreamX\"" > settings.gradle
+          echo "include ':app'" >> settings.gradle
 
-          # إنشاء build.gradle الجذر إذا كان مفقوداً
-          if [ ! -f build.gradle ]; then
-            echo "buildscript {" > build.gradle
-            echo "    repositories {" >> build.gradle
-            echo "        google()" >> build.gradle
-            echo "        mavenCentral()" >> build.gradle
-            echo "    }" >> build.gradle
-            echo "    dependencies {" >> build.gradle
-            echo "        classpath 'com.android.tools.build:gradle:8.5.2'" >> build.gradle
-            echo "    }" >> build.gradle
-            echo "}" >> build.gradle
-            echo "allprojects {" >> build.gradle
-            echo "    repositories {" >> build.gradle
-            echo "        google()" >> build.gradle
-            echo "        mavenCentral()" >> build.gradle
-            echo "    }" >> build.gradle
-            echo "}" >> build.gradle
-          fi
+          # ---- 2. إنشاء build.gradle الرئيسي (مع classpath لكوتلن) ----
+          cat > build.gradle << 'EOF'
+          buildscript {
+              ext.kotlin_version = '1.9.24'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.5.2'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
 
-          # إنشاء app/build.gradle إذا كان مفقوداً
-          if [ ! -f app/build.gradle ]; then
-            echo "plugins {" > app/build.gradle
-            echo "    id 'com.android.application'" >> app/build.gradle
-            echo "    id 'org.jetbrains.kotlin.android'" >> app/build.gradle
-            echo "}" >> app/build.gradle
-            echo "android {" >> app/build.gradle
-            echo "    namespace 'com.yourapp.iptv'" >> app/build.gradle
-            echo "    compileSdk 35" >> app/build.gradle
-            echo "    defaultConfig {" >> app/build.gradle
-            echo "        applicationId 'com.yourapp.iptv'" >> app/build.gradle
-            echo "        minSdk 29" >> app/build.gradle
-            echo "        targetSdk 35" >> app/build.gradle
-            echo "        versionCode 1" >> app/build.gradle
-            echo "        versionName '1.0'" >> app/build.gradle
-            echo "    }" >> app/build.gradle
-            echo "    buildFeatures {" >> app/build.gradle
-            echo "        compose true" >> app/build.gradle
-            echo "    }" >> app/build.gradle
-            echo "    compileOptions {" >> app/build.gradle
-            echo "        sourceCompatibility JavaVersion.VERSION_17" >> app/build.gradle
-            echo "        targetCompatibility JavaVersion.VERSION_17" >> app/build.gradle
-            echo "    }" >> app/build.gradle
-            echo "    kotlinOptions {" >> app/build.gradle
-            echo "        jvmTarget = '17'" >> app/build.gradle
-            echo "    }" >> app/build.gradle
-            echo "}" >> app/build.gradle
-            echo "dependencies {" >> app/build.gradle
-            echo "    implementation 'androidx.core:core-ktx:1.13.1'" >> app/build.gradle
-            echo "    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.4'" >> app/build.gradle
-            echo "    implementation 'androidx.activity:activity-compose:1.9.1'" >> app/build.gradle
-            echo "    implementation platform('androidx.compose:compose-bom:2024.09.03')" >> app/build.gradle
-            echo "    implementation 'androidx.compose.ui:ui'" >> app/build.gradle
-            echo "    implementation 'androidx.compose.material3:material3'" >> app/build.gradle
-            echo "}" >> app/build.gradle
-          fi
+          # ---- 3. إنشاء app/build.gradle (بأسلوب apply plugin) ----
+          cat > app/build.gradle << 'EOF'
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
 
-      # 3. إنشاء Gradle Wrapper وتنظيفه
+          android {
+              namespace 'com.yourapp.iptv'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.yourapp.iptv'
+                  minSdk 29
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+
+              buildFeatures {
+                  compose true
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.13.1'
+              implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.4'
+              implementation 'androidx.activity:activity-compose:1.9.1'
+              implementation platform('androidx.compose:compose-bom:2024.09.03')
+              implementation 'androidx.compose.ui:ui'
+              implementation 'androidx.compose.material3:material3'
+          }
+          EOF
+
+      # 3. إنشاء Gradle Wrapper
       - name: Generate Gradle Wrapper
         run: |
           cd ${{ steps.find_root.outputs.dir }}
