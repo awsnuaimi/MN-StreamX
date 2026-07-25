@@ -20,13 +20,54 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # خطوة فحص: نرى ما هي الملفات الموجودة حالياً
+      - name: Check existing files
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Files:"
+          ls -la
+
+      # خطوة سحرية: إنشاء ملفات Gradle الأساسية إذا كانت مفقودة
+      - name: Ensure Gradle build files exist
+        run: |
+          if [ ! -f settings.gradle ]; then
+            echo "Creating settings.gradle..."
+            echo 'rootProject.name = "MN-StreamX"' > settings.gradle
+            echo 'include ":app"' >> settings.gradle
+          else
+            echo "settings.gradle already exists."
+          fi
+          
+          if [ ! -f build.gradle ]; then
+            echo "Creating build.gradle..."
+            echo "// Top-level build file where you can add configuration options common to all sub-projects/modules." > build.gradle
+            echo "buildscript {" >> build.gradle
+            echo "    repositories {" >> build.gradle
+            echo "        google()" >> build.gradle
+            echo "        mavenCentral()" >> build.gradle
+            echo "    }" >> build.gradle
+            echo "    dependencies {" >> build.gradle
+            echo "        classpath 'com.android.tools.build:gradle:8.5.2'" >> build.gradle
+            echo "    }" >> build.gradle
+            echo "}" >> build.gradle
+            echo "" >> build.gradle
+            echo "allprojects {" >> build.gradle
+            echo "    repositories {" >> build.gradle
+            echo "        google()" >> build.gradle
+            echo "        mavenCentral()" >> build.gradle
+            echo "    }" >> build.gradle
+            echo "}" >> build.gradle
+          else
+            echo "build.gradle already exists."
+          fi
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # هذه الخطوة هي السر: ستحذف الملفات القديمة وتنشئ ملفات جديدة صحيحة
-      - name: Regenerate correct Gradle Wrapper
+      # الآن بعد أن أصبحت الملفات موجودة، نطلب من Gradle إنشاء Wrapper
+      - name: Generate correct Gradle Wrapper
         run: |
-          rm -f gradlew gradlew.bat
           gradle wrapper
           chmod +x gradlew
 
