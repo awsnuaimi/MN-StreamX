@@ -1,0 +1,60 @@
+name: One-time - Move project to root
+
+on:
+  workflow_dispatch:
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Move IPTVPlayer contents to root
+        run: |
+          if [ ! -d "IPTVPlayer" ]; then
+            echo "❌ IPTVPlayer folder not found. Nothing to move."
+            exit 1
+          fi
+
+          echo "📂 Contents of IPTVPlayer before move:"
+          ls -la IPTVPlayer
+
+          # نقل كل شيء (بما فيها الملفات المخفية) إلى الجذر
+          shopt -s dotglob
+          for item in IPTVPlayer/*; do
+            name=$(basename "$item")
+            if [ -e "$name" ] && [ "$name" != "IPTVPlayer" ]; then
+              echo "⚠️ $name already exists at root, skipping to avoid overwrite."
+              continue
+            fi
+            git mv "$item" "$name"
+          done
+          shopt -u dotglob
+
+          # حذف المجلد إذا صار فاضي
+          if [ -z "$(ls -A IPTVPlayer 2>/dev/null)" ]; then
+            rmdir IPTVPlayer
+            echo "✅ IPTVPlayer folder removed (was empty after move)."
+          else
+            echo "⚠️ IPTVPlayer folder still has leftover files:"
+            ls -la IPTVPlayer
+          fi
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push
+        run: |
+          git status
+          git add -A
+          if git diff --cached --quiet; then
+            echo "ℹ️ No changes to commit."
+          else
+            git commit -m "Move project contents from IPTVPlayer/ to repo root"
+            git push
+          fi
