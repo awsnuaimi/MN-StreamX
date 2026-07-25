@@ -1,0 +1,22 @@
+buildscript {
+    ext.kotlin_version = '1.9.24'
+    ext.hilt_version = '2.51.1'
+    ext.room_version = '2.6.1'
+    ext.media3_version = '1.4.1'
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.5.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath "com.google.dagger:hilt-android-gradle-plugin:$hilt_version"
+        classpath "androidx.room:room-gradle-plugin:$room_version"
+    }
+}
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
