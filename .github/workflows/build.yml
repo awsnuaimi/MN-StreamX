@@ -20,62 +20,93 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # خطوة فحص: نرى ما هي الملفات الموجودة حالياً
+      # 1. فحص الملفات والمجلدات الموجودة
       - name: Check existing files
         run: |
           echo "Current directory:"
           pwd
-          echo "Files:"
+          echo "Files and folders:"
           ls -la
 
-      # خطوة سحرية: إنشاء ملفات Gradle الأساسية إذا كانت مفقودة
+      # 2. العثور على مجلد المشروع (عادة 'app')
+      - name: Find project folder
+        id: find_folder
+        run: |
+          if [ -d "app" ]; then
+            echo "folder=app" >> $GITHUB_OUTPUT
+            echo "Found 'app' directory."
+          elif [ -d "android" ]; then
+            echo "folder=android" >> $GITHUB_OUTPUT
+            echo "Found 'android' directory."
+          else
+            echo "folder=." >> $GITHUB_OUTPUT
+            echo "No 'app' or 'android' directory found, using root."
+          fi
+
+      # 3. إنشاء ملفات Gradle الأساسية إذا لم تكن موجودة
       - name: Ensure Gradle build files exist
         run: |
-          if [ ! -f settings.gradle ]; then
-            echo "Creating settings.gradle..."
-            echo 'rootProject.name = "MN-StreamX"' > settings.gradle
-            echo 'include ":app"' >> settings.gradle
-          else
-            echo "settings.gradle already exists."
-          fi
-          
+          # إنشاء build.gradle الرئيسي إذا لم يكن موجوداً
           if [ ! -f build.gradle ]; then
             echo "Creating build.gradle..."
-            echo "// Top-level build file where you can add configuration options common to all sub-projects/modules." > build.gradle
-            echo "buildscript {" >> build.gradle
-            echo "    repositories {" >> build.gradle
-            echo "        google()" >> build.gradle
-            echo "        mavenCentral()" >> build.gradle
-            echo "    }" >> build.gradle
-            echo "    dependencies {" >> build.gradle
-            echo "        classpath 'com.android.tools.build:gradle:8.5.2'" >> build.gradle
-            echo "    }" >> build.gradle
-            echo "}" >> build.gradle
-            echo "" >> build.gradle
-            echo "allprojects {" >> build.gradle
-            echo "    repositories {" >> build.gradle
-            echo "        google()" >> build.gradle
-            echo "        mavenCentral()" >> build.gradle
-            echo "    }" >> build.gradle
-            echo "}" >> build.gradle
+            cat <<EOF > build.gradle
+            buildscript {
+                repositories {
+                    google()
+                    mavenCentral()
+                }
+                dependencies {
+                    classpath 'com.android.tools.build:gradle:8.5.2'
+                }
+            }
+            allprojects {
+                repositories {
+                    google()
+                    mavenCentral()
+                }
+            }
+            EOF
           else
             echo "build.gradle already exists."
+          fi
+
+          # إنشاء settings.gradle ديناميكياً بناءً على المجلد الموجود
+          if [ ! -f settings.gradle ]; then
+            echo "Creating settings.gradle..."
+            FOLDER="${{ steps.find_folder.outputs.folder }}"
+            if [ "$FOLDER" == "app" ] || [ "$FOLDER" == "android" ]; then
+              echo "rootProject.name = \"MN-StreamX\"" > settings.gradle
+              echo "include ':$FOLDER'" >> settings.gradle
+            else
+              echo "rootProject.name = \"MN-StreamX\"" > settings.gradle
+            fi
+            echo "settings.gradle created with include ':$FOLDER'."
+          else
+            echo "settings.gradle already exists."
           fi
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # الآن بعد أن أصبحت الملفات موجودة، نطلب من Gradle إنشاء Wrapper
+      # 4. إنشاء Gradle Wrapper جديد
       - name: Generate correct Gradle Wrapper
         run: |
           gradle wrapper
           chmod +x gradlew
 
+      # 5. بناء APK
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: |
+          FOLDER="${{ steps.find_folder.outputs.folder }}"
+          if [ "$FOLDER" == "app" ] || [ "$FOLDER" == "android" ]; then
+            cd $FOLDER
+            ../gradlew assembleDebug
+          else
+            ./gradlew assembleDebug
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.find_folder.outputs.folder }}/build/outputs/apk/debug/app-debug.apk
