@@ -31,7 +31,7 @@ jobs:
             echo "dir=." >> $GITHUB_OUTPUT
           fi
 
-      # 2. إنشاء ملفات Gradle صحيحة تماماً (هذا هو الحل السحري)
+      # 2. إنشاء ملفات Gradle الأساسية (settings, build, app/build)
       - name: Create correct Gradle files
         run: |
           cd ${{ steps.find_root.outputs.dir }}
@@ -41,11 +41,13 @@ jobs:
             mkdir app
           fi
 
-          # ---- 1. إنشاء settings.gradle ----
-          echo "rootProject.name = \"MN-StreamX\"" > settings.gradle
-          echo "include ':app'" >> settings.gradle
+          # ---- settings.gradle ----
+          cat > settings.gradle << 'EOF'
+          rootProject.name = "MN-StreamX"
+          include ':app'
+          EOF
 
-          # ---- 2. إنشاء build.gradle الرئيسي (مع classpath لكوتلن) ----
+          # ---- build.gradle الرئيسي ----
           cat > build.gradle << 'EOF'
           buildscript {
               ext.kotlin_version = '1.9.24'
@@ -66,7 +68,7 @@ jobs:
           }
           EOF
 
-          # ---- 3. إنشاء app/build.gradle (بأسلوب apply plugin) ----
+          # ---- app/build.gradle ----
           cat > app/build.gradle << 'EOF'
           apply plugin: 'com.android.application'
           apply plugin: 'kotlin-android'
@@ -107,20 +109,31 @@ jobs:
           }
           EOF
 
-      # 3. إنشاء Gradle Wrapper
+      # 3. إنشاء gradle.properties (هذا هو الحل للخطأ الحالي)
+      - name: Create gradle.properties
+        run: |
+          cd ${{ steps.find_root.outputs.dir }}
+          cat > gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.suppressUnsupportedCompileSdk=35
+          EOF
+
+      # 4. إنشاء Gradle Wrapper
       - name: Generate Gradle Wrapper
         run: |
           cd ${{ steps.find_root.outputs.dir }}
           gradle wrapper
           chmod +x gradlew
 
-      # 4. بناء APK
+      # 5. بناء APK
       - name: Build Debug APK
         run: |
           cd ${{ steps.find_root.outputs.dir }}
           ./gradlew assembleDebug
 
-      # 5. رفع APK
+      # 6. رفع APK
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
