@@ -4,6 +4,7 @@ import com.yourapp.iptv.data.model.EpgXmltvDto
 import java.io.StringReader
 import javax.xml.parsers.SAXParserFactory
 import org.xml.sax.Attributes
+import org.xml.sax.InputSource
 import org.xml.sax.helpers.DefaultHandler
 
 class EpgParser {
@@ -53,7 +54,7 @@ class EpgParser {
                 }
             }
 
-            saxParser.parse(StringReader(xmlContent), handler)
+            saxParser.parse(InputSource(StringReader(xmlContent)), handler)
         } catch (e: Exception) {
             e.printStackTrace()
         }

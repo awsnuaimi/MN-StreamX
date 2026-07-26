@@ -91,9 +91,11 @@ fun SettingsScreen(
         )
 
         // رسالة الخطأ
-        if (uiState.errorMessage != null) {
+        // رسالة الخطأ
+        val errorMessage = uiState.errorMessage
+        if (errorMessage != null) {
             Text(
-                text = uiState.errorMessage,
+                text = errorMessage,
                 color = MaterialTheme.colorScheme.error,
                 fontSize = 14.sp
             )
