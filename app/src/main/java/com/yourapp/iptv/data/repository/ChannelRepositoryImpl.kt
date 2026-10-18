@@ -11,6 +11,8 @@ import com.yourapp.iptv.data.source.xtream.XtreamDataSource
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.repository.ChannelRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class ChannelRepositoryImpl(
@@ -19,75 +21,54 @@ class ChannelRepositoryImpl(
     private val channelDao: ChannelDao,
     private val favoriteDao: FavoriteDao
 ) : ChannelRepository {
+    private val importLock = Mutex()
 
     override suspend fun getChannels(): List<Channel> = withContext(Dispatchers.IO) {
-        // 1. التحقق من الـ Cache
-        ChannelCache.getChannels()?.let { return@withContext it }
-
-        // 2. جلب القنوات من قاعدة البيانات
-        val entities = channelDao.getAllChannels()
-        if (entities.isNotEmpty()) {
-            val channels = entities.map { it.toDomain() }
-            ChannelCache.saveChannels(channels)
-            return@withContext channels
-        }
-
-        // 3. إذا لم يوجد شيء، نرجع قائمة فارغة (سيتم التحميل لاحقاً)
-        emptyList()
+        val favorites = favoriteDao.getAllFavorites().map { it.channelId }.toSet()
+        channelDao.getAllChannels().map { it.toDomain().copy(isFavorite = it.id in favorites) }
     }
 
-    override suspend fun search(query: String): List<Channel> = withContext(Dispatchers.IO) {
-        // بحث بسيط في القنوات المحملة
+    override suspend fun getChannel(id: String): Channel? = withContext(Dispatchers.IO) {
+        channelDao.getChannel(id)?.toDomain()
+    }
+
+    override suspend fun search(query: String): List<Channel> =
         getChannels().filter { it.name.contains(query, ignoreCase = true) }
+
+    override suspend fun getFavorites(): List<Channel> = getChannels().filter { it.isFavorite }
+
+    override suspend fun addFavorite(channel: Channel) = withContext(Dispatchers.IO) {
+        favoriteDao.addFavorite(FavoriteEntity(channel.id))
     }
 
-    override suspend fun getFavorites(): List<Channel> = withContext(Dispatchers.IO) {
-        val favoriteIds = favoriteDao.getAllFavorites().map { it.channelId }
-        getChannels().filter { it.id in favoriteIds }
+    override suspend fun removeFavorite(channel: Channel) = withContext(Dispatchers.IO) {
+        favoriteDao.removeFavorite(channel.id)
     }
 
-    override suspend fun addFavorite(channel: Channel) {
+    override suspend fun loadFromM3u(url: String): List<Channel> = importLock.withLock {
+        val channels = m3uDataSource.fetchChannels(url).map { it.toDomain() }
         withContext(Dispatchers.IO) {
-            favoriteDao.addFavorite(FavoriteEntity(channel.id))
+            channelDao.replaceAll(channels.map { it.toEntity() })
+            ChannelCache.clearCache()
         }
+        getChannels()
     }
 
-    override suspend fun removeFavorite(channel: Channel) {
-        withContext(Dispatchers.IO) {
-            favoriteDao.removeFavorite(channel.id)
+    suspend fun loadFromXtream(serverUrl: String, username: String, password: String): List<Channel> =
+        importLock.withLock {
+            val channels = withContext(Dispatchers.IO) {
+                xtreamDataSource.fetchChannels(serverUrl, username, password).map {
+                    Channel(it.streamId, it.name, it.icon, it.streamUrl, it.categoryId)
+                }
+            }
+            if (channels.isNotEmpty()) {
+                withContext(Dispatchers.IO) {
+                    channelDao.replaceAll(channels.map { it.toEntity() })
+                    ChannelCache.clearCache()
+                }
+            }
+            channels
         }
-    }
 
-    // دوال مساعدة لتحميل القنوات من المصادر المختلفة
-    suspend fun loadFromM3u(url: String): List<Channel> = withContext(Dispatchers.IO) {
-        val dtos = m3uDataSource.fetchChannels(url)
-        val channels = dtos.map { it.toDomain() }
-        // حفظ في قاعدة البيانات
-        val entities = channels.map { 
-            ChannelEntity(it.id, it.name, it.logoUrl, it.streamUrl, it.group)
-        }
-        channelDao.insertChannels(entities)
-        ChannelCache.saveChannels(channels)
-        channels
-    }
-
-    suspend fun loadFromXtream(serverUrl: String, username: String, password: String): List<Channel> = withContext(Dispatchers.IO) {
-        val dtos = xtreamDataSource.fetchChannels(serverUrl, username, password)
-        val channels = dtos.map { 
-            Channel(
-                id = it.streamId,
-                name = it.name,
-                logoUrl = it.icon,
-                streamUrl = it.streamUrl,
-                group = it.categoryId
-            )
-        }
-        // حفظ في قاعدة البيانات
-        val entities = channels.map { 
-            ChannelEntity(it.id, it.name, it.logoUrl, it.streamUrl, it.group)
-        }
-        channelDao.insertChannels(entities)
-        ChannelCache.saveChannels(channels)
-        channels
-    }
+    private fun Channel.toEntity() = ChannelEntity(id, name, logoUrl, streamUrl, group)
 }
