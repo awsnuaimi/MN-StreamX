@@ -2,118 +2,99 @@ package com.yourapp.iptv.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.yourapp.iptv.data.datastore.SettingsDataStore
+import com.yourapp.iptv.domain.model.AppSettings
+import com.yourapp.iptv.domain.repository.SettingsRepository
+import com.yourapp.iptv.ui.state.SettingsUiState
 import com.yourapp.iptv.util.validator.UrlValidator
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val settingsDataStore: SettingsDataStore
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+    private val state = MutableStateFlow(SettingsUiState())
+    val uiState = state.asStateFlow()
 
-    // حالة الشاشة
-    private val _uiState = MutableStateFlow(SettingsUiState())
-    val uiState: StateFlow<SettingsUiState> = _uiState
+    init { loadSavedSettings() }
 
-    init {
-        loadSavedSettings()
-    }
-
-    private fun loadSavedSettings() {
+    fun loadSavedSettings() {
+        if (state.value.isSaving) return
+        state.update { it.copy(isLoading = true, loadFailed = false, errorMessage = null) }
         viewModelScope.launch {
-            val m3uUrl = settingsDataStore.getM3uUrl().first()
-            val xtreamData = settingsDataStore.getXtreamData().first()
-            val epgUrl = settingsDataStore.getEpgUrl().first()
-
-            _uiState.value = _uiState.value.copy(
-                m3uUrl = m3uUrl ?: "",
-                xtreamServer = xtreamData.first ?: "",
-                xtreamUsername = xtreamData.second ?: "",
-                xtreamPassword = xtreamData.third ?: "",
-                epgUrl = epgUrl ?: ""
-            )
+            try {
+                val settings = settingsRepository.observeSettings().first()
+                state.value = SettingsUiState(settings = settings, isLoading = false)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                state.update {
+                    it.copy(isLoading = false, loadFailed = true, errorMessage = "تعذر قراءة الإعدادات المحفوظة.")
+                }
+            }
         }
     }
 
-    fun updateM3uUrl(url: String) {
-        _uiState.value = _uiState.value.copy(m3uUrl = url)
-    }
+    fun updateM3uUrl(value: String) = edit { copy(m3uUrl = value) }
+    fun updateXtreamServer(value: String) = edit { copy(xtreamServer = value) }
+    fun updateXtreamUsername(value: String) = edit { copy(xtreamUsername = value) }
+    fun updateXtreamPassword(value: String) = edit { copy(xtreamPassword = value) }
+    fun updateEpgUrl(value: String) = edit { copy(epgUrl = value) }
 
-    fun updateXtreamServer(server: String) {
-        _uiState.value = _uiState.value.copy(xtreamServer = server)
-    }
-
-    fun updateXtreamUsername(username: String) {
-        _uiState.value = _uiState.value.copy(xtreamUsername = username)
-    }
-
-    fun updateXtreamPassword(password: String) {
-        _uiState.value = _uiState.value.copy(xtreamPassword = password)
-    }
-
-    fun updateEpgUrl(url: String) {
-        _uiState.value = _uiState.value.copy(epgUrl = url)
+    private fun edit(change: AppSettings.() -> AppSettings) {
+        if (state.value.isLoading || state.value.isSaving || state.value.loadFailed) return
+        state.update { it.copy(settings = it.settings.change(), errorMessage = null, isSaved = false) }
     }
 
     fun saveSettings() {
+        val current = state.value
+        if (current.isLoading || current.isSaving || current.loadFailed) return
+        val settings = current.settings.let {
+            it.copy(
+                m3uUrl = it.m3uUrl.trim(),
+                xtreamServer = it.xtreamServer.trim(),
+                xtreamUsername = it.xtreamUsername.trim(),
+                epgUrl = it.epgUrl.trim()
+            )
+        }
+        val error = validationError(settings)
+        if (error != null) {
+            state.update { it.copy(errorMessage = error, isSaved = false) }
+            return
+        }
+        state.update { it.copy(isSaving = true, errorMessage = null, isSaved = false) }
         viewModelScope.launch {
-            val state = _uiState.value
-
-            // التحقق من صحة الروابط
-            val isValidM3u = UrlValidator.isValidUrl(state.m3uUrl)
-            val isValidEpg = state.epgUrl.isEmpty() || UrlValidator.isValidUrl(state.epgUrl)
-
-            if (state.m3uUrl.isNotEmpty() && !isValidM3u) {
-                _uiState.value = _uiState.value.copy(
-                    isValid = false,
-                    errorMessage = "رابط M3U غير صالح. يرجى التأكد من أن الرابط يبدأ بـ http:// أو https://"
-                )
-                return@launch
+            try {
+                settingsRepository.saveSettings(settings)
+                state.update { it.copy(settings = settings, isSaving = false, isSaved = true) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                state.update { it.copy(isSaving = false, errorMessage = "تعذر حفظ الإعدادات. أعد المحاولة.") }
             }
-
-            if (state.epgUrl.isNotEmpty() && !isValidEpg) {
-                _uiState.value = _uiState.value.copy(
-                    isValid = false,
-                    errorMessage = "رابط EPG غير صالح. يرجى التأكد من أن الرابط يبدأ بـ http:// أو https://"
-                )
-                return@launch
-            }
-
-            // حفظ الإعدادات
-            settingsDataStore.saveM3uUrl(state.m3uUrl)
-            settingsDataStore.saveXtreamData(
-                server = state.xtreamServer,
-                username = state.xtreamUsername,
-                password = state.xtreamPassword
-            )
-            settingsDataStore.saveEpgUrl(state.epgUrl)
-
-            _uiState.value = _uiState.value.copy(
-                isValid = true,
-                isSaved = true,
-                errorMessage = null
-            )
         }
     }
 
-    fun resetSaveStatus() {
-        _uiState.value = _uiState.value.copy(isSaved = false)
+    fun resetSaveStatus() { state.update { it.copy(isSaved = false) } }
+
+    private fun validationError(settings: AppSettings): String? {
+        val hasXtream = listOf(settings.xtreamServer, settings.xtreamUsername, settings.xtreamPassword)
+            .any { it.isNotBlank() }
+        return when {
+            settings.m3uUrl.isBlank() && !hasXtream -> "أدخل رابط قائمة M3U أو بيانات المصدر."
+            settings.m3uUrl.isNotBlank() && !UrlValidator.isValidUrl(settings.m3uUrl) ->
+                "رابط M3U غير صالح. استخدم رابط http:// أو https:// كاملًا."
+            hasXtream && (settings.xtreamServer.isBlank() || settings.xtreamUsername.isBlank() ||
+                settings.xtreamPassword.isBlank()) -> "أكمل السيرفر واسم المستخدم وكلمة المرور."
+            hasXtream && !UrlValidator.isValidUrl(settings.xtreamServer) -> "عنوان السيرفر غير صالح."
+            settings.epgUrl.isNotBlank() && !UrlValidator.isValidUrl(settings.epgUrl) -> "رابط EPG غير صالح."
+            else -> null
+        }
     }
 }
-
-// حالة واجهة الإعدادات
-data class SettingsUiState(
-    val m3uUrl: String = "",
-    val xtreamServer: String = "",
-    val xtreamUsername: String = "",
-    val xtreamPassword: String = "",
-    val epgUrl: String = "",
-    val isValid: Boolean = true,
-    val isSaved: Boolean = false,
-    val errorMessage: String? = null
-)

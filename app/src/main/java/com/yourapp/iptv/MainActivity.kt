@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.yourapp.iptv.ui.screen.settings.SettingsScreen
+import com.yourapp.iptv.navigation.AppNavGraph
 import com.yourapp.iptv.ui.theme.IPTVAppTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -17,16 +17,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             IPTVAppTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    // في هذه المرحلة، نعرض شاشة الإعدادات فقط
-                    SettingsScreen(
-                        onSettingsSaved = {
-                            // هنا سننتقل لاحقاً إلى الشاشة الرئيسية
-                        }
-                    )
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    AppNavGraph()
                 }
             }
         }

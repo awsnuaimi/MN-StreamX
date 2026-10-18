@@ -1,0 +1,104 @@
+package com.yourapp.iptv.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.yourapp.iptv.domain.model.PlaylistLoadException
+import com.yourapp.iptv.domain.repository.PlaylistRepository
+import com.yourapp.iptv.domain.repository.SettingsRepository
+import com.yourapp.iptv.ui.state.HomeUiState
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import com.yourapp.iptv.di.DefaultDispatcher
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+
+@HiltViewModel
+class HomeViewModel @Inject constructor(
+    private val settings: SettingsRepository,
+    private val playlists: PlaylistRepository,
+    @DefaultDispatcher private val background: CoroutineDispatcher
+) : ViewModel() {
+    private val state = MutableStateFlow(HomeUiState())
+    val uiState = state.asStateFlow()
+    private var loadJob: Job? = null
+    private var filterJob: Job? = null
+
+    init { refresh() }
+
+    fun refresh() {
+        if (loadJob?.isActive == true) return
+        state.update { it.copy(isLoading = true, errorMessage = null) }
+        loadJob = viewModelScope.launch {
+            try {
+                val source = settings.observeSettings().first().m3uUrl
+                if (source.isBlank()) {
+                    state.value = HomeUiState(isLoading = false, needsSource = true)
+                    return@launch
+                }
+                val channels = playlists.loadPlaylist(source).channels
+                val groups = withContext(background) {
+                    channels.mapNotNull { it.group }.distinct().sorted()
+                }
+                state.update {
+                    it.copy(
+                        channels = channels,
+                        groups = groups,
+                        selectedGroup = it.selectedGroup?.takeIf { group -> group in groups },
+                        isLoading = false,
+                        needsSource = false,
+                        errorMessage = null
+                    )
+                }
+                filterChannels()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                state.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = (error as? PlaylistLoadException)?.message
+                            ?: "تعذر تحميل القنوات. تحقق من الشبكة والإعدادات ثم أعد المحاولة."
+                    )
+                }
+            }
+        }
+    }
+
+    fun updateQuery(query: String) {
+        state.update { it.copy(query = query, selectedChannelId = null) }
+        filterChannels()
+    }
+
+    fun selectGroup(group: String?) {
+        state.update { it.copy(selectedGroup = group, selectedChannelId = null) }
+        filterChannels()
+    }
+
+    fun clearFilters() {
+        state.update { it.copy(query = "", selectedGroup = null, selectedChannelId = null) }
+        filterChannels()
+    }
+
+    fun selectChannel(id: String) { state.update { it.copy(selectedChannelId = id) } }
+
+    private fun filterChannels() {
+        filterJob?.cancel()
+        val snapshot = state.value
+        filterJob = viewModelScope.launch {
+            val visible = withContext(background) {
+                snapshot.channels.filter {
+                    (snapshot.selectedGroup == null || it.group == snapshot.selectedGroup) &&
+                        it.name.contains(snapshot.query.trim(), ignoreCase = true)
+                }
+            }
+            state.update { it.copy(visibleChannels = visible) }
+        }
+    }
+}
