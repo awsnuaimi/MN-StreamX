@@ -5,6 +5,10 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -19,29 +23,67 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Generate Gradle Wrapper in isolation
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Unit tests and lint
+        run: gradle --no-daemon testDebugUnitTest lintDebug
+
+      - name: Build and verify signed update APK
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          MN_STREAMX_KEYSTORE_BASE64: ${{ secrets.MN_STREAMX_KEYSTORE_BASE64 }}
+          MN_STREAMX_KEYSTORE_PASSWORD: ${{ secrets.MN_STREAMX_KEYSTORE_PASSWORD }}
+          MN_STREAMX_KEY_ALIAS: ${{ secrets.MN_STREAMX_KEY_ALIAS }}
+          EXPECTED_CERT_SHA256: de5ca5487450b6b9e81dffb638864a5d4bc9b5d2f49f4d3884b7d4a19fba4043
         run: |
-          if [ ! -f "gradlew" ]; then
-            echo "⚙️ gradlew not found, generating wrapper in isolated temp dir..."
-            mkdir -p /tmp/gradle-wrapper-gen
-            cd /tmp/gradle-wrapper-gen
-            touch settings.gradle
-            gradle wrapper --gradle-version 8.7
-            cp gradlew "$GITHUB_WORKSPACE/gradlew"
-            cp gradlew.bat "$GITHUB_WORKSPACE/gradlew.bat"
-            mkdir -p "$GITHUB_WORKSPACE/gradle/wrapper"
-            cp gradle/wrapper/gradle-wrapper.jar "$GITHUB_WORKSPACE/gradle/wrapper/gradle-wrapper.jar"
-            echo "✅ Wrapper generated and copied successfully."
+          set -euo pipefail
+          for required_secret in MN_STREAMX_KEYSTORE_BASE64 MN_STREAMX_KEYSTORE_PASSWORD MN_STREAMX_KEY_ALIAS; do
+            if [[ -z "${!required_secret}" ]]; then
+              echo "::error::Missing repository secret: $required_secret"
+              exit 1
+            fi
+          done
+          umask 077
+          export MN_STREAMX_KEYSTORE_FILE="$RUNNER_TEMP/mn-streamx-app-signing.p12"
+          trap 'rm -f "$MN_STREAMX_KEYSTORE_FILE"' EXIT
+          printf '%s' "$MN_STREAMX_KEYSTORE_BASE64" | base64 --decode > "$MN_STREAMX_KEYSTORE_FILE"
+          gradle --no-daemon assembleRelease
+
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          signer_path="$(printf '%s\n' "$sdk_root"/build-tools/*/apksigner | sort -V | tail -n 1)"
+          if [[ ! -x "$signer_path" ]]; then
+            echo "::error::Android apksigner was not found."
+            exit 1
           fi
+          apk_path="app/build/outputs/apk/release/app-release.apk"
+          signing_report="$("$signer_path" verify --print-certs "$apk_path")"
+          actual_cert="$(printf '%s\n' "$signing_report" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+          if [[ "${actual_cert,,}" != "$EXPECTED_CERT_SHA256" ]]; then
+            echo "::error::Signing certificate changed. Refusing to publish an incompatible update."
+            exit 1
+          fi
+          version_code=$((100000 + GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          version_name="1.1.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          aapt_path="${signer_path%/apksigner}/aapt"
+          badging="$("$aapt_path" dump badging "$apk_path")"
+          package_line="${badging%%$'\n'*}"
+          if [[ "$package_line" != *"name='com.yourapp.iptv'"* || "$package_line" != *"versionCode='$version_code'"* ]]; then
+            echo "::error::Package ID or versionCode does not match the update configuration."
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$apk_path" "dist/MN-StreamX-${version_name}.apk"
+          printf '### MN StreamX update APK\nVersion: %s\n\nVersion code: %s\n\nCertificate SHA-256: `%s`\n' \
+            "$version_name" "$version_code" "$actual_cert" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
-
-      - name: Test and build Debug APK
-        run: ./gradlew testDebugUnitTest lintDebug assembleDebug
-
-      - name: Upload APK artifact
+      - name: Upload signed update APK
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: MN-StreamX-update-apk
+          path: dist/*.apk
+          if-no-files-found: error

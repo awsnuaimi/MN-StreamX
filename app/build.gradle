@@ -6,6 +6,35 @@ plugins {
     id 'androidx.room'
 }
 
+def positiveNumber = { String raw, String label ->
+    if (raw == null || !(raw ==~ /[1-9][0-9]*/) || raw.length() > 10) {
+        throw new GradleException("${label} must be a positive integer.")
+    }
+    return Long.parseLong(raw)
+}
+def ciRun = System.getenv('GITHUB_RUN_NUMBER')
+def runNumber = ciRun ? positiveNumber(ciRun, 'GITHUB_RUN_NUMBER') : 0L
+def runAttempt = runNumber ? positiveNumber(System.getenv('GITHUB_RUN_ATTEMPT') ?: '1', 'GITHUB_RUN_ATTEMPT') : 1L
+if (runAttempt > 99L) throw new GradleException('Run attempts above 99 require a new workflow run.')
+def explicitVersion = providers.gradleProperty('appVersionCode').orNull
+def updateVersionCode = explicitVersion ? positiveNumber(explicitVersion, 'appVersionCode') :
+    (runNumber ? 100000L + runNumber * 100L + runAttempt : 2L)
+if (updateVersionCode > 2100000000L) throw new GradleException('versionCode exceeds the Android limit.')
+def updateVersionName = providers.gradleProperty('appVersionName').orNull ?:
+    (runNumber ? "1.1.${runNumber}.${runAttempt}" : '1.1.0')
+
+def stableStore = System.getenv('MN_STREAMX_KEYSTORE_FILE')
+def stablePassword = System.getenv('MN_STREAMX_KEYSTORE_PASSWORD')
+def stableAlias = System.getenv('MN_STREAMX_KEY_ALIAS')
+def suppliedValues = [stableStore, stablePassword, stableAlias].count { it != null && !it.isEmpty() }
+if (suppliedValues > 0 && suppliedValues < 3) {
+    throw new GradleException('Incomplete MN StreamX signing environment: provide the keystore file, password, and alias.')
+}
+def stableSigningReady = suppliedValues == 3
+if (stableSigningReady && !file(stableStore).isFile()) {
+    throw new GradleException('The configured MN StreamX signing keystore does not exist.')
+}
+
 android {
     namespace 'com.yourapp.iptv'
     compileSdk 35
@@ -14,8 +43,30 @@ android {
         applicationId 'com.yourapp.iptv'
         minSdk 29
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        versionCode updateVersionCode.toInteger()
+        versionName updateVersionName
+    }
+
+    signingConfigs {
+        if (stableSigningReady) {
+            stable {
+                storeFile file(stableStore)
+                storeType 'PKCS12'
+                storePassword stablePassword
+                keyAlias stableAlias
+                keyPassword stablePassword
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            if (stableSigningReady) signingConfig signingConfigs.stable
+        }
+        release {
+            debuggable false
+            minifyEnabled false
+            if (stableSigningReady) signingConfig signingConfigs.stable
+        }
     }
 
     buildFeatures {
@@ -35,6 +86,16 @@ android {
 
     room {
         schemaDirectory("$projectDir/schemas")
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name == 'preReleaseBuild') {
+        task.doFirst {
+            if (!stableSigningReady) {
+                throw new GradleException('Release signing is required. Configure the MN_STREAMX signing secrets first.')
+            }
+        }
     }
 }
 
