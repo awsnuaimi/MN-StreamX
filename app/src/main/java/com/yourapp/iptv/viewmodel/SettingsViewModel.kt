@@ -3,6 +3,7 @@ package com.yourapp.iptv.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.AppSettings
+import com.yourapp.iptv.domain.model.PlaylistSource
 import com.yourapp.iptv.domain.repository.SettingsRepository
 import com.yourapp.iptv.ui.state.SettingsUiState
 import com.yourapp.iptv.util.validator.UrlValidator
@@ -42,6 +43,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun updateM3uUrl(value: String) = edit { copy(m3uUrl = value) }
+    fun updateSource(value: PlaylistSource) = edit { copy(source = value) }
     fun updateXtreamServer(value: String) = edit { copy(xtreamServer = value) }
     fun updateXtreamUsername(value: String) = edit { copy(xtreamUsername = value) }
     fun updateXtreamPassword(value: String) = edit { copy(xtreamPassword = value) }
@@ -84,15 +86,14 @@ class SettingsViewModel @Inject constructor(
     fun resetSaveStatus() { state.update { it.copy(isSaved = false) } }
 
     private fun validationError(settings: AppSettings): String? {
-        val hasXtream = listOf(settings.xtreamServer, settings.xtreamUsername, settings.xtreamPassword)
-            .any { it.isNotBlank() }
+        val xtream = settings.source == PlaylistSource.XTREAM
         return when {
-            settings.m3uUrl.isBlank() && !hasXtream -> "أدخل رابط قائمة M3U أو بيانات المصدر."
-            settings.m3uUrl.isNotBlank() && !UrlValidator.isValidUrl(settings.m3uUrl) ->
+            !xtream && settings.m3uUrl.isBlank() -> "أدخل رابط قائمة M3U."
+            !xtream && !UrlValidator.isValidUrl(settings.m3uUrl) ->
                 "رابط M3U غير صالح. استخدم رابط http:// أو https:// كاملًا."
-            hasXtream && (settings.xtreamServer.isBlank() || settings.xtreamUsername.isBlank() ||
+            xtream && (settings.xtreamServer.isBlank() || settings.xtreamUsername.isBlank() ||
                 settings.xtreamPassword.isBlank()) -> "أكمل السيرفر واسم المستخدم وكلمة المرور."
-            hasXtream && !UrlValidator.isValidUrl(settings.xtreamServer) -> "عنوان السيرفر غير صالح."
+            xtream && !UrlValidator.isValidUrl(settings.xtreamServer) -> "عنوان السيرفر غير صالح."
             settings.epgUrl.isNotBlank() && !UrlValidator.isValidUrl(settings.epgUrl) -> "رابط EPG غير صالح."
             else -> null
         }

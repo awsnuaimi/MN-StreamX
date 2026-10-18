@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.yourapp.iptv.domain.model.AppSettings
+import com.yourapp.iptv.domain.model.PlaylistSource
 import com.yourapp.iptv.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -20,6 +21,7 @@ class SettingsDataStore(context: Context) : SettingsRepository {
         val USERNAME = stringPreferencesKey("xtream_username")
         val PASSWORD = stringPreferencesKey("xtream_password")
         val EPG = stringPreferencesKey("epg_url")
+        val SOURCE = stringPreferencesKey("playlist_source")
     }
 
     override fun observeSettings(): Flow<AppSettings> = store.data.map { values ->
@@ -28,7 +30,12 @@ class SettingsDataStore(context: Context) : SettingsRepository {
             xtreamServer = values[SERVER].orEmpty(),
             xtreamUsername = values[USERNAME].orEmpty(),
             xtreamPassword = values[PASSWORD].orEmpty(),
-            epgUrl = values[EPG].orEmpty()
+            epgUrl = values[EPG].orEmpty(),
+            source = values[SOURCE]?.let { saved ->
+                PlaylistSource.entries.firstOrNull { it.name == saved }
+            } ?: if (values[M3U].isNullOrBlank() && !values[SERVER].isNullOrBlank()) {
+                PlaylistSource.XTREAM
+            } else PlaylistSource.M3U
         )
     }
 
@@ -39,6 +46,7 @@ class SettingsDataStore(context: Context) : SettingsRepository {
             values[USERNAME] = settings.xtreamUsername
             values[PASSWORD] = settings.xtreamPassword
             values[EPG] = settings.epgUrl
+            values[SOURCE] = settings.source.name
         }
     }
 

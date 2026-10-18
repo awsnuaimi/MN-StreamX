@@ -4,6 +4,7 @@ import com.yourapp.iptv.domain.model.AppSettings
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.Playlist
 import com.yourapp.iptv.domain.model.PlaylistLoadException
+import com.yourapp.iptv.domain.model.PlaylistSource
 import com.yourapp.iptv.domain.repository.PlaylistRepository
 import com.yourapp.iptv.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
@@ -63,16 +64,46 @@ class HomeViewModelTest {
         assertEquals(2, model.uiState.value.visibleChannels.size)
     }
 
-    private fun settings(url: String) = object : SettingsRepository {
-        override fun observeSettings() = flowOf(AppSettings(m3uUrl = url))
+    @Test fun selectedXtreamTakesPrecedenceOverPreviouslySavedM3u() = runTest(dispatcher) {
+        val playlists = FakePlaylists()
+        HomeViewModel(source(AppSettings(m3uUrl = "https://unit.test/old.m3u",
+            xtreamServer = "https://unit.test:8080", xtreamUsername = "test-user",
+            xtreamPassword = "test-password", source = PlaylistSource.XTREAM)), playlists, dispatcher)
+        advanceUntilIdle()
+        assertEquals(1, playlists.xtreamCalls)
+        assertEquals(0, playlists.calls)
+    }
+
+    @Test fun incompleteXtreamDoesNotUseOldM3uOrMakeRequests() = runTest(dispatcher) {
+        val playlists = FakePlaylists()
+        val model = HomeViewModel(source(AppSettings(m3uUrl = "https://unit.test/old.m3u",
+            xtreamServer = "https://unit.test", source = PlaylistSource.XTREAM)), playlists, dispatcher)
+        advanceUntilIdle()
+        assertTrue(model.uiState.value.needsSource)
+        assertEquals(0, playlists.xtreamCalls)
+        assertEquals(0, playlists.calls)
+    }
+
+    private fun settings(url: String) = source(AppSettings(m3uUrl = url))
+
+    private fun source(value: AppSettings) = object : SettingsRepository {
+        override fun observeSettings() = flowOf(value)
         override suspend fun saveSettings(settings: AppSettings) = Unit
     }
 
     private class FakePlaylists : PlaylistRepository {
         var calls = 0
+        var xtreamCalls = 0
         var fail = false
+        override suspend fun loadXtream(serverUrl: String, username: String, password: String): Playlist {
+            xtreamCalls++
+            return result()
+        }
         override suspend fun loadPlaylist(url: String): Playlist {
             calls++
+            return result()
+        }
+        private suspend fun result(): Playlist {
             delay(20)
             if (fail) throw PlaylistLoadException("Synthetic failure")
             return Playlist("Test", listOf(

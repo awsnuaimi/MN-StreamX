@@ -1,6 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
 import com.yourapp.iptv.domain.model.AppSettings
+import com.yourapp.iptv.domain.model.PlaylistSource
 import com.yourapp.iptv.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -86,6 +87,40 @@ class SettingsViewModelTest {
         assertFalse(model.uiState.value.isSaved)
         assertNotNull(model.uiState.value.errorMessage)
         assertEquals("https://unit.test/list.m3u", model.uiState.value.settings.m3uUrl)
+    }
+
+    @Test fun xtreamSavesWithoutM3uAndPreservesPasswordExactly() = runTest(dispatcher) {
+        val repository = FakeSettings()
+        val model = SettingsViewModel(repository)
+        advanceUntilIdle()
+        model.updateSource(PlaylistSource.XTREAM)
+        model.updateM3uUrl("invalid-unused-link")
+        model.updateXtreamServer(" https://unit.test:8080 ")
+        model.updateXtreamUsername(" user ")
+        model.updateXtreamPassword(" p&/+# ")
+        model.saveSettings()
+        advanceUntilIdle()
+        assertEquals(1, repository.saves)
+        assertEquals(PlaylistSource.XTREAM, repository.value.source)
+        assertEquals("user", repository.value.xtreamUsername)
+        assertEquals(" p&/+# ", repository.value.xtreamPassword)
+        assertTrue(model.uiState.value.isSaved)
+    }
+
+    @Test fun incompleteXtreamCannotSaveAndUnusedXtreamDoesNotBlockM3u() = runTest(dispatcher) {
+        val repository = FakeSettings()
+        val model = SettingsViewModel(repository)
+        advanceUntilIdle()
+        model.updateSource(PlaylistSource.XTREAM)
+        model.updateXtreamServer("https://unit.test")
+        model.saveSettings()
+        advanceUntilIdle()
+        assertEquals(0, repository.saves)
+        model.updateSource(PlaylistSource.M3U)
+        model.updateM3uUrl("https://unit.test/list.m3u")
+        model.saveSettings()
+        advanceUntilIdle()
+        assertEquals(1, repository.saves)
     }
 
     private class FakeSettings(var value: AppSettings = AppSettings()) : SettingsRepository {

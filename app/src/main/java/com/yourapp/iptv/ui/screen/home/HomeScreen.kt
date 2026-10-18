@@ -77,7 +77,7 @@ fun HomeScreen(
         }
         state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         when {
-            state.needsSource -> HomeMessage("أضف رابط قائمة M3U لعرض القنوات.", "فتح الإعدادات", onSettings)
+            state.needsSource -> HomeMessage("اختر مصدر القنوات وأدخل رابط M3U أو بيانات Xtream.", "فتح الإعدادات", onSettings)
             state.isLoading && state.channels.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally,

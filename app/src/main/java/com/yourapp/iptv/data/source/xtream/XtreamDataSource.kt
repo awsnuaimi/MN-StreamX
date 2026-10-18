@@ -2,27 +2,21 @@ package com.yourapp.iptv.data.source.xtream
 
 import com.yourapp.iptv.data.model.XtreamChannelDto
 import com.yourapp.iptv.data.network.HttpClient
-import okhttp3.Request
-import java.io.IOException
+import okhttp3.OkHttpClient
 
-class XtreamDataSource {
-    private val client = HttpClient.create()
+class XtreamDataSource(client: OkHttpClient = HttpClient.create()) {
+    private val http = XtreamHttpClient(client)
 
     suspend fun fetchChannels(serverUrl: String, username: String, password: String): List<XtreamChannelDto> {
-        // بناء رابط الـ API الخاص بـ Xtream
-        val url = "$serverUrl/get_live_streams.php?username=$username&password=$password"
-        
-        val request = Request.Builder()
-            .url(url)
-            .build()
-
-        val response = client.newCall(request).execute()
-        
-        return if (response.isSuccessful) {
-            val body = response.body?.string() ?: ""
-            XtreamParser.parseChannels(body)
-        } else {
-            emptyList()
+        val urls = XtreamUrls(serverUrl, username, password)
+        val extension = http.read(urls.api(), 256 * 1024) { reader, _ ->
+            XtreamAccountParser.extension(reader)
+        }
+        val categories = http.read(urls.api("get_live_categories"), 2 * 1024 * 1024) { reader, active ->
+            XtreamParser.categories(reader, active)
+        }
+        return http.read(urls.api("get_live_streams"), 20 * 1024 * 1024) { reader, active ->
+            XtreamParser.channels(reader, urls, extension, categories, active)
         }
     }
 }

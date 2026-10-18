@@ -47,6 +47,7 @@ fun SettingsScreen(
             SettingsInputForm(
                 settings = state.settings,
                 enabled = !state.isSaving && !state.loadFailed,
+                onSourceChanged = viewModel::updateSource,
                 onM3uChanged = viewModel::updateM3uUrl,
                 onServerChanged = viewModel::updateXtreamServer,
                 onUsernameChanged = viewModel::updateXtreamUsername,

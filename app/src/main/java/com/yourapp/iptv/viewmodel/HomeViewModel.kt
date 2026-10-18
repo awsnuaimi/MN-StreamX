@@ -3,6 +3,7 @@ package com.yourapp.iptv.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.PlaylistLoadException
+import com.yourapp.iptv.domain.model.PlaylistSource
 import com.yourapp.iptv.domain.repository.PlaylistRepository
 import com.yourapp.iptv.domain.repository.SettingsRepository
 import com.yourapp.iptv.ui.state.HomeUiState
@@ -37,12 +38,17 @@ class HomeViewModel @Inject constructor(
         state.update { it.copy(isLoading = true, errorMessage = null) }
         loadJob = viewModelScope.launch {
             try {
-                val source = settings.observeSettings().first().m3uUrl
-                if (source.isBlank()) {
+                val source = settings.observeSettings().first()
+                if (!source.hasSelectedSource()) {
                     state.value = HomeUiState(isLoading = false, needsSource = true)
                     return@launch
                 }
-                val channels = playlists.loadPlaylist(source).channels
+                val channels = when (source.source) {
+                    PlaylistSource.M3U -> playlists.loadPlaylist(source.m3uUrl)
+                    PlaylistSource.XTREAM -> playlists.loadXtream(
+                        source.xtreamServer, source.xtreamUsername, source.xtreamPassword
+                    )
+                }.channels
                 val groups = withContext(background) {
                     channels.mapNotNull { it.group }.distinct().sorted()
                 }

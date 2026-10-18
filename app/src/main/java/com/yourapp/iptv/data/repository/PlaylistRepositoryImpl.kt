@@ -9,4 +9,7 @@ class PlaylistRepositoryImpl(
 ) : PlaylistRepository {
     override suspend fun loadPlaylist(url: String): Playlist =
         Playlist(name = "M3U", channels = channelRepository.loadFromM3u(url))
+
+    override suspend fun loadXtream(serverUrl: String, username: String, password: String): Playlist =
+        Playlist(name = "Xtream Codes", channels = channelRepository.loadFromXtream(serverUrl, username, password))
 }

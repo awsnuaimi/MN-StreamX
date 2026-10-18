@@ -54,11 +54,11 @@ class ChannelRepositoryImpl(
         getChannels()
     }
 
-    suspend fun loadFromXtream(serverUrl: String, username: String, password: String): List<Channel> =
+    override suspend fun loadFromXtream(serverUrl: String, username: String, password: String): List<Channel> =
         importLock.withLock {
             val channels = withContext(Dispatchers.IO) {
                 xtreamDataSource.fetchChannels(serverUrl, username, password).map {
-                    Channel(it.streamId, it.name, it.icon, it.streamUrl, it.categoryId)
+                    Channel(it.channelId, it.name, it.icon, it.streamUrl, it.categoryName)
                 }
             }
             if (channels.isNotEmpty()) {
@@ -67,7 +67,7 @@ class ChannelRepositoryImpl(
                     ChannelCache.clearCache()
                 }
             }
-            channels
+            getChannels()
         }
 
     private fun Channel.toEntity() = ChannelEntity(id, name, logoUrl, streamUrl, group)

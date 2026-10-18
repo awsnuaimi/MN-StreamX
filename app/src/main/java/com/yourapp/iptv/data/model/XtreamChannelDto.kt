@@ -5,5 +5,9 @@ data class XtreamChannelDto(
     val name: String,
     val streamUrl: String,
     val icon: String? = null,
-    val categoryId: String? = null
-)
+    val categoryId: String? = null,
+    val categoryName: String? = null,
+    val channelId: String = streamId
+) {
+    override fun toString(): String = "XtreamChannelDto(streamId=$streamId, streamUrl=redacted)"
+}
