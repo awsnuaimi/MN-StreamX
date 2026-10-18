@@ -1,78 +1,70 @@
 package com.yourapp.iptv.data.datastore
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.yourapp.iptv.domain.model.AppSettings
+import com.yourapp.iptv.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
-class SettingsDataStore(private val context: Context) {
+class SettingsDataStore(context: Context) : SettingsRepository {
+    private val store = context.applicationContext.settingsDataStore
 
-    companion object {
-        private val M3U_URL_KEY = stringPreferencesKey("m3u_url")
-        private val XTREAM_SERVER_KEY = stringPreferencesKey("xtream_server")
-        private val XTREAM_USERNAME_KEY = stringPreferencesKey("xtream_username")
-        private val XTREAM_PASSWORD_KEY = stringPreferencesKey("xtream_password")
-        private val EPG_URL_KEY = stringPreferencesKey("epg_url")
+    private companion object {
+        val M3U = stringPreferencesKey("m3u_url")
+        val SERVER = stringPreferencesKey("xtream_server")
+        val USERNAME = stringPreferencesKey("xtream_username")
+        val PASSWORD = stringPreferencesKey("xtream_password")
+        val EPG = stringPreferencesKey("epg_url")
     }
 
-    // حفظ رابط M3U
+    override fun observeSettings(): Flow<AppSettings> = store.data.map { values ->
+        AppSettings(
+            m3uUrl = values[M3U].orEmpty(),
+            xtreamServer = values[SERVER].orEmpty(),
+            xtreamUsername = values[USERNAME].orEmpty(),
+            xtreamPassword = values[PASSWORD].orEmpty(),
+            epgUrl = values[EPG].orEmpty()
+        )
+    }
+
+    override suspend fun saveSettings(settings: AppSettings) {
+        store.edit { values ->
+            values[M3U] = settings.m3uUrl
+            values[SERVER] = settings.xtreamServer
+            values[USERNAME] = settings.xtreamUsername
+            values[PASSWORD] = settings.xtreamPassword
+            values[EPG] = settings.epgUrl
+        }
+    }
+
+    fun getM3uUrl(): Flow<String?> = observeSettings().map { it.m3uUrl }
+    fun getEpgUrl(): Flow<String?> = observeSettings().map { it.epgUrl }
+    fun getXtreamData(): Flow<Triple<String?, String?, String?>> = observeSettings().map {
+        Triple(it.xtreamServer, it.xtreamUsername, it.xtreamPassword)
+    }
+
     suspend fun saveM3uUrl(url: String) {
-        context.dataStore.edit { preferences ->
-            preferences[M3U_URL_KEY] = url
-        }
+        store.edit { it[M3U] = url }
     }
 
-    // استرجاع رابط M3U
-    fun getM3uUrl(): Flow<String?> {
-        return context.dataStore.data.map { preferences ->
-            preferences[M3U_URL_KEY]
-        }
-    }
-
-    // حفظ بيانات Xtream
-    suspend fun saveXtreamData(server: String, username: String, password: String) {
-        context.dataStore.edit { preferences ->
-            preferences[XTREAM_SERVER_KEY] = server
-            preferences[XTREAM_USERNAME_KEY] = username
-            preferences[XTREAM_PASSWORD_KEY] = password
-        }
-    }
-
-    // استرجاع بيانات Xtream
-    fun getXtreamData(): Flow<Triple<String?, String?, String?>> {
-        return context.dataStore.data.map { preferences ->
-            Triple(
-                preferences[XTREAM_SERVER_KEY],
-                preferences[XTREAM_USERNAME_KEY],
-                preferences[XTREAM_PASSWORD_KEY]
-            )
-        }
-    }
-
-    // حفظ رابط EPG
     suspend fun saveEpgUrl(url: String) {
-        context.dataStore.edit { preferences ->
-            preferences[EPG_URL_KEY] = url
+        store.edit { it[EPG] = url }
+    }
+
+    suspend fun saveXtreamData(server: String, username: String, password: String) {
+        store.edit {
+            it[SERVER] = server
+            it[USERNAME] = username
+            it[PASSWORD] = password
         }
     }
 
-    // استرجاع رابط EPG
-    fun getEpgUrl(): Flow<String?> {
-        return context.dataStore.data.map { preferences ->
-            preferences[EPG_URL_KEY]
-        }
-    }
-
-    // مسح جميع الإعدادات
     suspend fun clearAll() {
-        context.dataStore.edit { preferences ->
-            preferences.clear()
-        }
+        store.edit { it.clear() }
     }
 }
