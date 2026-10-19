@@ -15,6 +15,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -83,6 +84,15 @@ class PlayerViewModelTest {
         assertFalse(model.uiState.value.isLoading)
         assertNotNull(model.uiState.value.errorMessage)
         assertNull(model.uiState.value.channel)
+    }
+
+    @Test fun selectingTheAlreadyActiveChannelKeepsTheSameStateAndDoesNotReload() = runTest(dispatcher) {
+        val repository = FakeChannels()
+        val model = PlayerViewModel(SavedStateHandle(mapOf("channelId" to "a")), repository, dispatcher, FakeFavoriteRepository())
+        advanceUntilIdle()
+        val before = model.uiState.value
+        model.selectChannel("a"); advanceUntilIdle()
+        assertSame(before, model.uiState.value)
     }
 
     private class FakeChannels(private val fail: Boolean = false) : ChannelRepository {

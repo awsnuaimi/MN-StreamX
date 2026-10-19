@@ -31,7 +31,7 @@ internal fun PlayerAppearancePreview(value: PlayerAppearance) {
             Text("معاينة حجم النص والخلفية", color = NeonBlue, style = MaterialTheme.typography.labelMedium)
             Text("اسم القناة · عنوان البرنامج الحالي", color = Color.White, style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(DeckIcon.GUIDE to "الدليل", DeckIcon.CHANNELS to "القنوات", DeckIcon.FAVORITE to "المفضلة").forEach { (icon, label) ->
+                listOf(DeckIcon.MORE to "المزيد", DeckIcon.CHANNELS to "قناة", DeckIcon.CHANNELS to "قناة").forEach { (icon, label) ->
                     Surface(Modifier.weight(1f).height(68.dp), color = Color(0xFF1D2C36), contentColor = Color.White) {
                         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             PlayerDeckIcon(icon, NeonBlue, 22.dp)

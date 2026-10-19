@@ -4,7 +4,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PlayerDeckActivationTest {
-    @Test fun consumesReleaseAfterFocusMovesIntoDeckWithoutActivatingAnAction() {
+    @Test fun consumesWholeOkPressWithoutForwardingReleaseToTheNativePlayer() {
         val key = PlayerDeckActivation(); var opened = 0
         assertTrue(key.handle(23, 0, 0, true) { opened++ })
         assertTrue(key.handle(23, 0, 1, false) { opened++ })
@@ -12,7 +12,7 @@ class PlayerDeckActivationTest {
         assertEquals(1, opened)
         assertFalse(key.handle(23, 0, 0, false) { opened++ })
     }
-    @Test fun enterVariantsOpenDeckButNativeControlsAndDialogsKeepTheirKeys() {
+    @Test fun enterVariantsShowInformationWhileNativeControlsAndDialogsKeepTheirKeys() {
         for (code in listOf(23, 66, 160)) {
             val key = PlayerDeckActivation(); var opened = 0
             assertFalse(key.handle(code, 0, 0, false) { opened++ })
@@ -29,5 +29,11 @@ class PlayerDeckActivationTest {
         assertEquals(0, opened)
         assertTrue(key.handle(23, 0, 0, true) { opened++ })
         assertEquals(1, opened)
+    }
+    @Test fun resetClearsALostOkReleaseWhenTheAppStops() {
+        val key = PlayerDeckActivation(); var opened = 0
+        key.handle(23, 0, 0, true) { opened++ }; key.reset()
+        key.handle(23, 0, 0, true) { opened++ }
+        assertEquals(2, opened)
     }
 }

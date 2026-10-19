@@ -1,12 +1,12 @@
 package com.yourapp.iptv.ui.screen.player
 
-enum class PlayerBackAction { CLOSE_DETAILS, CLOSE_CHANNELS, HIDE_CONTROLS, HIDE_INFO, EXIT }
+internal enum class PlayerBackAction { CLOSE_DETAILS, CLOSE_CHANNELS, CLOSE_MORE, HIDE_CONTROLS, HIDE_CARDS, EXIT }
 
-fun playerBackAction(detailsOpen: Boolean, channelsOpen: Boolean, controlsVisible: Boolean,
-    infoFocused: Boolean): PlayerBackAction = when {
-    detailsOpen -> PlayerBackAction.CLOSE_DETAILS
-    channelsOpen -> PlayerBackAction.CLOSE_CHANNELS
-    controlsVisible -> PlayerBackAction.HIDE_CONTROLS
-    infoFocused -> PlayerBackAction.HIDE_INFO
-    else -> PlayerBackAction.EXIT
+internal fun playerBackAction(panel: PlayerPanel): PlayerBackAction = when (panel) {
+    PlayerPanel.DETAILS -> PlayerBackAction.CLOSE_DETAILS
+    PlayerPanel.CHANNELS -> PlayerBackAction.CLOSE_CHANNELS
+    PlayerPanel.MORE -> PlayerBackAction.CLOSE_MORE
+    PlayerPanel.CONTROLS -> PlayerBackAction.HIDE_CONTROLS
+    PlayerPanel.CARDS -> PlayerBackAction.HIDE_CARDS
+    PlayerPanel.WATCHING -> PlayerBackAction.EXIT
 }

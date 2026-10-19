@@ -26,7 +26,7 @@ import com.yourapp.iptv.ui.theme.NeonBlue
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PlayerDeckInfo(channel: Channel, position: Int, total: Int, epg: PlayerEpgUiState,
-    appearance: PlayerAppearance, technical: PlaybackTechnicalInfo, dense: Boolean) {
+    appearance: PlayerAppearance, technical: PlaybackTechnicalInfo, dense: Boolean, preview: Boolean = false) {
     val current = epg.schedule.current(epg.nowMillis)
     val next = epg.schedule.next(epg.nowMillis)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -41,7 +41,7 @@ internal fun PlayerDeckInfo(channel: Channel, position: Int, total: Int, epg: Pl
                     Text(current?.title ?: channel.name, Modifier.weight(1f), color = Color.White,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Content))
-                    Text("● مباشر", color = NeonBlue, style = MaterialTheme.typography.labelMedium)
+                    Text(if (preview) "معاينة" else "● مباشر", color = NeonBlue, style = MaterialTheme.typography.labelMedium)
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     if (current != null) {

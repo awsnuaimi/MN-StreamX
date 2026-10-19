@@ -29,7 +29,7 @@ internal fun PlayerAppearanceForm(value: PlayerAppearance, enabled: Boolean, onC
         AppearanceToggle("إظهار البرنامج التالي", value.showNext, enabled) { onChange(value.copy(showNext = it)) }
         AppearanceToggle("إظهار سطر وصف مختصر", value.showDescription,
             enabled) { onChange(value.copy(showDescription = it)) }
-        AppearanceToggle("إظهار زري القناة السابقة والتالية", value.showChannelButtons, enabled) {
+        AppearanceToggle("إظهار السابق والتالي داخل قائمة المزيد", value.showChannelButtons, enabled) {
             onChange(value.copy(showChannelButtons = it))
         }
         AppearanceToggle("إظهار شرح اختصارات الريموت", value.showHints, enabled) { onChange(value.copy(showHints = it)) }

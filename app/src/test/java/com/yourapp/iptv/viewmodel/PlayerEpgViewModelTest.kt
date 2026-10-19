@@ -152,6 +152,42 @@ class PlayerEpgViewModelTest {
         assertEquals(1, calls)
     }
 
+    @Test fun previewUsesAnIndependentSelectionAndStopsRequestsWhenCardsClose() = runTest(dispatcher) {
+        val calls = mutableListOf<String>()
+        val repository = fake { channel, _ -> calls += channel.id; EpgSchedule(emptyList()) }
+        val active = PlayerEpgViewModel(settings, repository)
+        val preview = PlayerEpgViewModel(settings, repository)
+        backgroundScope.launch { active.uiState.collect() }
+        active.selectChannel(a); runCurrent(); advanceTimeBy(351); runCurrent()
+        val previewObserver = backgroundScope.launch { preview.uiState.collect() }
+        preview.selectChannel(b); runCurrent(); advanceTimeBy(200); runCurrent()
+        preview.selectChannel(a); runCurrent(); advanceTimeBy(351); runCurrent()
+        assertEquals("a", active.uiState.value.channelId)
+        assertEquals("a", preview.uiState.value.channelId)
+        assertFalse(calls.contains("b"))
+        previewObserver.cancel(); runCurrent()
+        preview.selectChannel(b); advanceTimeBy(500); runCurrent()
+        assertFalse(calls.contains("b"))
+    }
+
+    @Test fun closingThePreviewCancelsItsInflightRequestWithoutStoppingTheActiveEpg() = runTest(dispatcher) {
+        var previewCancelled = false
+        val repository = fake { channel, _ ->
+            if (channel.id == "b") try { delay(10000) } finally { previewCancelled = true }
+            EpgSchedule(emptyList())
+        }
+        val active = PlayerEpgViewModel(settings, repository)
+        val preview = PlayerEpgViewModel(settings, repository)
+        backgroundScope.launch { active.uiState.collect() }
+        active.selectChannel(a)
+        val observer = backgroundScope.launch { preview.uiState.collect() }
+        preview.selectChannel(b); runCurrent(); advanceTimeBy(351); runCurrent()
+        observer.cancel(); runCurrent()
+        assertTrue(previewCancelled)
+        assertEquals("a", active.uiState.value.channelId)
+        assertFalse(active.uiState.value.isLoading)
+    }
+
     private fun fake(load: suspend (Channel, AppSettings) -> EpgSchedule?): LiveEpgRepository =
         object : LiveEpgRepository {
             override suspend fun load(channel: Channel, settings: AppSettings) = load.invoke(channel, settings)
