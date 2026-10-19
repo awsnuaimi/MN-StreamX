@@ -17,7 +17,7 @@ class PlayerAppearanceDataStoreTest {
     @Test fun savedAppearanceSurvivesReopeningStorage() = runBlocking {
         val file = temporary.root.resolve("appearance.preferences_pb")
         val firstScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val expected = PlayerAppearance(style = PlayerInfoStyle.CLASSIC, displaySeconds = 8, showHints = true)
+        val expected = PlayerAppearance(style = PlayerInfoStyle.CARDS, displaySeconds = 8, showHints = true)
         try {
             val first = PlayerAppearanceDataStore(PreferenceDataStoreFactory.create(scope = firstScope) { file })
             assertEquals(PlayerAppearance(), first.observe().first())

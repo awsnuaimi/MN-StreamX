@@ -1,33 +1,24 @@
 package com.yourapp.iptv.ui.screen.home
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.*
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.iptv.ui.component.channel.FavoriteFeedback
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.tv.TvChannelGrid
 import com.yourapp.iptv.viewmodel.HomeViewModel
+import com.yourapp.iptv.viewmodel.HomeAppearanceViewModel
 
 @Composable
 fun HomeScreen(
@@ -36,75 +27,95 @@ fun HomeScreen(
     onOpenGuide: (String?, String?, String, Boolean) -> Unit,
     returnedChannelId: String? = null,
     onReturnHandled: () -> Unit = {},
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
+    appearanceViewModel: HomeAppearanceViewModel = hiltViewModel(),
+    onHomeAppearance: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
+    val savedAppearance by appearanceViewModel.appearance.collectAsStateWithLifecycle()
+    val appearance = savedAppearance
+    if (appearance == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+    val labels = remember(appearance.language) { HomeLabels(appearance.language) }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    val searchFocus = remember { FocusRequester() }
+    val sidebarFocus = remember { FocusRequester() }
     LaunchedEffect(returnedChannelId) {
         returnedChannelId?.let { viewModel.selectChannel(it); onReturnHandled() }
     }
-    Column(
-        Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        HomeHeader(state.visibleChannels.size, state.channels.size, state.isLoading,
-            onRefresh = viewModel::refresh, onSettings = onSettings,
-            onGuide = { onOpenGuide(state.selectedChannelId, state.selectedGroup, state.query, state.favoritesOnly) })
-        if (state.channels.isNotEmpty()) {
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = viewModel::updateQuery,
-                label = { Text("البحث عن قناة") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                modifier = Modifier.fillMaxWidth()
-            )
-            run {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        FilterChip(selected = state.selectedGroup == null && !state.favoritesOnly,
-                            onClick = { viewModel.selectGroup(null) }, label = { Text("الكل") })
+    LaunchedEffect(Unit) {
+        if (returnedChannelId == null && state.selectedChannelId == null) {
+            withFrameNanos { }; runCatching { sidebarFocus.requestFocus() }
+        }
+    }
+    LaunchedEffect(searching) { if (searching && state.channels.isNotEmpty()) { withFrameNanos { }; runCatching { searchFocus.requestFocus() } } }
+    BackHandler(enabled = searching) {
+        searching = false; viewModel.updateQuery(""); runCatching { sidebarFocus.requestFocus() }
+    }
+    val selected = when { searching -> HomeSection.SEARCH; state.favoritesOnly -> HomeSection.FAVORITES; else -> HomeSection.LIVE }
+    fun select(section: HomeSection) {
+        when (section) {
+            HomeSection.LIVE, HomeSection.FAVORITES -> { searching = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
+            HomeSection.SEARCH -> searching = true
+            HomeSection.GUIDE -> onOpenGuide(state.selectedChannelId, state.selectedGroup, state.query, state.favoritesOnly)
+            HomeSection.SETTINGS -> onSettings()
+            HomeSection.APPEARANCE -> onHomeAppearance()
+            HomeSection.REFRESH -> viewModel.refresh()
+        }
+    }
+    val languageDirection = if (appearance.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
+    // Physical sidebar placement is independent of the direction of text and channel names.
+    CompositionLocalProvider(LocalLayoutDirection provides if (appearance.sidebarOnRight) LayoutDirection.Rtl else LayoutDirection.Ltr) {
+        Row(Modifier.fillMaxSize()) {
+            CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
+                HomeSidebar(appearance, labels, selected, state.isLoading, sidebarFocus, ::select)
+            }
+            CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
+                Column(Modifier.weight(1f).fillMaxHeight().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(labels.section(selected), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(labels.text("${state.visibleChannels.size} قناة ظاهرة من ${state.channels.size}",
+                                "${state.visibleChannels.size} of ${state.channels.size} channels",
+                                "${state.visibleChannels.size} von ${state.channels.size} Sendern"), style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text("MN StreamX", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                     }
-                    item {
-                        FilterChip(selected = state.favoritesOnly,
-                            onClick = viewModel::toggleFavoritesFilter, label = { Text("★ المفضلة") })
-                    }
-                    items(state.groups, key = { it }) { group ->
-                        FilterChip(selected = state.selectedGroup == group,
-                            onClick = { viewModel.selectGroup(group) }, label = { Text(group) })
+                    if (searching || state.query.isNotBlank()) OutlinedTextField(state.query, viewModel::updateQuery,
+                        label = { Text(labels.text("البحث عن قناة", "Search channels", "Sender suchen")) }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        modifier = Modifier.fillMaxWidth().focusRequester(searchFocus))
+                    if (state.isLoading && state.channels.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    FavoriteFeedback(favorites, viewModel::retryFavorites)
+                    state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    when {
+                        state.needsSource -> HomeMessage(labels.text("أدخل مصدر القنوات من الإعدادات.", "Add a source in settings.", "Quelle in Einstellungen hinzufügen."),
+                            labels.section(HomeSection.SETTINGS), onSettings)
+                        state.isLoading && state.channels.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                        state.channels.isEmpty() -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
+                            labels.section(HomeSection.REFRESH), viewModel::refresh)
+                        else -> Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            HomeCategories(state.groups, state.selectedGroup, labels,
+                                Modifier.widthIn(min = 140.dp, max = 190.dp).fillMaxWidth(0.24f).fillMaxHeight()) { group ->
+                                // Selecting all categories must preserve the Favorites section.
+                                if (group == null) viewModel.selectAllGroups() else viewModel.selectGroup(group)
+                            }
+                            if (state.visibleChannels.isEmpty()) Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Text(labels.text("لا توجد قنوات تطابق الاختيار.", "No matching channels.", "Keine passenden Sender."))
+                                    AppButton(labels.text("مسح التصفية", "Clear filters", "Filter löschen"), viewModel::clearFilters)
+                                }
+                            } else TvChannelGrid(state.visibleChannels, state.selectedChannelId, { channel ->
+                                viewModel.selectChannel(channel.id)
+                                onPlayChannel(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
+                            }, Modifier.weight(1f).fillMaxHeight(), columns = appearance.columns)
+                        }
                     }
                 }
             }
-        }
-        if (state.isLoading && state.channels.isNotEmpty()) {
-            LinearProgressIndicator(Modifier.fillMaxWidth())
-        }
-        FavoriteFeedback(favorites, viewModel::retryFavorites)
-        state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        when {
-            state.needsSource -> HomeMessage("اختر مصدر القنوات وأدخل رابط M3U أو بيانات Xtream.", "فتح الإعدادات", onSettings)
-            state.isLoading && state.channels.isEmpty() -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        CircularProgressIndicator()
-                        Text("جارٍ تحميل قائمة القنوات...")
-                    }
-                }
-            }
-            state.channels.isEmpty() -> HomeMessage("لا توجد قنوات محمّلة.", "إعادة المحاولة", viewModel::refresh)
-            state.visibleChannels.isEmpty() -> HomeMessage(
-                if (state.favoritesOnly) "لا توجد قنوات مفضلة تطابق البحث والتصنيف. أضف قناة من المشغّل أو دليل البرامج."
-                else "لا توجد نتائج مطابقة.", "عرض الكل", viewModel::clearFilters)
-            else -> TvChannelGrid(
-                channels = state.visibleChannels,
-                selectedChannelId = state.selectedChannelId,
-                onChannelClick = { channel ->
-                    viewModel.selectChannel(channel.id)
-                    onPlayChannel(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
-                },
-                modifier = Modifier.weight(1f).fillMaxWidth()
-            )
         }
     }
 }
@@ -112,8 +123,7 @@ fun HomeScreen(
 @Composable
 private fun HomeMessage(text: String, action: String, onAction: () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(text, style = MaterialTheme.typography.titleMedium)
             AppButton(action, onAction)
         }

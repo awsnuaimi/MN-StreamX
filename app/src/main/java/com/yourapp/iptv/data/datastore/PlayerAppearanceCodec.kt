@@ -24,7 +24,7 @@ internal object PlayerAppearanceCodec {
     private val hints = booleanPreferencesKey("show_hints")
 
     fun decode(values: Preferences) = PlayerAppearance(
-        style = PlayerInfoStyle.entries.firstOrNull { it.name == read(values, style) } ?: PlayerInfoStyle.COMPACT,
+        style = PlayerInfoStyle.entries.firstOrNull { it.name == read(values, style) } ?: PlayerInfoStyle.CARDS,
         textSize = PlayerTextSize.entries.firstOrNull { it.name == read(values, size) } ?: PlayerTextSize.NORMAL,
         panelShade = PlayerPanelShade.entries.firstOrNull { it.name == read(values, shade) } ?: PlayerPanelShade.BALANCED,
         displaySeconds = read(values, seconds) ?: 5,

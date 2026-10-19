@@ -30,23 +30,23 @@ internal fun PlayerDeckRail(channels: List<Channel>, currentIndex: Int, currentI
     LaunchedEffect(currentId, focusCardId, focusEpoch) {
         val index = window.indexOfFirst { it.channel.id == focusCardId }
         if (focusCardId != null && focusCardId == currentId && index >= 0) {
-            list.scrollToItem(index + 2)
+            list.scrollToItem((index + 1).coerceAtLeast(0))
             withFrameNanos { }
             runCatching { selectedFocus.requestFocus() }
         }
     }
-    LazyRow(state = list, modifier = Modifier.fillMaxWidth().height(if (dense) 98.dp else 108.dp),
+    LazyRow(state = list, modifier = Modifier.fillMaxWidth().height(if (dense) 86.dp else 96.dp),
         contentPadding = PaddingValues(4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         item("guide") { DeckShortcutTile(DeckIcon.GUIDE, "دليل البرامج", channels.isNotEmpty(), onGuide,
-            Modifier.width(112.dp).fillParentMaxHeight()) }
+            Modifier.width(92.dp).fillParentMaxHeight()) }
         item("list") { DeckShortcutTile(DeckIcon.CHANNELS, "قائمة القنوات", channels.isNotEmpty(), onChannels,
-            Modifier.width(112.dp).fillParentMaxHeight()) }
+            Modifier.width(92.dp).fillParentMaxHeight()) }
         items(window, key = { "channel:${it.channel.id}" }) { item ->
             val playing = item.channel.id == currentId
             val subtitle = if (playing) currentTitle ?: "تعمل الآن"
-                else if (appearance.showGroup) item.channel.group ?: "قناة مباشرة" else "قناة مباشرة"
+                else ""
             DeckChannelTile(item, playing, subtitle, appearance.showLogo, { onSelect(item.channel.id) },
-                Modifier.width(140.dp).fillParentMaxHeight()
+                Modifier.width(156.dp).fillParentMaxHeight()
                     .then(if (playing) Modifier.focusRequester(selectedFocus) else Modifier))
         }
     }

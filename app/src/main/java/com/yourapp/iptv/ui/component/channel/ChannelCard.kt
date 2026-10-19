@@ -30,20 +30,20 @@ fun ChannelCard(channel: Channel, onClick: () -> Unit, modifier: Modifier = Modi
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().heightIn(min = 108.dp)
+        modifier = modifier.fillMaxWidth().heightIn(min = 92.dp)
             .onFocusChanged { focused = it.isFocused },
         shape = MaterialTheme.shapes.large,
         color = if (focused) Color(0xFF164362) else Color(0xFF111C36),
         contentColor = Color.White,
         border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) NeonBlue else Color(0xFF263658))
     ) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ChannelLogo(channel.name, channel.logoUrl, Modifier.size(52.dp))
+        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ChannelLogo(channel.name, channel.logoUrl, Modifier.size(44.dp))
             FavoriteBadge(channel.isFavorite)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(channel.name, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium)
+                    style = MaterialTheme.typography.titleSmall)
                 channel.group?.let {
                     Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         color = Color(0xFFBECDE4), style = MaterialTheme.typography.bodySmall)

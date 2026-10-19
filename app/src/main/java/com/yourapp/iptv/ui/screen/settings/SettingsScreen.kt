@@ -26,7 +26,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onSettingsSaved: () -> Unit = {},
     onBack: (() -> Unit)? = null,
-    onPlayerAppearance: () -> Unit = {}
+    onPlayerAppearance: () -> Unit = {},
+    onHomeAppearance: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.isSaved) {
@@ -41,6 +42,7 @@ fun SettingsScreen(
     ) {
         Text("إعدادات التطبيق", style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary)
+        AppButton("مظهر الرئيسية والشريط الجانبي", onHomeAppearance, enabled = !state.isSaving)
         AppButton("مظهر المشغّل", onPlayerAppearance, enabled = !state.isSaving)
         if (state.isLoading) {
             CircularProgressIndicator()

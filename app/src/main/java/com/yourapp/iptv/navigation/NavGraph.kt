@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.yourapp.iptv.ui.screen.appearance.HomeAppearanceScreen
 import com.yourapp.iptv.ui.screen.home.HomeScreen
 import com.yourapp.iptv.ui.screen.epg.EpgScreen
 import com.yourapp.iptv.ui.screen.player.PlayerScreen
@@ -23,6 +24,7 @@ fun AppNavGraph() {
             val returnedChannel by entry.savedStateHandle
                 .getStateFlow<String?>("lastPlayedChannelId", null).collectAsStateWithLifecycle()
             HomeScreen(
+                onHomeAppearance = { nav.navigate("home_appearance") { launchSingleTop = true } },
                 returnedChannelId = returnedChannel,
                 onReturnHandled = { entry.savedStateHandle["lastPlayedChannelId"] = null },
                 onSettings = { nav.navigate(Destinations.SETTINGS) { launchSingleTop = true } },
@@ -55,11 +57,13 @@ fun AppNavGraph() {
                 }
             )
         }
+        composable("home_appearance") { HomeAppearanceScreen(onBack = { nav.popBackStack() }) }
         composable(Destinations.PLAYER_APPEARANCE) {
             PlayerAppearanceScreen(onBack = { nav.popBackStack() })
         }
         composable(Destinations.SETTINGS) {
             SettingsScreen(
+                onHomeAppearance = { nav.navigate("home_appearance") { launchSingleTop = true } },
                 onPlayerAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
                 onSettingsSaved = {
                     nav.navigate(Destinations.HOME) {

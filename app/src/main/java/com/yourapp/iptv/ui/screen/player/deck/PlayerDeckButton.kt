@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,14 +31,14 @@ internal fun PlayerDeckButton(icon: DeckIcon, label: String, onClick: () -> Unit
     val color = when { !enabled -> Color(0xFF6C7A88); focused -> Color(0xFF101C26)
         selected -> Color(0xFFFFD54F); else -> Color.White }
     Surface(onClick = onClick, enabled = enabled,
-        modifier = modifier.width(78.dp).heightIn(min = 58.dp)
+        modifier = modifier.widthIn(min = 72.dp).heightIn(min = 54.dp)
             .onFocusChanged { focused = it.isFocused }.semantics { contentDescription = label },
         shape = MaterialTheme.shapes.medium, color = if (focused) Color(0xFFEAF2F7) else Color.Transparent,
         contentColor = color, border = if (focused) BorderStroke(2.dp, NeonBlue) else null) {
         Column(Modifier.padding(horizontal = 4.dp, vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             PlayerDeckIcon(icon, color, filled = selected)
-            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
+            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
         }
     }
 }

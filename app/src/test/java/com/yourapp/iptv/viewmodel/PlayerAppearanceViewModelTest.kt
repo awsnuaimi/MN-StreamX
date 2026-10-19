@@ -26,9 +26,9 @@ class PlayerAppearanceViewModelTest {
         val repository = FakePlayerAppearanceRepository()
         val model = PlayerAppearanceViewModel(repository).also { store.put("player", it) }
         runCurrent()
-        repository.values.value = PlayerAppearance(style = PlayerInfoStyle.CLASSIC, displaySeconds = 8)
+        repository.values.value = PlayerAppearance(style = PlayerInfoStyle.CARDS, displaySeconds = 8)
         runCurrent()
-        assertEquals(PlayerInfoStyle.CLASSIC, model.appearance.value.style)
+        assertEquals(PlayerInfoStyle.CARDS, model.appearance.value.style)
         assertEquals(8000L, model.appearance.value.timeoutMillis)
         assertEquals(1, repository.reads)
     }
@@ -41,7 +41,7 @@ class PlayerAppearanceViewModelTest {
             override fun observe() = flow {
                 attempts++
                 if (attempts == 1) {
-                    emit(PlayerAppearance(style = PlayerInfoStyle.CLASSIC))
+                    emit(PlayerAppearance(style = PlayerInfoStyle.CARDS))
                     throw IOException("Synthetic failure")
                 }
                 emitAll(values)
@@ -50,7 +50,7 @@ class PlayerAppearanceViewModelTest {
         }
         val model = PlayerAppearanceViewModel(repository).also { store.put("player", it) }
         runCurrent()
-        assertEquals(PlayerInfoStyle.CLASSIC, model.appearance.value.style)
+        assertEquals(PlayerInfoStyle.CARDS, model.appearance.value.style)
         advanceTimeBy(4999); runCurrent(); assertEquals(1, attempts)
         advanceTimeBy(1); runCurrent()
         assertEquals(2, attempts)

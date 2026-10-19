@@ -84,6 +84,26 @@ class HomeViewModelTest {
         assertEquals(0, playlists.calls)
     }
 
+    @Test fun sidebarSectionsAreIdempotentAndClearPreviousFilters() = runTest(dispatcher) {
+        val favorites = FakeFavoriteRepository()
+        val model = HomeViewModel(settings("https://unit.test/list.m3u"), FakePlaylists(), dispatcher, favorites)
+        advanceUntilIdle()
+        model.updateQuery("Beta"); model.selectGroup("Sports"); advanceUntilIdle()
+        model.selectSection(true); advanceUntilIdle()
+        assertTrue(model.uiState.value.favoritesOnly)
+        assertEquals("", model.uiState.value.query)
+        assertEquals(null, model.uiState.value.selectedGroup)
+        model.selectSection(true); advanceUntilIdle()
+        assertTrue(model.uiState.value.favoritesOnly)
+        model.selectGroup("News"); advanceUntilIdle()
+        model.selectAllGroups(); advanceUntilIdle()
+        assertTrue(model.uiState.value.favoritesOnly)
+        assertEquals(null, model.uiState.value.selectedGroup)
+        model.selectSection(false); advanceUntilIdle()
+        assertFalse(model.uiState.value.favoritesOnly)
+        assertEquals(2, model.uiState.value.visibleChannels.size)
+    }
+
     private fun settings(url: String) = source(AppSettings(m3uUrl = url))
 
     private fun source(value: AppSettings) = object : SettingsRepository {

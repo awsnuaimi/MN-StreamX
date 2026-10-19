@@ -11,7 +11,7 @@ class PlayerAppearanceCodecTest {
     }
 
     @Test fun allOptionsRoundTripWithoutDeletingUnrelatedKeys() {
-        val value = PlayerAppearance(PlayerInfoStyle.CLASSIC, PlayerTextSize.LARGE, PlayerPanelShade.SOLID,
+        val value = PlayerAppearance(PlayerInfoStyle.CARDS, PlayerTextSize.LARGE, PlayerPanelShade.SOLID,
             displaySeconds = 8, showLogo = false, showGroup = false, showCounter = false,
             showNext = false, showDescription = false, showChannelButtons = false, showHints = true)
         val preferences = mutablePreferencesOf(stringPreferencesKey("future_option") to "preserve")
@@ -37,20 +37,22 @@ class PlayerAppearanceCodecTest {
 
     @Test fun resettingAppearanceResetsOnlyItsOwnOptions() {
         val values = mutablePreferencesOf(stringPreferencesKey("future_option") to "preserve")
-        PlayerAppearanceCodec.encode(values, PlayerAppearance(style = PlayerInfoStyle.CLASSIC, showHints = true))
+        PlayerAppearanceCodec.encode(values, PlayerAppearance(style = PlayerInfoStyle.CARDS, showHints = true))
         PlayerAppearanceCodec.encode(values, PlayerAppearance())
         assertEquals(PlayerAppearance(), PlayerAppearanceCodec.decode(values))
         assertEquals("preserve", values[stringPreferencesKey("future_option")])
     }
 
-    @Test fun allThreeStylesKeepIndependentStableStoredNames() {
-        for (style in PlayerInfoStyle.entries) {
-            val values = mutablePreferencesOf()
-            PlayerAppearanceCodec.encode(values, PlayerAppearance(style = style, displaySeconds = 8))
+    @Test fun oldStoredStylesMigrateToCardsAndKeepOtherOptions() {
+        for (old in listOf("COMPACT", "CLASSIC", "CARDS", "unknown")) {
+            val values = mutablePreferencesOf(stringPreferencesKey("info_style") to old,
+                intPreferencesKey("display_seconds") to 8, booleanPreferencesKey("show_logo") to false)
             val restored = PlayerAppearanceCodec.decode(values)
-            assertEquals(style, restored.style)
+            assertEquals(PlayerInfoStyle.CARDS, restored.style)
+            assertFalse(restored.showLogo)
             assertEquals(8000L, restored.timeoutMillis)
         }
-        assertEquals(PlayerInfoStyle.COMPACT, PlayerAppearanceCodec.decode(emptyPreferences()).style)
+        assertEquals(PlayerInfoStyle.CARDS, PlayerAppearance().style)
+        assertEquals(PlayerInfoStyle.CARDS, PlayerAppearanceCodec.decode(emptyPreferences()).style)
     }
 }

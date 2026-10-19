@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -45,12 +47,12 @@ internal fun DeckChannelTile(item: DeckChannelItem, playing: Boolean, subtitle: 
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 10.dp, vertical = 7.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                if (showLogo) ChannelLogo(item.channel.name, item.channel.logoUrl, Modifier.size(32.dp))
+                if (showLogo) ChannelLogo(item.channel.name, item.channel.logoUrl, Modifier.width(80.dp).height(34.dp))
                 Text("${item.number} · ${item.channel.name}", Modifier.padding(top = 4.dp), color = color,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelLarge.copy(textDirection = TextDirection.Content))
             }
-            Text(subtitle, Modifier.fillMaxWidth().background(if (playing) Color(0xFF12647B) else Color(0xFF233846))
+            if (subtitle.isNotBlank()) Text(subtitle, Modifier.fillMaxWidth().background(if (playing) Color(0xFF12647B) else Color.Transparent)
                 .padding(horizontal = 8.dp, vertical = 5.dp), color = Color.White, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Content))
         }
@@ -61,11 +63,11 @@ internal fun DeckChannelTile(item: DeckChannelItem, playing: Boolean, subtitle: 
 private fun DeckTileSurface(enabled: Boolean, playing: Boolean, onClick: () -> Unit, modifier: Modifier,
     content: @Composable (Color) -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    val color = when { !enabled -> Color(0xFF748595); focused -> Color(0xFF101C26); else -> Color.White }
+    val color = when { !enabled -> Color(0xFF748595); else -> Color.White }
     Surface(onClick = onClick, enabled = enabled, modifier = modifier.onFocusChanged { focused = it.isFocused },
         shape = MaterialTheme.shapes.small, contentColor = color,
-        color = if (focused) Color(0xFFE7EFF4) else Color(0xFF1D2C36),
-        border = when { focused -> BorderStroke(3.dp, NeonBlue); playing -> BorderStroke(2.dp, NeonBlue); else -> null }) {
+        color = if (focused) Color(0xFF174860) else Color(0xFF172536),
+        border = when { focused -> BorderStroke(3.dp, NeonBlue); playing -> BorderStroke(1.dp, Color(0xFF607D92)); else -> null }) {
         content(color)
     }
 }

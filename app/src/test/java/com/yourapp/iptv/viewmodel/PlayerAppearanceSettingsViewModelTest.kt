@@ -20,7 +20,7 @@ class PlayerAppearanceSettingsViewModelTest {
         PlayerAppearanceSettingsViewModel(repository).also { store.put("appearance", it) }
 
     @Test fun editingBeforeReadingCannotOverwriteSavedAppearance() = runTest(dispatcher) {
-        val saved = PlayerAppearance(style = PlayerInfoStyle.CLASSIC)
+        val saved = PlayerAppearance(style = PlayerInfoStyle.CARDS)
         val repository = FakePlayerAppearanceRepository(saved).apply { latency = 100 }
         val model = model(repository)
         model.update(PlayerAppearance(textSize = PlayerTextSize.LARGE)); model.save()
@@ -32,7 +32,7 @@ class PlayerAppearanceSettingsViewModelTest {
     @Test fun saveIsAtomicAndRepeatedClicksCannotDuplicateWrites() = runTest(dispatcher) {
         val repository = FakePlayerAppearanceRepository().apply { latency = 100 }
         val model = model(repository); advanceUntilIdle()
-        val value = PlayerAppearance(style = PlayerInfoStyle.CLASSIC, textSize = PlayerTextSize.LARGE)
+        val value = PlayerAppearance(style = PlayerInfoStyle.CARDS, textSize = PlayerTextSize.LARGE)
         model.update(value); model.save(); model.save()
         model.update(PlayerAppearance()); advanceUntilIdle()
         assertEquals(1, repository.saves)

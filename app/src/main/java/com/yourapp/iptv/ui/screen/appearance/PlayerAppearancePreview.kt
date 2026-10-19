@@ -18,7 +18,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.PlayerAppearance
-import com.yourapp.iptv.domain.model.PlayerInfoStyle
 import com.yourapp.iptv.ui.screen.player.deck.PlayerDeckIcon
 import com.yourapp.iptv.ui.screen.player.deck.DeckIcon
 import com.yourapp.iptv.ui.theme.NeonBlue
@@ -31,7 +30,7 @@ internal fun PlayerAppearancePreview(value: PlayerAppearance) {
             verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text("معاينة حجم النص والخلفية", color = NeonBlue, style = MaterialTheme.typography.labelMedium)
             Text("اسم القناة · عنوان البرنامج الحالي", color = Color.White, style = MaterialTheme.typography.titleMedium)
-            if (value.style == PlayerInfoStyle.CARDS) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(DeckIcon.GUIDE to "الدليل", DeckIcon.CHANNELS to "القنوات", DeckIcon.FAVORITE to "المفضلة").forEach { (icon, label) ->
                     Surface(Modifier.weight(1f).height(68.dp), color = Color(0xFF1D2C36), contentColor = Color.White) {
                         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {

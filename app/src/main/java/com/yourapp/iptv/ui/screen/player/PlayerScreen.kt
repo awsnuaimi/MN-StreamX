@@ -30,7 +30,6 @@ import com.yourapp.iptv.ui.component.player.PlayerSurface
 import com.yourapp.iptv.ui.component.player.PlayerSurfaceHandle
 import com.yourapp.iptv.ui.component.player.handlePlayerRemoteKey
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
-import com.yourapp.iptv.domain.model.PlayerInfoStyle
 import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
 import com.yourapp.iptv.viewmodel.PlayerEpgViewModel
 import com.yourapp.iptv.viewmodel.PlayerViewModel
@@ -67,6 +66,7 @@ fun PlayerScreen(
     var detailsOpen by remember(channel?.id) { mutableStateOf(false) }
     var returnToDetails by remember { mutableStateOf(false) }
     var focusEpoch by remember { mutableIntStateOf(0) }
+    val deckActivation = remember { PlayerDeckActivation() }
     val surface = remember { PlayerSurfaceHandle() }
     val errorFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
@@ -129,8 +129,15 @@ fun PlayerScreen(
         focusEpoch++
         showInfo()
     }
-    fun handleRemote(event: KeyEvent, visible: Boolean): Boolean = handlePlayerRemoteKey(
-        event.keyCode, event.action, event.repeatCount, visible || infoFocused || detailsOpen, listOpen || detailsOpen
+    fun openDeck() {
+        focusCardId = null; returnToDetails = false; focusInfo = true
+        surface.hideControls(); controlsVisible = false; focusEpoch++; showInfo()
+    }
+    fun handleRemote(event: KeyEvent, visible: Boolean): Boolean {
+        if (deckActivation.handle(event.keyCode, event.action, event.repeatCount,
+                !visible && !infoFocused && !listOpen && !detailsOpen && error == null, ::openDeck)) return true
+        return handlePlayerRemoteKey(
+            event.keyCode, event.action, event.repeatCount, visible || infoFocused || detailsOpen, listOpen || detailsOpen
     ) { command ->
         if (detailsOpen) {
             if (command == PlayerRemoteCommand.BACK) closeDetails()
@@ -140,17 +147,10 @@ fun PlayerScreen(
             PlayerRemoteCommand.NEXT -> changeChannel(true)
             PlayerRemoteCommand.PREVIOUS -> changeChannel(false)
             PlayerRemoteCommand.TOGGLE_CHANNELS -> if (listOpen) closeChannels() else openChannels()
-            PlayerRemoteCommand.SHOW_INFO -> {
-                focusCardId = null
-                returnToDetails = false
-                focusInfo = true
-                surface.hideControls()
-                controlsVisible = false
-                focusEpoch++
-                showInfo()
-            }
+            PlayerRemoteCommand.SHOW_INFO -> openDeck()
             PlayerRemoteCommand.BACK -> back()
         }
+    }
     }
 
     BackHandler { back() }
@@ -175,7 +175,7 @@ fun PlayerScreen(
                     runCatching { errorFocus.requestFocus() }
                 }
                 focusInfo && channel != null -> runCatching {
-                    if (appearance.style == PlayerInfoStyle.CARDS && focusCardId == channel.id && state.currentIndex >= 0) {
+                    if (focusCardId == channel.id && state.currentIndex >= 0) {
                         // The rail scrolls to its selected tile before requesting focus.
                     } else if (returnToDetails) detailsFocus.requestFocus() else favoriteFocus.requestFocus()
                 }
@@ -196,12 +196,12 @@ fun PlayerScreen(
                 onRemoteKey = ::handleRemote,
                 onControllerVisibilityChanged = { controlsVisible = it },
                 modifier = Modifier.fillMaxSize(), controllerTimeoutMs = appearance.timeoutMillis.toInt(),
-                technicalInfoEnabled = appearance.style == PlayerInfoStyle.CARDS,
+                technicalInfoEnabled = true,
                 onTechnicalInfo = { id, value -> if (id == activeChannel?.id) technical = value }
             )
         }
         if (infoVisible && !controlsVisible && !listOpen && error == null) {
-            PlayerInfoOverlay(channel, state.currentIndex + 1, state.queue.size, state.canChangeChannel,
+            PlayerInfoOverlay(channel, state.currentIndex + 1, state.canChangeChannel,
                 onPrevious = { changeChannel(false) }, onNext = { changeChannel(true) },
                 onChannels = ::openChannels,
                 onControls = { focusCardId = null; focusInfo = false; infoVisible = false; surface.showControls() },

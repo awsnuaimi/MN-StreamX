@@ -22,7 +22,8 @@ fun TvChannelGrid(
     channels: List<Channel>,
     selectedChannelId: String?,
     onChannelClick: (Channel) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    columns: Int? = null
 ) {
     val grid = rememberLazyGridState()
     val restoreFocus = remember { FocusRequester() }
@@ -35,7 +36,7 @@ fun TvChannelGrid(
         }
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 220.dp),
+        columns = columns?.let { GridCells.Fixed(it.coerceIn(2, 4)) } ?: GridCells.Adaptive(minSize = 220.dp),
         state = grid,
         modifier = modifier,
         contentPadding = PaddingValues(4.dp),

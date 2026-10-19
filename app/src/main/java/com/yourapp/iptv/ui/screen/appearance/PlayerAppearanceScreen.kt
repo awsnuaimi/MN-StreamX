@@ -38,7 +38,7 @@ fun PlayerAppearanceScreen(onBack: () -> Unit, viewModel: PlayerAppearanceSettin
         }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("اختر ما يناسبك. زر تفاصيل البرنامج يبقى متاحًا في النمطين.")
+            Text("لوحة البطاقات هي واجهة المشغّل. خصّص النص والخلفية والمعلومات التي تظهر فيها.")
             if (state.isLoading) CircularProgressIndicator()
             else if (state.loadFailed) AppButton("إعادة قراءة المظهر", viewModel::load)
             else {

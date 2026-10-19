@@ -5,18 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.PlayerAppearance
-import com.yourapp.iptv.domain.model.PlayerInfoStyle
 import com.yourapp.iptv.domain.model.PlayerPanelShade
 import com.yourapp.iptv.domain.model.PlayerTextSize
 
 @Composable
 internal fun PlayerAppearanceForm(value: PlayerAppearance, enabled: Boolean, onChange: (PlayerAppearance) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        AppearanceChoice("عرض معلومات المشغّل", value.style,
-            listOf(PlayerInfoStyle.COMPACT to "مختصر", PlayerInfoStyle.CLASSIC to "النمط الحالي الكامل",
-                PlayerInfoStyle.CARDS to "لوحة البطاقات"), enabled) {
-            onChange(value.copy(style = it))
-        }
         AppearanceChoice("حجم النص", value.textSize,
             listOf(PlayerTextSize.SMALL to "صغير", PlayerTextSize.NORMAL to "عادي", PlayerTextSize.LARGE to "كبير"), enabled) {
             onChange(value.copy(textSize = it))
@@ -33,8 +27,8 @@ internal fun PlayerAppearanceForm(value: PlayerAppearance, enabled: Boolean, onC
         AppearanceToggle("إظهار تصنيف القناة", value.showGroup, enabled) { onChange(value.copy(showGroup = it)) }
         AppearanceToggle("إظهار ترتيب القناة وعدد القنوات", value.showCounter, enabled) { onChange(value.copy(showCounter = it)) }
         AppearanceToggle("إظهار البرنامج التالي", value.showNext, enabled) { onChange(value.copy(showNext = it)) }
-        AppearanceToggle("إظهار وصف مختصر في الكامل ولوحة البطاقات", value.showDescription,
-            enabled && value.style != PlayerInfoStyle.COMPACT) { onChange(value.copy(showDescription = it)) }
+        AppearanceToggle("إظهار سطر وصف مختصر", value.showDescription,
+            enabled) { onChange(value.copy(showDescription = it)) }
         AppearanceToggle("إظهار زري القناة السابقة والتالية", value.showChannelButtons, enabled) {
             onChange(value.copy(showChannelButtons = it))
         }

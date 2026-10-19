@@ -1,6 +1,5 @@
 package com.yourapp.iptv.ui.screen.player
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,14 +26,13 @@ import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
 import com.yourapp.iptv.ui.screen.player.deck.PlayerDeckOverlay
 import com.yourapp.iptv.domain.model.PlayerAppearance
-import com.yourapp.iptv.domain.model.PlayerInfoStyle
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.state.FavoriteUiState
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
 
 @Composable
 fun PlayerInfoOverlay(
-    channel: Channel?, position: Int, total: Int, canChange: Boolean,
+    channel: Channel?, position: Int, canChange: Boolean,
     onPrevious: () -> Unit, onNext: () -> Unit, onChannels: () -> Unit,
     onControls: () -> Unit, onBack: () -> Unit, onFocusChanged: (Boolean) -> Unit,
     epg: PlayerEpgUiState, favorites: FavoriteUiState,
@@ -45,26 +43,11 @@ fun PlayerInfoOverlay(
     onGuide: () -> Unit = {}
 ) {
     val density = LocalDensity.current
-    val compact = appearance.style == PlayerInfoStyle.COMPACT
     CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * appearance.textSize.scale)) {
         Box(Modifier.fillMaxSize().onFocusChanged { onFocusChanged(it.hasFocus) }.focusGroup()) {
-            if (appearance.style == PlayerInfoStyle.CARDS && channel != null) {
-                PlayerDeckOverlay(channel, deckChannels, position - 1, appearance, epg, technical, canChange,
-                    favorites, favoriteFocus, detailsFocus, focusCardId, deckFocusEpoch, onSelectDeckChannel, onGuide,
-                    onPrevious, onNext, onChannels, onControls, onDetails, onToggleFavorite, onRetryFavorites, onAppearance, onBack)
-            } else {
-                PlayerInfoHeader(channel, position, total, appearance, onBack, onAppearance)
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .background(Color.Black.copy(alpha = appearance.panelShade.alpha))
-                    .padding(horizontal = 18.dp, vertical = if (compact) 10.dp else 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp)) {
-                    if (channel != null) PlayerEpgInfo(epg, appearance.showNext, !compact && appearance.showDescription)
-                    PlayerActionRow(appearance, channel != null, channel?.isFavorite == true, canChange, total,
-                        favorites, favoriteFocus, detailsFocus, onPrevious, onNext, onChannels, onControls,
-                        onDetails, onToggleFavorite, onRetryFavorites)
-                }
-            }
+            if (channel != null) PlayerDeckOverlay(channel, deckChannels, position - 1, appearance, epg, technical, canChange,
+                favorites, favoriteFocus, detailsFocus, focusCardId, deckFocusEpoch, onSelectDeckChannel, onGuide,
+                onPrevious, onNext, onChannels, onControls, onDetails, onToggleFavorite, onRetryFavorites, onAppearance, onBack)
         }
     }
 }

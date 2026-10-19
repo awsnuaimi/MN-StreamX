@@ -1,13 +1,7 @@
 package com.yourapp.iptv.ui.screen.player.deck
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -35,12 +29,14 @@ internal fun PlayerDeckOverlay(channel: Channel, channels: List<Channel>, curren
     onDetails: () -> Unit, onFavorite: () -> Unit, onRetryFavorites: () -> Unit,
     onAppearance: () -> Unit, onBack: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val dense = maxHeight < 480.dp
+        val dense = maxHeight < 650.dp
         val alpha = appearance.panelShade.alpha
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * 0.88f)
-            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = (alpha - 0.18f).coerceAtLeast(0.4f)),
-                Color.Black.copy(alpha = alpha), Color.Black.copy(alpha = (alpha + 0.12f).coerceAtMost(1f)))))
-            .verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 12.dp),
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * 0.8f)
+            .background(Brush.verticalGradient(0f to Color.Transparent,
+                0.12f to Color(0xFF080E19).copy(alpha = alpha * 0.85f),
+                0.55f to Color(0xFF080E19).copy(alpha = alpha),
+                1f to Color(0xFF080E19).copy(alpha = (alpha + 0.08f).coerceAtMost(1f))))
+            .verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 18.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PlayerDeckInfo(channel, currentIndex + 1, channels.size, epg, appearance, technical, dense)
             PlayerDeckRail(channels, currentIndex, channel.id, epg.schedule.current(epg.nowMillis)?.title,
@@ -48,7 +44,7 @@ internal fun PlayerDeckOverlay(channel: Channel, channels: List<Channel>, curren
             PlayerDeckDock(appearance, canChange, channel.isFavorite, favorites, favoriteFocus, detailsFocus,
                 onPrevious, onNext, onControls, onDetails, onFavorite, onAppearance, onBack)
             FavoriteFeedback(favorites, onRetryFavorites)
-            if (appearance.showHints) Text("INFO للأيقونات · ↑ ↓ للتنقل بين الصفوف · OK للاختيار · MENU للقنوات",
+            if (appearance.showHints) Text("OK / INFO للوحة · ↑ ↓ بين الصفوف · BACK لإخفائها · MENU للقنوات",
                 color = Color(0xFFBCCBD9), style = MaterialTheme.typography.bodySmall)
         }
     }

@@ -105,6 +105,16 @@ class HomeViewModel @Inject constructor(
         filterChannels()
     }
 
+    fun selectAllGroups() {
+        state.update { it.copy(selectedGroup = null, selectedChannelId = null) }
+        filterChannels()
+    }
+
+    fun selectSection(favoritesOnly: Boolean) {
+        state.update { it.copy(favoritesOnly = favoritesOnly, selectedGroup = null, query = "", selectedChannelId = null) }
+        filterChannels()
+    }
+
     fun clearFilters() {
         state.update { it.copy(query = "", selectedGroup = null, favoritesOnly = false, selectedChannelId = null) }
         filterChannels()
