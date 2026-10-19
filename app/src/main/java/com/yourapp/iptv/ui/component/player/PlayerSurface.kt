@@ -29,7 +29,8 @@ fun PlayerSurface(
     onBuffering: (String, Boolean) -> Unit,
     onRemoteKey: (KeyEvent, Boolean) -> Boolean,
     onControllerVisibilityChanged: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    controllerTimeoutMs: Int = 4500
 ) {
     val context = LocalContext.current.applicationContext
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -73,7 +74,7 @@ fun PlayerSurface(
                 handle.view = this
                 useController = true
                 setControllerAutoShow(false)
-                controllerShowTimeoutMs = 4500
+                controllerShowTimeoutMs = controllerTimeoutMs.coerceIn(3000, 8000)
                 setKeepContentOnPlayerReset(true)
                 setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                 this.onRemoteKey = { event, visible -> handleKey(event, visible) }
@@ -87,6 +88,8 @@ fun PlayerSurface(
         },
         modifier = modifier,
         update = { view ->
+            val timeout = controllerTimeoutMs.coerceIn(3000, 8000)
+            if (view.controllerShowTimeoutMs != timeout) view.controllerShowTimeoutMs = timeout
             view.player = session.player
             view.keepScreenOn = session.player != null
         },

@@ -5,4 +5,5 @@ object Destinations {
     const val SETTINGS = "settings"
     const val PLAYER = "player/{channelId}?group={group}&query={query}&favoritesOnly={favoritesOnly}"
     const val EPG = "epg?channelId={channelId}&group={group}&query={query}&favoritesOnly={favoritesOnly}"
+    const val PLAYER_APPEARANCE = "player-appearance"
 }

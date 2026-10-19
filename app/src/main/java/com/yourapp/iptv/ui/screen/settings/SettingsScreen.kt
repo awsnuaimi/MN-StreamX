@@ -25,7 +25,8 @@ import com.yourapp.iptv.viewmodel.SettingsViewModel
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onSettingsSaved: () -> Unit = {},
-    onBack: (() -> Unit)? = null
+    onBack: (() -> Unit)? = null,
+    onPlayerAppearance: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.isSaved) {
@@ -40,6 +41,7 @@ fun SettingsScreen(
     ) {
         Text("إعدادات التطبيق", style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary)
+        AppButton("مظهر المشغّل", onPlayerAppearance, enabled = !state.isSaving)
         if (state.isLoading) {
             CircularProgressIndicator()
             Text("جارٍ قراءة الإعدادات...")

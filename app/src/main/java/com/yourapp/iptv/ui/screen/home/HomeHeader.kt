@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextDirection
+import com.yourapp.iptv.ui.presentation.ProgramPresentation
 import com.yourapp.iptv.ui.component.common.AppButton
 
 @Composable
@@ -39,7 +41,8 @@ private fun HomeHeading(visible: Int, total: Int, modifier: Modifier) {
     Column(modifier) {
         Text("MN StreamX", style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary)
-        Text("القنوات المباشرة · $visible / $total", style = MaterialTheme.typography.bodyMedium)
+        Text(ProgramPresentation.channelCount(visible, total),
+            style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Rtl))
     }
 }
 

@@ -32,6 +32,7 @@ import com.yourapp.iptv.ui.component.player.handlePlayerRemoteKey
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
 import com.yourapp.iptv.viewmodel.PlayerEpgViewModel
 import com.yourapp.iptv.viewmodel.PlayerViewModel
+import com.yourapp.iptv.viewmodel.PlayerAppearanceViewModel
 import kotlinx.coroutines.delay
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -39,11 +40,14 @@ import kotlinx.coroutines.delay
 fun PlayerScreen(
     onBack: (String?) -> Unit,
     viewModel: PlayerViewModel = hiltViewModel(),
-    epgViewModel: PlayerEpgViewModel = hiltViewModel()
+    epgViewModel: PlayerEpgViewModel = hiltViewModel(),
+    appearanceViewModel: PlayerAppearanceViewModel = hiltViewModel(),
+    onAppearance: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
     val epg by epgViewModel.uiState.collectAsStateWithLifecycle()
+    val appearance by appearanceViewModel.appearance.collectAsStateWithLifecycle()
     val channel = state.channel
     val activeChannel by rememberUpdatedState(channel)
     var retry by remember(channel?.id) { mutableIntStateOf(0) }
@@ -56,6 +60,9 @@ fun PlayerScreen(
     var interaction by remember { mutableIntStateOf(0) }
     var focusInfo by remember { mutableStateOf(false) }
     val favoriteFocus = remember { FocusRequester() }
+    val detailsFocus = remember { FocusRequester() }
+    var detailsOpen by remember(channel?.id) { mutableStateOf(false) }
+    var returnToDetails by remember { mutableStateOf(false) }
     var focusEpoch by remember { mutableIntStateOf(0) }
     val surface = remember { PlayerSurfaceHandle() }
     val errorFocus = remember { FocusRequester() }
@@ -63,6 +70,13 @@ fun PlayerScreen(
     val error = state.errorMessage ?: playbackError
 
     fun showInfo() { infoVisible = true; interaction++ }
+    fun closeDetails() {
+        detailsOpen = false
+        returnToDetails = true
+        focusInfo = true
+        focusEpoch++
+        showInfo()
+    }
     fun closeChannels() {
         focusInfo = false
         listOpen = false
@@ -77,22 +91,25 @@ fun PlayerScreen(
         listOpen = true
     }
     fun back() {
-        when {
-            listOpen -> closeChannels()
-            controlsVisible -> {
+        when (playerBackAction(detailsOpen, listOpen, controlsVisible, infoFocused)) {
+            PlayerBackAction.CLOSE_DETAILS -> closeDetails()
+            PlayerBackAction.CLOSE_CHANNELS -> closeChannels()
+            PlayerBackAction.HIDE_CONTROLS -> {
                 surface.hideControls()
                 controlsVisible = false
                 focusEpoch++
             }
-            infoFocused -> {
+            PlayerBackAction.HIDE_INFO -> {
                 focusInfo = false
                 infoVisible = false
                 focusEpoch++
             }
-            else -> onBack(channel?.id)
+            PlayerBackAction.EXIT -> onBack(channel?.id)
         }
     }
     fun changeChannel(next: Boolean) {
+        detailsOpen = false
+        returnToDetails = false
         focusInfo = false
         listOpen = false
         surface.hideControls()
@@ -102,13 +119,18 @@ fun PlayerScreen(
         showInfo()
     }
     fun handleRemote(event: KeyEvent, visible: Boolean): Boolean = handlePlayerRemoteKey(
-        event.keyCode, event.action, event.repeatCount, visible || infoFocused, listOpen
+        event.keyCode, event.action, event.repeatCount, visible || infoFocused || detailsOpen, listOpen || detailsOpen
     ) { command ->
+        if (detailsOpen) {
+            if (command == PlayerRemoteCommand.BACK) closeDetails()
+            return@handlePlayerRemoteKey
+        }
         when (command) {
             PlayerRemoteCommand.NEXT -> changeChannel(true)
             PlayerRemoteCommand.PREVIOUS -> changeChannel(false)
             PlayerRemoteCommand.TOGGLE_CHANNELS -> if (listOpen) closeChannels() else openChannels()
             PlayerRemoteCommand.SHOW_INFO -> {
+                returnToDetails = false
                 focusInfo = true
                 surface.hideControls()
                 controlsVisible = false
@@ -125,14 +147,14 @@ fun PlayerScreen(
     }
     LaunchedEffect(channel) { epgViewModel.selectChannel(channel) }
     LaunchedEffect(channel?.id) { showInfo() }
-    LaunchedEffect(channel?.id, interaction, listOpen, controlsVisible, infoFocused, error) {
-        if (!listOpen && !controlsVisible && !infoFocused && error == null) {
-            delay(4500)
+    LaunchedEffect(channel?.id, interaction, listOpen, detailsOpen, controlsVisible, infoFocused, error, appearance.displaySeconds) {
+        if (!listOpen && !detailsOpen && !controlsVisible && !infoFocused && error == null) {
+            delay(appearance.timeoutMillis)
             infoVisible = false
         }
     }
-    LaunchedEffect(focusEpoch, channel?.id, retry, error, listOpen) {
-        if (!listOpen) {
+    LaunchedEffect(focusEpoch, channel?.id, retry, error, listOpen, detailsOpen) {
+        if (!listOpen && !detailsOpen) {
             withFrameNanos { }
             when {
                 error != null -> {
@@ -140,7 +162,9 @@ fun PlayerScreen(
                     controlsVisible = false
                     runCatching { errorFocus.requestFocus() }
                 }
-                focusInfo && channel != null -> runCatching { favoriteFocus.requestFocus() }
+                focusInfo && channel != null -> runCatching {
+                    if (returnToDetails) detailsFocus.requestFocus() else favoriteFocus.requestFocus()
+                }
                 channel == null -> runCatching { rootFocus.requestFocus() }
                 else -> surface.requestFocus()
             }
@@ -157,7 +181,7 @@ fun PlayerScreen(
                 onBuffering = { id, loading -> if (id == activeChannel?.id) buffering = loading },
                 onRemoteKey = ::handleRemote,
                 onControllerVisibilityChanged = { controlsVisible = it },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(), controllerTimeoutMs = appearance.timeoutMillis.toInt()
             )
         }
         if (infoVisible && !controlsVisible && !listOpen && error == null) {
@@ -168,6 +192,8 @@ fun PlayerScreen(
                 onBack = { onBack(channel?.id) }, onFocusChanged = { infoFocused = it },
                 favoriteFocus = favoriteFocus, favorites = favorites, onToggleFavorite = viewModel::toggleFavorite,
                 onRetryFavorites = viewModel::retryFavorites,
+                appearance = appearance, detailsFocus = detailsFocus, onAppearance = onAppearance,
+                onDetails = { detailsOpen = true; surface.hideControls(); controlsVisible = false },
                 epg = if (epg.channelId == channel?.id) epg
                     else PlayerEpgUiState(channelId = channel?.id, isLoading = channel != null))
         }
@@ -184,5 +210,8 @@ fun PlayerScreen(
                 onSelect = { id -> viewModel.selectChannel(id); closeChannels() },
                 onDismiss = ::closeChannels, onRemoteKey = ::handleRemote)
         }
+        if (detailsOpen && channel != null) PlayerProgramDetailsDialog(channel.name,
+            if (epg.channelId == channel.id) epg else PlayerEpgUiState(channelId = channel.id, isLoading = true),
+            appearance, ::closeDetails)
     }
 }

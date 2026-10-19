@@ -13,6 +13,7 @@ import com.yourapp.iptv.ui.screen.home.HomeScreen
 import com.yourapp.iptv.ui.screen.epg.EpgScreen
 import com.yourapp.iptv.ui.screen.player.PlayerScreen
 import com.yourapp.iptv.ui.screen.settings.SettingsScreen
+import com.yourapp.iptv.ui.screen.appearance.PlayerAppearanceScreen
 
 @Composable
 fun AppNavGraph() {
@@ -54,8 +55,12 @@ fun AppNavGraph() {
                 }
             )
         }
+        composable(Destinations.PLAYER_APPEARANCE) {
+            PlayerAppearanceScreen(onBack = { nav.popBackStack() })
+        }
         composable(Destinations.SETTINGS) {
             SettingsScreen(
+                onPlayerAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
                 onSettingsSaved = {
                     nav.navigate(Destinations.HOME) {
                         popUpTo(Destinations.HOME) { inclusive = true }
@@ -71,7 +76,8 @@ fun AppNavGraph() {
             navArgument("query") { type = NavType.StringType; defaultValue = "" },
             navArgument("favoritesOnly") { type = NavType.BoolType; defaultValue = false }
         )) {
-            PlayerScreen(onBack = { channelId ->
+            PlayerScreen(onAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
+                onBack = { channelId ->
                 if (channelId != null) {
                     nav.previousBackStackEntry?.savedStateHandle?.set("lastPlayedChannelId", channelId)
                 }
