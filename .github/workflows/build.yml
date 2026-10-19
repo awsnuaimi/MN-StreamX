@@ -49,8 +49,26 @@ jobs:
           done
           umask 077
           export MN_STREAMX_KEYSTORE_FILE="$RUNNER_TEMP/mn-streamx-app-signing.p12"
-          trap 'rm -f "$MN_STREAMX_KEYSTORE_FILE"' EXIT
+          certificate_path="$RUNNER_TEMP/mn-streamx-signing-cert.der"
+          trap 'rm -f "$MN_STREAMX_KEYSTORE_FILE" "$certificate_path"' EXIT
+          expected_cert="${EXPECTED_CERT_SHA256,,}"
+          if [[ ! "$expected_cert" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::EXPECTED_CERT_SHA256 must contain exactly 64 hexadecimal characters."
+            exit 1
+          fi
+          printf 'Expected certificate SHA-256: %s\n' "$expected_cert"
           printf '%s' "$MN_STREAMX_KEYSTORE_BASE64" | base64 --decode > "$MN_STREAMX_KEYSTORE_FILE"
+          keytool -exportcert -storetype PKCS12 \
+            -keystore "$MN_STREAMX_KEYSTORE_FILE" \
+            -alias "$MN_STREAMX_KEY_ALIAS" \
+            -storepass:env MN_STREAMX_KEYSTORE_PASSWORD \
+            -file "$certificate_path" > /dev/null
+          repository_cert="$(sha256sum "$certificate_path" | cut -d ' ' -f1)"
+          printf 'Repository certificate SHA-256: %s\n' "$repository_cert"
+          if [[ "$repository_cert" != "$expected_cert" ]]; then
+            echo "::error::The repository signing certificate differs from the Termux certificate. Check MN_STREAMX_KEYSTORE_BASE64."
+            exit 1
+          fi
           gradle --no-daemon assembleRelease
 
           sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
@@ -61,8 +79,14 @@ jobs:
           fi
           apk_path="app/build/outputs/apk/release/app-release.apk"
           signing_report="$("$signer_path" verify --print-certs "$apk_path")"
-          actual_cert="$(printf '%s\n' "$signing_report" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
-          if [[ "${actual_cert,,}" != "$EXPECTED_CERT_SHA256" ]]; then
+          actual_cert="$(printf '%s\n' "$signing_report" | sed -n 's/^[[:space:]]*Signer #1 certificate SHA-256 digest:[[:space:]]*//p' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+          printf 'APK certificate SHA-256: %s\n' "${actual_cert:-not found}"
+          if [[ ! "$actual_cert" =~ ^[0-9a-f]{64}$ ]]; then
+            printf '%s\n' "$signing_report"
+            echo "::error::Cannot read the APK certificate digest from the public apksigner report."
+            exit 1
+          fi
+          if [[ "$actual_cert" != "$expected_cert" ]]; then
             echo "::error::Signing certificate changed. Refusing to publish an incompatible update."
             exit 1
           fi
