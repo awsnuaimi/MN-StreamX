@@ -28,7 +28,7 @@ class PlayerViewModelTest {
     @Test fun switchingUsesLoadedChannelsWithoutReloadingOrImporting() = runTest(dispatcher) {
         val repository = FakeChannels()
         val saved = SavedStateHandle(mapOf("channelId" to "b"))
-        val model = PlayerViewModel(saved, repository, dispatcher)
+        val model = PlayerViewModel(saved, repository, dispatcher, FakeFavoriteRepository())
         model.nextChannel()
         advanceUntilIdle()
         assertEquals("b", model.uiState.value.channel?.id)
@@ -43,7 +43,7 @@ class PlayerViewModelTest {
     @Test fun selectionStaysWithinTheHomeCategoryAndSearch() = runTest(dispatcher) {
         val model = PlayerViewModel(SavedStateHandle(mapOf(
             "channelId" to "b", "group" to "News", "query" to "news"
-        )), FakeChannels(), dispatcher)
+        )), FakeChannels(), dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertEquals(listOf("a", "b"), model.uiState.value.queue.channels.map { it.id })
         model.nextChannel()
@@ -57,16 +57,16 @@ class PlayerViewModelTest {
     @Test fun restoredStateOpensTheLastSelectedChannel() = runTest(dispatcher) {
         val saved = SavedStateHandle(mapOf("channelId" to "a"))
         val repository = FakeChannels()
-        val first = PlayerViewModel(saved, repository, dispatcher)
+        val first = PlayerViewModel(saved, repository, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         first.selectChannel("c")
-        val restored = PlayerViewModel(saved, repository, dispatcher)
+        val restored = PlayerViewModel(saved, repository, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertEquals("c", restored.uiState.value.channel?.id)
     }
 
     @Test fun missingChannelCanBeReplacedUsingTheChannelPanel() = runTest(dispatcher) {
-        val model = PlayerViewModel(SavedStateHandle(mapOf("channelId" to "gone")), FakeChannels(), dispatcher)
+        val model = PlayerViewModel(SavedStateHandle(mapOf("channelId" to "gone")), FakeChannels(), dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertNull(model.uiState.value.channel)
         assertNotNull(model.uiState.value.errorMessage)
@@ -78,7 +78,7 @@ class PlayerViewModelTest {
     }
 
     @Test fun repositoryFailureEndsLoadingWithAReadableError() = runTest(dispatcher) {
-        val model = PlayerViewModel(SavedStateHandle(mapOf("channelId" to "a")), FakeChannels(fail = true), dispatcher)
+        val model = PlayerViewModel(SavedStateHandle(mapOf("channelId" to "a")), FakeChannels(fail = true), dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertFalse(model.uiState.value.isLoading)
         assertNotNull(model.uiState.value.errorMessage)

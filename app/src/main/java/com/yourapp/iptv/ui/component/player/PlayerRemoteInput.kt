@@ -20,6 +20,7 @@ fun handlePlayerRemoteKey(
         KeyEvent.KEYCODE_INFO -> if (!channelListOpen) PlayerRemoteCommand.SHOW_INFO else null
         KeyEvent.KEYCODE_DPAD_UP -> if (!controlsVisible && !channelListOpen) PlayerRemoteCommand.NEXT else null
         KeyEvent.KEYCODE_DPAD_DOWN -> if (!controlsVisible && !channelListOpen) PlayerRemoteCommand.PREVIOUS else null
+        KeyEvent.KEYCODE_DPAD_RIGHT -> if (!controlsVisible && !channelListOpen) PlayerRemoteCommand.SHOW_INFO else null
         KeyEvent.KEYCODE_DPAD_LEFT -> if (!controlsVisible && !channelListOpen) PlayerRemoteCommand.TOGGLE_CHANNELS else null
         else -> null
     } ?: return false

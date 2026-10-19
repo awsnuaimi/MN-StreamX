@@ -31,7 +31,7 @@ class HomeViewModelTest {
 
     @Test fun noConfiguredSourceDoesNotMakeNetworkRequest() = runTest(dispatcher) {
         val playlists = FakePlaylists()
-        val model = HomeViewModel(settings(""), playlists, dispatcher)
+        val model = HomeViewModel(settings(""), playlists, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertTrue(model.uiState.value.needsSource)
         assertEquals(0, playlists.calls)
@@ -39,7 +39,7 @@ class HomeViewModelTest {
 
     @Test fun sourceLoadsAndRefreshFailurePreservesDisplayedChannels() = runTest(dispatcher) {
         val playlists = FakePlaylists()
-        val model = HomeViewModel(settings("https://unit.test/list.m3u"), playlists, dispatcher)
+        val model = HomeViewModel(settings("https://unit.test/list.m3u"), playlists, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertEquals(2, model.uiState.value.channels.size)
         playlists.fail = true
@@ -51,7 +51,7 @@ class HomeViewModelTest {
     }
 
     @Test fun searchAndGroupFilterCombine() = runTest(dispatcher) {
-        val model = HomeViewModel(settings("https://unit.test/list.m3u"), FakePlaylists(), dispatcher)
+        val model = HomeViewModel(settings("https://unit.test/list.m3u"), FakePlaylists(), dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         model.updateQuery("Beta")
         advanceUntilIdle()
@@ -68,7 +68,7 @@ class HomeViewModelTest {
         val playlists = FakePlaylists()
         HomeViewModel(source(AppSettings(m3uUrl = "https://unit.test/old.m3u",
             xtreamServer = "https://unit.test:8080", xtreamUsername = "test-user",
-            xtreamPassword = "test-password", source = PlaylistSource.XTREAM)), playlists, dispatcher)
+            xtreamPassword = "test-password", source = PlaylistSource.XTREAM)), playlists, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertEquals(1, playlists.xtreamCalls)
         assertEquals(0, playlists.calls)
@@ -77,7 +77,7 @@ class HomeViewModelTest {
     @Test fun incompleteXtreamDoesNotUseOldM3uOrMakeRequests() = runTest(dispatcher) {
         val playlists = FakePlaylists()
         val model = HomeViewModel(source(AppSettings(m3uUrl = "https://unit.test/old.m3u",
-            xtreamServer = "https://unit.test", source = PlaylistSource.XTREAM)), playlists, dispatcher)
+            xtreamServer = "https://unit.test", source = PlaylistSource.XTREAM)), playlists, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertTrue(model.uiState.value.needsSource)
         assertEquals(0, playlists.xtreamCalls)

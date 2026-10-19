@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.yourapp.iptv.ui.component.channel.FavoriteFeedback
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.tv.TvChannelGrid
 import com.yourapp.iptv.viewmodel.HomeViewModel
@@ -31,13 +32,14 @@ import com.yourapp.iptv.viewmodel.HomeViewModel
 @Composable
 fun HomeScreen(
     onSettings: () -> Unit,
-    onPlayChannel: (String, String?, String) -> Unit,
-    onOpenGuide: (String?, String?, String) -> Unit,
+    onPlayChannel: (String, String?, String, Boolean) -> Unit,
+    onOpenGuide: (String?, String?, String, Boolean) -> Unit,
     returnedChannelId: String? = null,
     onReturnHandled: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
     LaunchedEffect(returnedChannelId) {
         returnedChannelId?.let { viewModel.selectChannel(it); onReturnHandled() }
     }
@@ -47,7 +49,7 @@ fun HomeScreen(
     ) {
         HomeHeader(state.visibleChannels.size, state.channels.size, state.isLoading,
             onRefresh = viewModel::refresh, onSettings = onSettings,
-            onGuide = { onOpenGuide(state.selectedChannelId, state.selectedGroup, state.query) })
+            onGuide = { onOpenGuide(state.selectedChannelId, state.selectedGroup, state.query, state.favoritesOnly) })
         if (state.channels.isNotEmpty()) {
             OutlinedTextField(
                 value = state.query,
@@ -57,11 +59,15 @@ fun HomeScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 modifier = Modifier.fillMaxWidth()
             )
-            if (state.groups.isNotEmpty()) {
+            run {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
-                        FilterChip(selected = state.selectedGroup == null,
+                        FilterChip(selected = state.selectedGroup == null && !state.favoritesOnly,
                             onClick = { viewModel.selectGroup(null) }, label = { Text("الكل") })
+                    }
+                    item {
+                        FilterChip(selected = state.favoritesOnly,
+                            onClick = viewModel::toggleFavoritesFilter, label = { Text("★ المفضلة") })
                     }
                     items(state.groups, key = { it }) { group ->
                         FilterChip(selected = state.selectedGroup == group,
@@ -73,6 +79,7 @@ fun HomeScreen(
         if (state.isLoading && state.channels.isNotEmpty()) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
         }
+        FavoriteFeedback(favorites, viewModel::retryFavorites)
         state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         when {
             state.needsSource -> HomeMessage("اختر مصدر القنوات وأدخل رابط M3U أو بيانات Xtream.", "فتح الإعدادات", onSettings)
@@ -86,13 +93,15 @@ fun HomeScreen(
                 }
             }
             state.channels.isEmpty() -> HomeMessage("لا توجد قنوات محمّلة.", "إعادة المحاولة", viewModel::refresh)
-            state.visibleChannels.isEmpty() -> HomeMessage("لا توجد نتائج مطابقة.", "عرض الكل", viewModel::clearFilters)
+            state.visibleChannels.isEmpty() -> HomeMessage(
+                if (state.favoritesOnly) "لا توجد قنوات مفضلة تطابق البحث والتصنيف. أضف قناة من المشغّل أو دليل البرامج."
+                else "لا توجد نتائج مطابقة.", "عرض الكل", viewModel::clearFilters)
             else -> TvChannelGrid(
                 channels = state.visibleChannels,
                 selectedChannelId = state.selectedChannelId,
                 onChannelClick = { channel ->
                     viewModel.selectChannel(channel.id)
-                    onPlayChannel(channel.id, state.selectedGroup, state.query)
+                    onPlayChannel(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
                 },
                 modifier = Modifier.weight(1f).fillMaxWidth()
             )

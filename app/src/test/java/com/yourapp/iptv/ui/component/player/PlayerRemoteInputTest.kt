@@ -49,6 +49,18 @@ class PlayerRemoteInputTest {
         assertEquals(listOf(PlayerRemoteCommand.TOGGLE_CHANNELS), commands)
     }
 
+    @Test fun rightOpensActionsAndLeavesDirectionsToFocusedControls() {
+        val commands = mutableListOf<PlayerRemoteCommand>()
+        assertTrue(handlePlayerRemoteKey(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN,
+            0, false, false, commands::add))
+        assertEquals(listOf(PlayerRemoteCommand.SHOW_INFO), commands)
+        for (key in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            assertFalse(handlePlayerRemoteKey(key, KeyEvent.ACTION_DOWN,
+                0, true, false, commands::add))
+        }
+    }
+
     @Test fun mediaAndSeekKeysAreLeftToTheNativePlayer() {
         assertFalse(handlePlayerRemoteKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.ACTION_DOWN,
             0, false, false) { error("Unexpected command") })

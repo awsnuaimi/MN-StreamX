@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.di.DefaultDispatcher
 import com.yourapp.iptv.domain.model.Channel
+import com.yourapp.iptv.domain.model.ChannelFavorites
 import com.yourapp.iptv.domain.model.PlaybackQueue
 import com.yourapp.iptv.domain.repository.ChannelRepository
+import com.yourapp.iptv.domain.repository.FavoriteRepository
 import com.yourapp.iptv.ui.state.EpgUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -23,10 +25,12 @@ import javax.inject.Inject
 class EpgViewModel @Inject constructor(
     private val saved: SavedStateHandle,
     private val channels: ChannelRepository,
-    @DefaultDispatcher private val background: CoroutineDispatcher
+    @DefaultDispatcher private val background: CoroutineDispatcher,
+    favorites: FavoriteRepository
 ) : ViewModel() {
     private val state = MutableStateFlow(EpgUiState(
         selectedGroup = saved["group"], query = saved.get<String>("query").orEmpty(),
+        favoritesOnly = saved.get<Boolean>("favoritesOnly") ?: false,
         selectedChannelId = saved["channelId"], selectedProgramKey = saved["epgProgramKey"]
     ))
     val uiState = state.asStateFlow()
@@ -34,6 +38,16 @@ class EpgViewModel @Inject constructor(
     private var loaded = false
     private var loadJob: Job? = null
     private var filterJob: Job? = null
+    private var favoriteIds: Set<String>? = null
+    private val favoriteController = FavoriteController(viewModelScope, favorites) {
+        favoriteIds = it
+        filterChannels(showLoading = false)
+    }
+    val favoriteState = favoriteController.uiState
+
+    fun toggleFavorite() { state.value.channel?.let { favoriteController.toggle(it.id) } }
+
+    fun retryFavorites() = favoriteController.retry()
 
     init { reload() }
 
@@ -75,18 +89,30 @@ class EpgViewModel @Inject constructor(
     }
 
     fun selectGroup(group: String?) {
-        if (state.value.selectedGroup == group || (group != null && group !in state.value.groups)) return
+        if ((state.value.selectedGroup == group && (group != null || !state.value.favoritesOnly)) ||
+            (group != null && group !in state.value.groups)) return
         saved["group"] = group
+        if (group == null) saved["favoritesOnly"] = false
         resetSelection()
-        state.update { it.copy(selectedGroup = group) }
+        state.update { it.copy(selectedGroup = group,
+            favoritesOnly = if (group == null) false else it.favoritesOnly) }
+        filterChannels()
+    }
+
+    fun toggleFavoritesFilter() {
+        val value = !state.value.favoritesOnly
+        saved["favoritesOnly"] = value
+        resetSelection()
+        state.update { it.copy(favoritesOnly = value) }
         filterChannels()
     }
 
     fun clearFilters() {
         saved["query"] = ""
         saved["group"] = null
+        saved["favoritesOnly"] = false
         resetSelection()
-        state.update { it.copy(query = "", selectedGroup = null) }
+        state.update { it.copy(query = "", selectedGroup = null, favoritesOnly = false) }
         filterChannels()
     }
 
@@ -119,14 +145,16 @@ class EpgViewModel @Inject constructor(
         state.update { it.copy(queue = PlaybackQueue.empty(), selectedChannelId = null, selectedProgramKey = null) }
     }
 
-    private fun filterChannels() {
+    private fun filterChannels(showLoading: Boolean = true) {
         filterJob?.cancel()
         if (!loaded) return
         val snapshot = state.value
-        state.update { it.copy(isFiltering = true) }
+        val ids = favoriteIds
+        if (showLoading) state.update { it.copy(isFiltering = true) }
         filterJob = viewModelScope.launch {
             val queue = withContext(background) {
-                PlaybackQueue.create(available, snapshot.selectedGroup, snapshot.query)
+                PlaybackQueue.create(ChannelFavorites.apply(available, ids), snapshot.selectedGroup,
+                    snapshot.query, snapshot.favoritesOnly)
             }
             val requested = saved.get<String>("channelId")
             val selected = queue.channels.getOrNull(queue.indexOf(requested))?.id ?: queue.channels.firstOrNull()?.id

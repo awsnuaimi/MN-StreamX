@@ -25,12 +25,12 @@ fun AppNavGraph() {
                 returnedChannelId = returnedChannel,
                 onReturnHandled = { entry.savedStateHandle["lastPlayedChannelId"] = null },
                 onSettings = { nav.navigate(Destinations.SETTINGS) { launchSingleTop = true } },
-                onPlayChannel = { id, group, query ->
-                    nav.navigate(playerRoute(id, group, query)) { launchSingleTop = true }
+                onPlayChannel = { id, group, query, favoritesOnly ->
+                    nav.navigate(playerRoute(id, group, query, favoritesOnly)) { launchSingleTop = true }
                 },
-                onOpenGuide = { id, group, query ->
+                onOpenGuide = { id, group, query, favoritesOnly ->
                     nav.navigate(buildString {
-                        append("epg?query=${Uri.encode(query)}")
+                        append("epg?query=${Uri.encode(query)}&favoritesOnly=$favoritesOnly")
                         if (id != null) append("&channelId=${Uri.encode(id)}")
                         if (group != null) append("&group=${Uri.encode(group)}")
                     }) { launchSingleTop = true }
@@ -40,7 +40,8 @@ fun AppNavGraph() {
         composable(Destinations.EPG, arguments = listOf(
             navArgument("channelId") { type = NavType.StringType; nullable = true; defaultValue = null },
             navArgument("group") { type = NavType.StringType; nullable = true; defaultValue = null },
-            navArgument("query") { type = NavType.StringType; defaultValue = "" }
+            navArgument("query") { type = NavType.StringType; defaultValue = "" },
+            navArgument("favoritesOnly") { type = NavType.BoolType; defaultValue = false }
         )) { entry ->
             val returnedChannel by entry.savedStateHandle
                 .getStateFlow<String?>("lastPlayedChannelId", null).collectAsStateWithLifecycle()
@@ -48,8 +49,8 @@ fun AppNavGraph() {
                 returnedChannelId = returnedChannel,
                 onReturnHandled = { entry.savedStateHandle["lastPlayedChannelId"] = null },
                 onBack = { nav.popBackStack() },
-                onPlayChannel = { id, group, query ->
-                    nav.navigate(playerRoute(id, group, query)) { launchSingleTop = true }
+                onPlayChannel = { id, group, query, favoritesOnly ->
+                    nav.navigate(playerRoute(id, group, query, favoritesOnly)) { launchSingleTop = true }
                 }
             )
         }
@@ -67,7 +68,8 @@ fun AppNavGraph() {
         composable(Destinations.PLAYER, arguments = listOf(
             navArgument("channelId") { type = NavType.StringType },
             navArgument("group") { type = NavType.StringType; nullable = true; defaultValue = null },
-            navArgument("query") { type = NavType.StringType; defaultValue = "" }
+            navArgument("query") { type = NavType.StringType; defaultValue = "" },
+            navArgument("favoritesOnly") { type = NavType.BoolType; defaultValue = false }
         )) {
             PlayerScreen(onBack = { channelId ->
                 if (channelId != null) {
@@ -79,7 +81,7 @@ fun AppNavGraph() {
     }
 }
 
-private fun playerRoute(id: String, group: String?, query: String): String = buildString {
-    append("player/${Uri.encode(id)}?query=${Uri.encode(query)}")
+private fun playerRoute(id: String, group: String?, query: String, favoritesOnly: Boolean): String = buildString {
+    append("player/${Uri.encode(id)}?query=${Uri.encode(query)}&favoritesOnly=$favoritesOnly")
     if (group != null) append("&group=${Uri.encode(group)}")
 }

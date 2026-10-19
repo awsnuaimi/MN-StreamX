@@ -8,6 +8,7 @@ data class HomeUiState(
     val groups: List<String> = emptyList(),
     val query: String = "",
     val selectedGroup: String? = null,
+    val favoritesOnly: Boolean = false,
     val selectedChannelId: String? = null,
     val isLoading: Boolean = true,
     val needsSource: Boolean = false,

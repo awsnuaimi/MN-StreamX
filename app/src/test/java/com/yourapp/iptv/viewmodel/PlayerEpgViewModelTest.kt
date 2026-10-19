@@ -141,6 +141,17 @@ class PlayerEpgViewModelTest {
         assertEquals(1, calls)
     }
 
+    @Test fun favoriteFlagChangesDoNotRestartTheEpgRequest() = runTest(dispatcher) {
+        var calls = 0
+        val model = PlayerEpgViewModel(settings, fake { _, _ -> calls++; EpgSchedule(emptyList()) })
+        backgroundScope.launch { model.uiState.collect() }
+        model.selectChannel(a)
+        runCurrent(); advanceTimeBy(351); runCurrent()
+        model.selectChannel(a.copy(isFavorite = true))
+        runCurrent(); advanceTimeBy(500); runCurrent()
+        assertEquals(1, calls)
+    }
+
     private fun fake(load: suspend (Channel, AppSettings) -> EpgSchedule?): LiveEpgRepository =
         object : LiveEpgRepository {
             override suspend fun load(channel: Channel, settings: AppSettings) = load.invoke(channel, settings)

@@ -24,7 +24,7 @@ class EpgViewModelTest {
 
     @Test fun loadsStoredChannelsOnceWithoutImportingThePlaylistAgain() = runTest(dispatcher) {
         val repository = FakeChannels()
-        val model = EpgViewModel(SavedStateHandle(mapOf("channelId" to "b")), repository, dispatcher)
+        val model = EpgViewModel(SavedStateHandle(mapOf("channelId" to "b")), repository, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertEquals("b", model.uiState.value.channel?.id)
         repeat(50) { model.selectChannel("a"); model.selectChannel("b") }
@@ -34,7 +34,7 @@ class EpgViewModelTest {
 
     @Test fun inheritsTheHomeCategorySearchAndSelection() = runTest(dispatcher) {
         val model = EpgViewModel(SavedStateHandle(mapOf("channelId" to "b", "group" to "News",
-            "query" to " NEWS ")), FakeChannels(), dispatcher)
+            "query" to " NEWS ")), FakeChannels(), dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertEquals(listOf("a", "b"), model.uiState.value.queue.channels.map { it.id })
         assertEquals("b", model.uiState.value.channel?.id)
@@ -45,13 +45,13 @@ class EpgViewModelTest {
     @Test fun channelAndProgramSelectionSurviveRecreationAndSameChannelReturns() = runTest(dispatcher) {
         val saved = SavedStateHandle()
         val repository = FakeChannels()
-        val first = EpgViewModel(saved, repository, dispatcher)
+        val first = EpgViewModel(saved, repository, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         first.selectChannel("b")
         first.selectProgram("1700000000000:1700003600000")
         first.restoreChannel("b")
         assertNotNull(first.uiState.value.selectedProgramKey)
-        val restored = EpgViewModel(saved, repository, dispatcher)
+        val restored = EpgViewModel(saved, repository, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertEquals("b", restored.uiState.value.channel?.id)
         assertEquals("1700000000000:1700003600000", restored.uiState.value.selectedProgramKey)
@@ -62,7 +62,7 @@ class EpgViewModelTest {
 
     @Test fun aPlayerReturnBeforeTheDatabaseReadCompletesUsesTheReturnedChannel() = runTest(dispatcher) {
         val saved = SavedStateHandle(mapOf("channelId" to "a", "epgProgramKey" to "previous-program"))
-        val model = EpgViewModel(saved, FakeChannels(), dispatcher)
+        val model = EpgViewModel(saved, FakeChannels(), dispatcher, FakeFavoriteRepository())
         model.restoreChannel("c")
         advanceUntilIdle()
         assertEquals("c", model.uiState.value.channel?.id)
@@ -70,7 +70,7 @@ class EpgViewModelTest {
     }
 
     @Test fun rapidFilterChangesUseTheFinalQueryAndCanBeClearedAfterNoResults() = runTest(dispatcher) {
-        val model = EpgViewModel(SavedStateHandle(), FakeChannels(), dispatcher)
+        val model = EpgViewModel(SavedStateHandle(), FakeChannels(), dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         model.updateQuery("Beta")
         model.updateQuery("missing")
@@ -87,7 +87,7 @@ class EpgViewModelTest {
     }
 
     @Test fun queriesEnteredDuringInitialLoadingAreNotLost() = runTest(dispatcher) {
-        val model = EpgViewModel(SavedStateHandle(), FakeChannels(), dispatcher)
+        val model = EpgViewModel(SavedStateHandle(), FakeChannels(), dispatcher, FakeFavoriteRepository())
         model.updateQuery("Beta")
         advanceUntilIdle()
         assertEquals("b", model.uiState.value.channel?.id)
@@ -98,7 +98,7 @@ class EpgViewModelTest {
         val repository = FakeChannels()
         repository.items = repository.items + repository.items.first().copy(name = "Duplicate")
         val model = EpgViewModel(SavedStateHandle(mapOf("channelId" to "gone", "group" to "gone")),
-            repository, dispatcher)
+            repository, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertEquals(3, model.uiState.value.queue.size)
         assertEquals("a", model.uiState.value.channel?.id)
@@ -107,7 +107,7 @@ class EpgViewModelTest {
 
     @Test fun readFailuresHaveASafeErrorAndRetryOnlyReadsTheLocalChannels() = runTest(dispatcher) {
         val repository = FakeChannels().apply { fail = true }
-        val model = EpgViewModel(SavedStateHandle(), repository, dispatcher)
+        val model = EpgViewModel(SavedStateHandle(), repository, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertFalse(model.uiState.value.isLoading)
         assertNotNull(model.uiState.value.errorMessage)
@@ -122,7 +122,7 @@ class EpgViewModelTest {
 
     @Test fun anEmptyLocalLibraryStopsLoadingWithoutSelectingAnInvalidChannel() = runTest(dispatcher) {
         val repository = FakeChannels().apply { items = emptyList() }
-        val model = EpgViewModel(SavedStateHandle(), repository, dispatcher)
+        val model = EpgViewModel(SavedStateHandle(), repository, dispatcher, FakeFavoriteRepository())
         advanceUntilIdle()
         assertFalse(model.uiState.value.isLoading)
         assertFalse(model.uiState.value.isFiltering)

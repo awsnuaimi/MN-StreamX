@@ -3,6 +3,8 @@ package com.yourapp.iptv.ui.screen.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,16 +26,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
+import com.yourapp.iptv.ui.component.channel.FavoriteBadge
+import com.yourapp.iptv.ui.component.channel.FavoriteButton
+import com.yourapp.iptv.ui.component.channel.FavoriteFeedback
+import com.yourapp.iptv.ui.state.FavoriteUiState
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
 import com.yourapp.iptv.ui.theme.NeonBlue
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PlayerInfoOverlay(
     channel: Channel?, position: Int, total: Int, canChange: Boolean,
     onPrevious: () -> Unit, onNext: () -> Unit, onChannels: () -> Unit,
     onControls: () -> Unit, onBack: () -> Unit, onFocusChanged: (Boolean) -> Unit,
-    epg: PlayerEpgUiState
+    epg: PlayerEpgUiState, favorites: FavoriteUiState,
+    onToggleFavorite: () -> Unit, onRetryFavorites: () -> Unit, favoriteFocus: FocusRequester
 ) {
     Box(Modifier.fillMaxSize().onFocusChanged { onFocusChanged(it.hasFocus) }.focusGroup()) {
         Row(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.76f)).padding(16.dp),
@@ -49,20 +57,24 @@ fun PlayerInfoOverlay(
                         style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            Text("$position / $total", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            FavoriteBadge(channel?.isFavorite == true)
+            Text(if (position > 0) "$position / $total" else "خارج المفضلة · $total قناة", color = Color.White, style = MaterialTheme.typography.titleMedium)
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.76f)).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (channel != null) PlayerEpgInfo(epg)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 AppButton("السابق", onPrevious, enabled = canChange)
                 AppButton("قائمة القنوات", onChannels, enabled = total > 0)
                 AppButton("التالي", onNext, enabled = canChange)
                 AppButton("تحكم بالتشغيل", onControls, enabled = channel != null)
+                if (channel != null) FavoriteButton(channel.isFavorite, favorites, onToggleFavorite, Modifier.focusRequester(favoriteFocus))
             }
-            Text("↑ / CH+ التالي · ↓ / CH− السابق · ← / MENU القائمة · OK تحكم",
+            FavoriteFeedback(favorites, onRetryFavorites)
+            Text("CH+ / CH− تبديل · ← / MENU القائمة · → / INFO المفضلة · OK تحكم",
                 color = Color(0xFFCCD9E8), style = MaterialTheme.typography.bodySmall)
         }
     }

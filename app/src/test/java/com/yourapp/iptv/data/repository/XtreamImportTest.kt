@@ -73,5 +73,7 @@ class XtreamImportTest {
         override suspend fun addFavorite(favorite: FavoriteEntity) { values[favorite.channelId] = favorite }
         override suspend fun removeFavorite(channelId: String) { values.remove(channelId) }
         override suspend fun getAllFavorites() = values.values.toList()
+        override fun observeFavoriteIds() = kotlinx.coroutines.flow.flowOf(values.keys.toList())
+        override suspend fun isFavorite(channelId: String) = channelId in values
     }
 }

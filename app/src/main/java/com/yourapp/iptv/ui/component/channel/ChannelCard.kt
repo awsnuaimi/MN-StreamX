@@ -40,6 +40,7 @@ fun ChannelCard(channel: Channel, onClick: () -> Unit, modifier: Modifier = Modi
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ChannelLogo(channel.name, channel.logoUrl, Modifier.size(52.dp))
+            FavoriteBadge(channel.isFavorite)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(channel.name, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleMedium)

@@ -29,7 +29,7 @@ import com.yourapp.iptv.ui.state.EpgUiState
 @Composable
 fun EpgFilters(
     state: EpgUiState, request: EpgFocusRequest, searchFocus: FocusRequester,
-    onQuery: (String) -> Unit, onGroup: (String?) -> Unit, onBack: () -> Unit, onFocused: () -> Unit,
+    onQuery: (String) -> Unit, onGroup: (String?) -> Unit, onFavorites: () -> Unit, onBack: () -> Unit, onFocused: () -> Unit,
     compact: Boolean = false
 ) {
     LaunchedEffect(request.serial) {
@@ -44,7 +44,8 @@ fun EpgFilters(
             Column(Modifier.weight(1f)) {
                 Text("دليل البرامج", style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.primary)
-                Text("${state.queue.size} قناة · ${state.selectedGroup ?: "كل التصنيفات"}",
+                Text("${state.queue.size} قناة · " + (if (state.favoritesOnly) "★ المفضلة · " else "") +
+                    (state.selectedGroup ?: "كل التصنيفات"),
                     maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
             }
             AppButton("رجوع", onBack)
@@ -53,11 +54,15 @@ fun EpgFilters(
             enabled = !state.isLoading, label = { Text("البحث عن قناة في الدليل") },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             modifier = Modifier.fillMaxWidth().focusRequester(searchFocus))
-        if (!compact && state.groups.isNotEmpty()) {
+        if (!compact) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {
-                    FilterChip(selected = state.selectedGroup == null, onClick = { onGroup(null) },
+                    FilterChip(selected = state.selectedGroup == null && !state.favoritesOnly, onClick = { onGroup(null) },
                         enabled = !state.isLoading, label = { Text("الكل") })
+                }
+                item {
+                    FilterChip(selected = state.favoritesOnly, onClick = onFavorites,
+                        enabled = !state.isLoading, label = { Text("★ المفضلة") })
                 }
                 items(state.groups, key = { it }) { group ->
                     FilterChip(selected = state.selectedGroup == group, onClick = { onGroup(group) },

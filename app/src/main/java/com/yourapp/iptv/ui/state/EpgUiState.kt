@@ -7,6 +7,7 @@ data class EpgUiState(
     val queue: PlaybackQueue = PlaybackQueue.empty(),
     val groups: List<String> = emptyList(),
     val selectedGroup: String? = null,
+    val favoritesOnly: Boolean = false,
     val query: String = "",
     val selectedChannelId: String? = null,
     val selectedProgramKey: String? = null,

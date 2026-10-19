@@ -39,6 +39,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
+import com.yourapp.iptv.ui.component.channel.FavoriteBadge
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.theme.NeonBlue
 
@@ -48,6 +49,7 @@ fun PlayerChannelPanel(
     currentIndex: Int,
     group: String?,
     query: String,
+    favoritesOnly: Boolean,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
     onRemoteKey: (KeyEvent, Boolean) -> Boolean
@@ -75,13 +77,14 @@ fun PlayerChannelPanel(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column(Modifier.weight(1f)) {
                             Text("قائمة القنوات · ${channels.size}", style = MaterialTheme.typography.titleLarge)
-                            Text(group ?: "كل التصنيفات", maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            Text((if (favoritesOnly) "★ المفضلة · " else "") + (group ?: "كل التصنيفات"), maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 color = NeonBlue, style = MaterialTheme.typography.bodyMedium)
                         }
                         AppButton("إغلاق", onDismiss)
                     }
                     if (query.isNotBlank()) Text("البحث: $query", maxLines = 1,
                         overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                    if (channels.isEmpty()) Text("لا توجد قنوات في قائمة المفضلة الحالية. يستمر بث القناة حتى تختار غيرها.")
                     LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(channels, key = { _, channel -> channel.id }) { index, channel ->
@@ -115,6 +118,7 @@ private fun PlayerChannelRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(number.toString(), color = NeonBlue, style = MaterialTheme.typography.labelLarge)
             ChannelLogo(channel.name, channel.logoUrl, Modifier.size(40.dp))
+            FavoriteBadge(channel.isFavorite)
             Column(Modifier.weight(1f)) {
                 Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleMedium)

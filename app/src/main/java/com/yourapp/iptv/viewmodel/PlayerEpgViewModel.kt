@@ -31,5 +31,5 @@ class PlayerEpgViewModel @Inject constructor(
             errorMessage = "تعذر قراءة إعدادات دليل البرامج.")) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 0), PlayerEpgUiState())
 
-    fun selectChannel(channel: Channel?) { selected.value = channel }
+    fun selectChannel(channel: Channel?) { selected.value = channel?.copy(isFavorite = false) }
 }

@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.PlaylistLoadException
 import com.yourapp.iptv.domain.model.PlaylistSource
+import com.yourapp.iptv.domain.model.ChannelFavorites
+import com.yourapp.iptv.domain.model.PlaybackQueue
+import com.yourapp.iptv.domain.repository.FavoriteRepository
 import com.yourapp.iptv.domain.repository.PlaylistRepository
 import com.yourapp.iptv.domain.repository.SettingsRepository
 import com.yourapp.iptv.ui.state.HomeUiState
@@ -24,12 +27,21 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val playlists: PlaylistRepository,
-    @DefaultDispatcher private val background: CoroutineDispatcher
+    @DefaultDispatcher private val background: CoroutineDispatcher,
+    favorites: FavoriteRepository
 ) : ViewModel() {
     private val state = MutableStateFlow(HomeUiState())
     val uiState = state.asStateFlow()
     private var loadJob: Job? = null
     private var filterJob: Job? = null
+    private var favoriteIds: Set<String>? = null
+    private val favoriteController = FavoriteController(viewModelScope, favorites) {
+        favoriteIds = it
+        filterChannels()
+    }
+    val favoriteState = favoriteController.uiState
+
+    fun retryFavorites() = favoriteController.retry()
 
     init { refresh() }
 
@@ -78,33 +90,50 @@ class HomeViewModel @Inject constructor(
     }
 
     fun updateQuery(query: String) {
-        state.update { it.copy(query = query, selectedChannelId = null) }
+        state.update { it.copy(query = query.take(200), selectedChannelId = null) }
         filterChannels()
     }
 
     fun selectGroup(group: String?) {
-        state.update { it.copy(selectedGroup = group, selectedChannelId = null) }
+        state.update { it.copy(selectedGroup = group, selectedChannelId = null,
+            favoritesOnly = if (group == null) false else it.favoritesOnly) }
+        filterChannels()
+    }
+
+    fun toggleFavoritesFilter() {
+        state.update { it.copy(favoritesOnly = !it.favoritesOnly, selectedChannelId = null) }
         filterChannels()
     }
 
     fun clearFilters() {
-        state.update { it.copy(query = "", selectedGroup = null, selectedChannelId = null) }
+        state.update { it.copy(query = "", selectedGroup = null, favoritesOnly = false, selectedChannelId = null) }
         filterChannels()
     }
 
-    fun selectChannel(id: String) { state.update { it.copy(selectedChannelId = id) } }
+    fun selectChannel(id: String) {
+        state.update { current ->
+            val selected = current.visibleChannels.firstOrNull { it.id == id }?.id
+                ?: current.visibleChannels.firstOrNull()?.id
+            current.copy(selectedChannelId = selected)
+        }
+    }
 
     private fun filterChannels() {
         filterJob?.cancel()
         val snapshot = state.value
+        val ids = favoriteIds
         filterJob = viewModelScope.launch {
-            val visible = withContext(background) {
-                snapshot.channels.filter {
-                    (snapshot.selectedGroup == null || it.group == snapshot.selectedGroup) &&
-                        it.name.contains(snapshot.query.trim(), ignoreCase = true)
-                }
+            val (marked, visible) = withContext(background) {
+                val marked = ChannelFavorites.apply(snapshot.channels, ids)
+                marked to PlaybackQueue.create(marked, snapshot.selectedGroup, snapshot.query,
+                    snapshot.favoritesOnly).channels
             }
-            state.update { it.copy(visibleChannels = visible) }
+            state.update { current ->
+                current.copy(channels = marked, visibleChannels = visible,
+                    selectedChannelId = current.selectedChannelId?.let { id ->
+                        visible.firstOrNull { it.id == id }?.id ?: visible.firstOrNull()?.id
+                    })
+            }
         }
     }
 }

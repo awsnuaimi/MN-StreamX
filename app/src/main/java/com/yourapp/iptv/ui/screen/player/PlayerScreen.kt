@@ -42,6 +42,7 @@ fun PlayerScreen(
     epgViewModel: PlayerEpgViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
     val epg by epgViewModel.uiState.collectAsStateWithLifecycle()
     val channel = state.channel
     val activeChannel by rememberUpdatedState(channel)
@@ -53,6 +54,8 @@ fun PlayerScreen(
     var infoVisible by remember { mutableStateOf(true) }
     var infoFocused by remember { mutableStateOf(false) }
     var interaction by remember { mutableIntStateOf(0) }
+    var focusInfo by remember { mutableStateOf(false) }
+    val favoriteFocus = remember { FocusRequester() }
     var focusEpoch by remember { mutableIntStateOf(0) }
     val surface = remember { PlayerSurfaceHandle() }
     val errorFocus = remember { FocusRequester() }
@@ -61,6 +64,7 @@ fun PlayerScreen(
 
     fun showInfo() { infoVisible = true; interaction++ }
     fun closeChannels() {
+        focusInfo = false
         listOpen = false
         focusEpoch++
         showInfo()
@@ -69,6 +73,7 @@ fun PlayerScreen(
         if (state.queue.size == 0) return
         surface.hideControls()
         controlsVisible = false
+        focusInfo = false
         listOpen = true
     }
     fun back() {
@@ -79,10 +84,16 @@ fun PlayerScreen(
                 controlsVisible = false
                 focusEpoch++
             }
+            infoFocused -> {
+                focusInfo = false
+                infoVisible = false
+                focusEpoch++
+            }
             else -> onBack(channel?.id)
         }
     }
     fun changeChannel(next: Boolean) {
+        focusInfo = false
         listOpen = false
         surface.hideControls()
         controlsVisible = false
@@ -91,13 +102,14 @@ fun PlayerScreen(
         showInfo()
     }
     fun handleRemote(event: KeyEvent, visible: Boolean): Boolean = handlePlayerRemoteKey(
-        event.keyCode, event.action, event.repeatCount, visible, listOpen
+        event.keyCode, event.action, event.repeatCount, visible || infoFocused, listOpen
     ) { command ->
         when (command) {
             PlayerRemoteCommand.NEXT -> changeChannel(true)
             PlayerRemoteCommand.PREVIOUS -> changeChannel(false)
             PlayerRemoteCommand.TOGGLE_CHANNELS -> if (listOpen) closeChannels() else openChannels()
             PlayerRemoteCommand.SHOW_INFO -> {
+                focusInfo = true
                 surface.hideControls()
                 controlsVisible = false
                 focusEpoch++
@@ -108,6 +120,9 @@ fun PlayerScreen(
     }
 
     BackHandler { back() }
+    LaunchedEffect(infoVisible, controlsVisible, listOpen) {
+        if (!infoVisible || controlsVisible || listOpen) infoFocused = false
+    }
     LaunchedEffect(channel) { epgViewModel.selectChannel(channel) }
     LaunchedEffect(channel?.id) { showInfo() }
     LaunchedEffect(channel?.id, interaction, listOpen, controlsVisible, infoFocused, error) {
@@ -125,6 +140,7 @@ fun PlayerScreen(
                     controlsVisible = false
                     runCatching { errorFocus.requestFocus() }
                 }
+                focusInfo && channel != null -> runCatching { favoriteFocus.requestFocus() }
                 channel == null -> runCatching { rootFocus.requestFocus() }
                 else -> surface.requestFocus()
             }
@@ -148,8 +164,10 @@ fun PlayerScreen(
             PlayerInfoOverlay(channel, state.currentIndex + 1, state.queue.size, state.canChangeChannel,
                 onPrevious = { changeChannel(false) }, onNext = { changeChannel(true) },
                 onChannels = ::openChannels,
-                onControls = { infoVisible = false; surface.showControls() },
+                onControls = { focusInfo = false; infoVisible = false; surface.showControls() },
                 onBack = { onBack(channel?.id) }, onFocusChanged = { infoFocused = it },
+                favoriteFocus = favoriteFocus, favorites = favorites, onToggleFavorite = viewModel::toggleFavorite,
+                onRetryFavorites = viewModel::retryFavorites,
                 epg = if (epg.channelId == channel?.id) epg
                     else PlayerEpgUiState(channelId = channel?.id, isLoading = channel != null))
         }
@@ -162,7 +180,7 @@ fun PlayerScreen(
                 onBack = { onBack(channel?.id) })
         }
         if (listOpen) {
-            PlayerChannelPanel(state.queue.channels, state.currentIndex, state.selectedGroup, state.query,
+            PlayerChannelPanel(state.queue.channels, state.currentIndex, state.selectedGroup, state.query, state.favoritesOnly,
                 onSelect = { id -> viewModel.selectChannel(id); closeChannels() },
                 onDismiss = ::closeChannels, onRemoteKey = ::handleRemote)
         }

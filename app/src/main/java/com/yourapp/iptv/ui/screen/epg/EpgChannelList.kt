@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
+import com.yourapp.iptv.ui.component.channel.FavoriteBadge
 import com.yourapp.iptv.ui.state.EpgUiState
 import com.yourapp.iptv.ui.theme.NeonBlue
 
@@ -87,6 +88,7 @@ private fun EpgChannelRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(number.toString(), style = MaterialTheme.typography.labelMedium, color = NeonBlue)
             ChannelLogo(channel.name, channel.logoUrl, Modifier.size(32.dp))
+            FavoriteBadge(channel.isFavorite)
             Text(channel.name, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium)
         }

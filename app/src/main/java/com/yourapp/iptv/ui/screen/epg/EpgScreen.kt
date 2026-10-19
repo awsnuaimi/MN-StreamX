@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.yourapp.iptv.ui.component.channel.FavoriteFeedback
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
 import com.yourapp.iptv.viewmodel.EpgViewModel
@@ -37,11 +38,12 @@ import com.yourapp.iptv.viewmodel.PlayerEpgViewModel
 
 @Composable
 fun EpgScreen(
-    onBack: () -> Unit, onPlayChannel: (String, String?, String) -> Unit,
+    onBack: () -> Unit, onPlayChannel: (String, String?, String, Boolean) -> Unit,
     returnedChannelId: String? = null, onReturnHandled: () -> Unit = {},
     viewModel: EpgViewModel = hiltViewModel(), epgViewModel: PlayerEpgViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
     val loadedEpg by epgViewModel.uiState.collectAsStateWithLifecycle()
     val channel = state.channel
     val epg = if (loadedEpg.channelId == channel?.id) loadedEpg
@@ -67,7 +69,7 @@ fun EpgScreen(
         val latest = viewModel.uiState.value
         if (latest.queue.indexOf(id) < 0) return
         viewModel.selectChannel(id)
-        onPlayChannel(id, latest.selectedGroup, latest.query)
+        onPlayChannel(id, latest.selectedGroup, latest.query, latest.favoritesOnly)
     }
     fun paneKeys(area: EpgFocusArea) = Modifier.onPreviewKeyEvent {
         val event = it.nativeKeyEvent
@@ -90,6 +92,10 @@ fun EpgScreen(
         }
     }
 
+    LaunchedEffect(channel?.id, state.isLoading, state.isFiltering) {
+        if (channel == null && !state.isLoading && !state.isFiltering) requestArea(EpgFocusArea.FILTERS)
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 680.dp
         fun back() {
@@ -99,8 +105,9 @@ fun EpgScreen(
         BackHandler { back() }
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             EpgFilters(state, request, searchFocus, viewModel::updateQuery, viewModel::selectGroup,
-                onBack = ::back, onFocused = { markArea(EpgFocusArea.FILTERS) },
+                onFavorites = viewModel::toggleFavoritesFilter, onBack = ::back, onFocused = { markArea(EpgFocusArea.FILTERS) },
                 compact = !wide && mobilePane == EpgFocusArea.PROGRAMS.name)
+            FavoriteFeedback(favorites, viewModel::retryFavorites)
             when {
                 state.isLoading || state.isFiltering -> Box(Modifier.weight(1f).fillMaxWidth(),
                     contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -108,7 +115,8 @@ fun EpgScreen(
                     contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(state.errorMessage ?: "لا توجد قنوات مطابقة. غيّر البحث أو التصنيف.",
+                        Text(state.errorMessage ?: if (state.favoritesOnly) "لا توجد قنوات مفضلة مطابقة. غيّر البحث أو التصنيف."
+                            else "لا توجد قنوات مطابقة. غيّر البحث أو التصنيف.",
                             style = MaterialTheme.typography.bodyLarge)
                         if (state.errorMessage != null) AppButton("إعادة المحاولة", viewModel::reload)
                         else AppButton("عرض كل القنوات", viewModel::clearFilters)
@@ -121,6 +129,7 @@ fun EpgScreen(
                     EpgProgramPane(channel, epg, state.selectedProgramKey, request,
                         viewModel::selectProgram, onPlay = { play(channel.id) },
                         onFocused = { markArea(EpgFocusArea.PROGRAMS) },
+                        favorites = favorites, onToggleFavorite = viewModel::toggleFavorite,
                         modifier = Modifier.weight(0.64f).fillMaxHeight().then(paneKeys(EpgFocusArea.PROGRAMS)))
                 }
                 else -> {
@@ -138,6 +147,7 @@ fun EpgScreen(
                     } else {
                         EpgProgramPane(channel, epg, state.selectedProgramKey, request, viewModel::selectProgram,
                             onPlay = { play(channel.id) }, onFocused = { markArea(EpgFocusArea.PROGRAMS) },
+                        favorites = favorites, onToggleFavorite = viewModel::toggleFavorite,
                             modifier = Modifier.weight(1f).fillMaxWidth().then(paneKeys(EpgFocusArea.PROGRAMS)))
                     }
                 }

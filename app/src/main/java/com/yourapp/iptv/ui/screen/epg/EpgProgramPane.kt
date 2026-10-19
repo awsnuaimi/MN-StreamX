@@ -31,6 +31,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.EpgProgramSelection
+import com.yourapp.iptv.ui.component.channel.FavoriteButton
+import com.yourapp.iptv.ui.state.FavoriteUiState
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
 import com.yourapp.iptv.ui.theme.NeonBlue
@@ -42,6 +44,7 @@ import java.util.Locale
 fun EpgProgramPane(
     channel: Channel, epg: PlayerEpgUiState, selectedKey: String?, request: EpgFocusRequest,
     onSelectProgram: (String) -> Unit, onPlay: () -> Unit, onFocused: () -> Unit,
+    favorites: FavoriteUiState, onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val programs = remember(epg.schedule.programs) {
@@ -78,6 +81,7 @@ fun EpgProgramPane(
                 }
                 AppButton("بث القناة", onPlay, Modifier.focusRequester(playFocus))
             }
+            FavoriteButton(channel.isFavorite, favorites, onToggleFavorite)
             if (epg.schedule.isStale) {
                 Text("جدول محفوظ مؤقتًا · تعذر تحديثه الآن", color = Color(0xFFFFD180),
                     style = MaterialTheme.typography.bodySmall)
