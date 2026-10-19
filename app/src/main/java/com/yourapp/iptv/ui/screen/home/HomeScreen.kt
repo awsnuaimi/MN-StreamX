@@ -3,7 +3,6 @@ package com.yourapp.iptv.ui.screen.home
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,28 +32,22 @@ import com.yourapp.iptv.viewmodel.HomeViewModel
 fun HomeScreen(
     onSettings: () -> Unit,
     onPlayChannel: (String, String?, String) -> Unit,
+    onOpenGuide: (String?, String?, String) -> Unit,
     returnedChannelId: String? = null,
+    onReturnHandled: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(returnedChannelId) {
-        returnedChannelId?.let(viewModel::selectChannel)
+        returnedChannelId?.let { viewModel.selectChannel(it); onReturnHandled() }
     }
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("MN StreamX", style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary)
-                Text("القنوات المباشرة · ${state.visibleChannels.size} / ${state.channels.size}",
-                    style = MaterialTheme.typography.bodyMedium)
-            }
-            AppButton("تحديث", viewModel::refresh, enabled = !state.isLoading)
-            AppButton("الإعدادات", onSettings)
-        }
+        HomeHeader(state.visibleChannels.size, state.channels.size, state.isLoading,
+            onRefresh = viewModel::refresh, onSettings = onSettings,
+            onGuide = { onOpenGuide(state.selectedChannelId, state.selectedGroup, state.query) })
         if (state.channels.isNotEmpty()) {
             OutlinedTextField(
                 value = state.query,

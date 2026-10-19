@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.yourapp.iptv.ui.screen.home.HomeScreen
+import com.yourapp.iptv.ui.screen.epg.EpgScreen
 import com.yourapp.iptv.ui.screen.player.PlayerScreen
 import com.yourapp.iptv.ui.screen.settings.SettingsScreen
 
@@ -22,13 +23,33 @@ fun AppNavGraph() {
                 .getStateFlow<String?>("lastPlayedChannelId", null).collectAsStateWithLifecycle()
             HomeScreen(
                 returnedChannelId = returnedChannel,
+                onReturnHandled = { entry.savedStateHandle["lastPlayedChannelId"] = null },
                 onSettings = { nav.navigate(Destinations.SETTINGS) { launchSingleTop = true } },
                 onPlayChannel = { id, group, query ->
-                    val route = buildString {
-                        append("player/${Uri.encode(id)}?query=${Uri.encode(query)}")
+                    nav.navigate(playerRoute(id, group, query)) { launchSingleTop = true }
+                },
+                onOpenGuide = { id, group, query ->
+                    nav.navigate(buildString {
+                        append("epg?query=${Uri.encode(query)}")
+                        if (id != null) append("&channelId=${Uri.encode(id)}")
                         if (group != null) append("&group=${Uri.encode(group)}")
-                    }
-                    nav.navigate(route) { launchSingleTop = true }
+                    }) { launchSingleTop = true }
+                }
+            )
+        }
+        composable(Destinations.EPG, arguments = listOf(
+            navArgument("channelId") { type = NavType.StringType; nullable = true; defaultValue = null },
+            navArgument("group") { type = NavType.StringType; nullable = true; defaultValue = null },
+            navArgument("query") { type = NavType.StringType; defaultValue = "" }
+        )) { entry ->
+            val returnedChannel by entry.savedStateHandle
+                .getStateFlow<String?>("lastPlayedChannelId", null).collectAsStateWithLifecycle()
+            EpgScreen(
+                returnedChannelId = returnedChannel,
+                onReturnHandled = { entry.savedStateHandle["lastPlayedChannelId"] = null },
+                onBack = { nav.popBackStack() },
+                onPlayChannel = { id, group, query ->
+                    nav.navigate(playerRoute(id, group, query)) { launchSingleTop = true }
                 }
             )
         }
@@ -56,4 +77,9 @@ fun AppNavGraph() {
             })
         }
     }
+}
+
+private fun playerRoute(id: String, group: String?, query: String): String = buildString {
+    append("player/${Uri.encode(id)}?query=${Uri.encode(query)}")
+    if (group != null) append("&group=${Uri.encode(group)}")
 }
