@@ -24,6 +24,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
+import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
+import com.yourapp.iptv.ui.screen.player.deck.PlayerDeckOverlay
 import com.yourapp.iptv.domain.model.PlayerAppearance
 import com.yourapp.iptv.domain.model.PlayerInfoStyle
 import com.yourapp.iptv.ui.component.common.AppButton
@@ -37,22 +39,31 @@ fun PlayerInfoOverlay(
     onControls: () -> Unit, onBack: () -> Unit, onFocusChanged: (Boolean) -> Unit,
     epg: PlayerEpgUiState, favorites: FavoriteUiState,
     onToggleFavorite: () -> Unit, onRetryFavorites: () -> Unit, favoriteFocus: FocusRequester,
-    appearance: PlayerAppearance, detailsFocus: FocusRequester, onDetails: () -> Unit, onAppearance: () -> Unit
+    appearance: PlayerAppearance, detailsFocus: FocusRequester, onDetails: () -> Unit, onAppearance: () -> Unit,
+    deckChannels: List<Channel> = emptyList(), technical: PlaybackTechnicalInfo = PlaybackTechnicalInfo(),
+    focusCardId: String? = null, deckFocusEpoch: Int = 0, onSelectDeckChannel: (String) -> Unit = {},
+    onGuide: () -> Unit = {}
 ) {
     val density = LocalDensity.current
     val compact = appearance.style == PlayerInfoStyle.COMPACT
     CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * appearance.textSize.scale)) {
         Box(Modifier.fillMaxSize().onFocusChanged { onFocusChanged(it.hasFocus) }.focusGroup()) {
-            PlayerInfoHeader(channel, position, total, appearance, onBack, onAppearance)
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .background(Color.Black.copy(alpha = appearance.panelShade.alpha))
-                .padding(horizontal = 18.dp, vertical = if (compact) 10.dp else 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp)) {
-                if (channel != null) PlayerEpgInfo(epg, appearance.showNext, !compact && appearance.showDescription)
-                PlayerActionRow(appearance, channel != null, channel?.isFavorite == true, canChange, total,
-                    favorites, favoriteFocus, detailsFocus, onPrevious, onNext, onChannels, onControls,
-                    onDetails, onToggleFavorite, onRetryFavorites)
+            if (appearance.style == PlayerInfoStyle.CARDS && channel != null) {
+                PlayerDeckOverlay(channel, deckChannels, position - 1, appearance, epg, technical, canChange,
+                    favorites, favoriteFocus, detailsFocus, focusCardId, deckFocusEpoch, onSelectDeckChannel, onGuide,
+                    onPrevious, onNext, onChannels, onControls, onDetails, onToggleFavorite, onRetryFavorites, onAppearance, onBack)
+            } else {
+                PlayerInfoHeader(channel, position, total, appearance, onBack, onAppearance)
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(Color.Black.copy(alpha = appearance.panelShade.alpha))
+                    .padding(horizontal = 18.dp, vertical = if (compact) 10.dp else 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp)) {
+                    if (channel != null) PlayerEpgInfo(epg, appearance.showNext, !compact && appearance.showDescription)
+                    PlayerActionRow(appearance, channel != null, channel?.isFavorite == true, canChange, total,
+                        favorites, favoriteFocus, detailsFocus, onPrevious, onNext, onChannels, onControls,
+                        onDetails, onToggleFavorite, onRetryFavorites)
+                }
             }
         }
     }

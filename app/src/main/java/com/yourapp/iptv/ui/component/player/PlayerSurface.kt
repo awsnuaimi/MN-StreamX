@@ -17,6 +17,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import com.yourapp.iptv.domain.model.Channel
+import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
 import com.yourapp.iptv.player.controller.PlayerController
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -30,7 +31,9 @@ fun PlayerSurface(
     onRemoteKey: (KeyEvent, Boolean) -> Boolean,
     onControllerVisibilityChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    controllerTimeoutMs: Int = 4500
+    controllerTimeoutMs: Int = 4500,
+    technicalInfoEnabled: Boolean = false,
+    onTechnicalInfo: (String, PlaybackTechnicalInfo) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current.applicationContext
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -43,6 +46,8 @@ fun PlayerSurface(
             onError = { id, error -> reportError(id, error) },
             onBuffering = { id, loading -> reportBuffering(id, loading) })
     }
+
+    PlayerTechnicalInfoObserver(if (technicalInfoEnabled) session.player else null, channel.id, onTechnicalInfo)
 
     LaunchedEffect(channel.id, channel.streamUrl, retryToken) {
         session.selectChannel(channel, retryToken)

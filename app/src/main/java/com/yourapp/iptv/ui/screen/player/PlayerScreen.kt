@@ -30,6 +30,8 @@ import com.yourapp.iptv.ui.component.player.PlayerSurface
 import com.yourapp.iptv.ui.component.player.PlayerSurfaceHandle
 import com.yourapp.iptv.ui.component.player.handlePlayerRemoteKey
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
+import com.yourapp.iptv.domain.model.PlayerInfoStyle
+import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
 import com.yourapp.iptv.viewmodel.PlayerEpgViewModel
 import com.yourapp.iptv.viewmodel.PlayerViewModel
 import com.yourapp.iptv.viewmodel.PlayerAppearanceViewModel
@@ -42,7 +44,8 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = hiltViewModel(),
     epgViewModel: PlayerEpgViewModel = hiltViewModel(),
     appearanceViewModel: PlayerAppearanceViewModel = hiltViewModel(),
-    onAppearance: () -> Unit = {}
+    onAppearance: () -> Unit = {},
+    onGuide: (String?, String?, String, Boolean) -> Unit = { _, _, _, _ -> }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
@@ -68,9 +71,13 @@ fun PlayerScreen(
     val errorFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
     val error = state.errorMessage ?: playbackError
+    var technical by remember(channel?.id, retry) { mutableStateOf(PlaybackTechnicalInfo()) }
+    var focusCardId by remember { mutableStateOf<String?>(null) }
+    var deckFocusEpoch by remember { mutableIntStateOf(0) }
 
     fun showInfo() { infoVisible = true; interaction++ }
     fun closeDetails() {
+        focusCardId = null
         detailsOpen = false
         returnToDetails = true
         focusInfo = true
@@ -78,12 +85,14 @@ fun PlayerScreen(
         showInfo()
     }
     fun closeChannels() {
+        focusCardId = null
         focusInfo = false
         listOpen = false
         focusEpoch++
         showInfo()
     }
     fun openChannels() {
+        focusCardId = null
         if (state.queue.size == 0) return
         surface.hideControls()
         controlsVisible = false
@@ -100,6 +109,7 @@ fun PlayerScreen(
                 focusEpoch++
             }
             PlayerBackAction.HIDE_INFO -> {
+                focusCardId = null
                 focusInfo = false
                 infoVisible = false
                 focusEpoch++
@@ -108,6 +118,7 @@ fun PlayerScreen(
         }
     }
     fun changeChannel(next: Boolean) {
+        focusCardId = null
         detailsOpen = false
         returnToDetails = false
         focusInfo = false
@@ -130,6 +141,7 @@ fun PlayerScreen(
             PlayerRemoteCommand.PREVIOUS -> changeChannel(false)
             PlayerRemoteCommand.TOGGLE_CHANNELS -> if (listOpen) closeChannels() else openChannels()
             PlayerRemoteCommand.SHOW_INFO -> {
+                focusCardId = null
                 returnToDetails = false
                 focusInfo = true
                 surface.hideControls()
@@ -163,7 +175,9 @@ fun PlayerScreen(
                     runCatching { errorFocus.requestFocus() }
                 }
                 focusInfo && channel != null -> runCatching {
-                    if (returnToDetails) detailsFocus.requestFocus() else favoriteFocus.requestFocus()
+                    if (appearance.style == PlayerInfoStyle.CARDS && focusCardId == channel.id && state.currentIndex >= 0) {
+                        // The rail scrolls to its selected tile before requesting focus.
+                    } else if (returnToDetails) detailsFocus.requestFocus() else favoriteFocus.requestFocus()
                 }
                 channel == null -> runCatching { rootFocus.requestFocus() }
                 else -> surface.requestFocus()
@@ -181,19 +195,29 @@ fun PlayerScreen(
                 onBuffering = { id, loading -> if (id == activeChannel?.id) buffering = loading },
                 onRemoteKey = ::handleRemote,
                 onControllerVisibilityChanged = { controlsVisible = it },
-                modifier = Modifier.fillMaxSize(), controllerTimeoutMs = appearance.timeoutMillis.toInt()
+                modifier = Modifier.fillMaxSize(), controllerTimeoutMs = appearance.timeoutMillis.toInt(),
+                technicalInfoEnabled = appearance.style == PlayerInfoStyle.CARDS,
+                onTechnicalInfo = { id, value -> if (id == activeChannel?.id) technical = value }
             )
         }
         if (infoVisible && !controlsVisible && !listOpen && error == null) {
             PlayerInfoOverlay(channel, state.currentIndex + 1, state.queue.size, state.canChangeChannel,
                 onPrevious = { changeChannel(false) }, onNext = { changeChannel(true) },
                 onChannels = ::openChannels,
-                onControls = { focusInfo = false; infoVisible = false; surface.showControls() },
+                onControls = { focusCardId = null; focusInfo = false; infoVisible = false; surface.showControls() },
                 onBack = { onBack(channel?.id) }, onFocusChanged = { infoFocused = it },
-                favoriteFocus = favoriteFocus, favorites = favorites, onToggleFavorite = viewModel::toggleFavorite,
+                favoriteFocus = favoriteFocus, favorites = favorites, onToggleFavorite = { focusCardId = null; viewModel.toggleFavorite() },
                 onRetryFavorites = viewModel::retryFavorites,
-                appearance = appearance, detailsFocus = detailsFocus, onAppearance = onAppearance,
-                onDetails = { detailsOpen = true; surface.hideControls(); controlsVisible = false },
+                appearance = appearance, detailsFocus = detailsFocus,
+                onAppearance = { focusCardId = null; onAppearance() },
+                deckChannels = state.queue.channels, technical = technical, focusCardId = focusCardId, deckFocusEpoch = deckFocusEpoch,
+                onGuide = { focusCardId = null; onGuide(channel?.id, state.selectedGroup, state.query, state.favoritesOnly) },
+                onSelectDeckChannel = { id ->
+                    focusCardId = id; deckFocusEpoch++; focusInfo = true; returnToDetails = false
+                    surface.hideControls(); controlsVisible = false
+                    viewModel.selectChannel(id); focusEpoch++; showInfo()
+                },
+                onDetails = { focusCardId = null; detailsOpen = true; surface.hideControls(); controlsVisible = false },
                 epg = if (epg.channelId == channel?.id) epg
                     else PlayerEpgUiState(channelId = channel?.id, isLoading = channel != null))
         }

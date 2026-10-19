@@ -42,4 +42,15 @@ class PlayerAppearanceCodecTest {
         assertEquals(PlayerAppearance(), PlayerAppearanceCodec.decode(values))
         assertEquals("preserve", values[stringPreferencesKey("future_option")])
     }
+
+    @Test fun allThreeStylesKeepIndependentStableStoredNames() {
+        for (style in PlayerInfoStyle.entries) {
+            val values = mutablePreferencesOf()
+            PlayerAppearanceCodec.encode(values, PlayerAppearance(style = style, displaySeconds = 8))
+            val restored = PlayerAppearanceCodec.decode(values)
+            assertEquals(style, restored.style)
+            assertEquals(8000L, restored.timeoutMillis)
+        }
+        assertEquals(PlayerInfoStyle.COMPACT, PlayerAppearanceCodec.decode(emptyPreferences()).style)
+    }
 }

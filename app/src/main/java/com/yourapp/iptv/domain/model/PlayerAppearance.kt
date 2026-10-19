@@ -1,6 +1,6 @@
 package com.yourapp.iptv.domain.model
 
-enum class PlayerInfoStyle { COMPACT, CLASSIC }
+enum class PlayerInfoStyle { COMPACT, CLASSIC, CARDS }
 enum class PlayerTextSize(val scale: Float) { SMALL(0.9f), NORMAL(1f), LARGE(1.15f) }
 enum class PlayerPanelShade(val alpha: Float) { SOFT(0.65f), BALANCED(0.8f), SOLID(0.94f) }
 

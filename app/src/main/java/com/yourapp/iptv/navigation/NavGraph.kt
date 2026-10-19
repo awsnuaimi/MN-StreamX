@@ -77,6 +77,15 @@ fun AppNavGraph() {
             navArgument("favoritesOnly") { type = NavType.BoolType; defaultValue = false }
         )) {
             PlayerScreen(onAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
+                onGuide = { id, group, query, favoritesOnly ->
+                    val previous = nav.previousBackStackEntry
+                    if (id != null) previous?.savedStateHandle?.set("lastPlayedChannelId", id)
+                    if (previous?.destination?.route == Destinations.EPG) nav.popBackStack()
+                    else nav.navigate(playerGuideRoute(id, group, query, favoritesOnly)) {
+                        popUpTo(Destinations.PLAYER) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
                 onBack = { channelId ->
                 if (channelId != null) {
                     nav.previousBackStackEntry?.savedStateHandle?.set("lastPlayedChannelId", channelId)
@@ -89,5 +98,11 @@ fun AppNavGraph() {
 
 private fun playerRoute(id: String, group: String?, query: String, favoritesOnly: Boolean): String = buildString {
     append("player/${Uri.encode(id)}?query=${Uri.encode(query)}&favoritesOnly=$favoritesOnly")
+    if (group != null) append("&group=${Uri.encode(group)}")
+}
+
+private fun playerGuideRoute(id: String?, group: String?, query: String, favoritesOnly: Boolean): String = buildString {
+    append("epg?query=${Uri.encode(query)}&favoritesOnly=$favoritesOnly")
+    if (id != null) append("&channelId=${Uri.encode(id)}")
     if (group != null) append("&group=${Uri.encode(group)}")
 }
