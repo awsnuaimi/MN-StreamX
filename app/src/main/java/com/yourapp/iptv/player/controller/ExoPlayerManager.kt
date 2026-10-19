@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -23,11 +24,12 @@ class ExoPlayerManager(context: Context) {
         }
     }
 
-    fun play(url: String) {
+    fun play(url: String, mediaId: String = "", title: String? = null) {
         initialize()
         val uri = Uri.parse(url)
         val output = uri.getQueryParameter("output")?.lowercase(Locale.ROOT)
-        val item = MediaItem.Builder().setUri(uri).apply {
+        val item = MediaItem.Builder().setUri(uri).setMediaId(mediaId).apply {
+            if (title != null) setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
             if (output == "m3u8" || output == "hls") setMimeType(MimeTypes.APPLICATION_M3U8)
         }.build()
         player?.apply {

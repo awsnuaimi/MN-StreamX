@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,10 +32,14 @@ import com.yourapp.iptv.viewmodel.HomeViewModel
 @Composable
 fun HomeScreen(
     onSettings: () -> Unit,
-    onPlayChannel: (String) -> Unit,
+    onPlayChannel: (String, String?, String) -> Unit,
+    returnedChannelId: String? = null,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(returnedChannelId) {
+        returnedChannelId?.let(viewModel::selectChannel)
+    }
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -94,7 +99,7 @@ fun HomeScreen(
                 selectedChannelId = state.selectedChannelId,
                 onChannelClick = { channel ->
                     viewModel.selectChannel(channel.id)
-                    onPlayChannel(channel.id)
+                    onPlayChannel(channel.id, state.selectedGroup, state.query)
                 },
                 modifier = Modifier.weight(1f).fillMaxWidth()
             )

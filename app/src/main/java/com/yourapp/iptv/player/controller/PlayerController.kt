@@ -10,7 +10,7 @@ class PlayerController(context: Context) {
     val player: ExoPlayer? get() = manager.player
 
     fun initialize() = manager.initialize()
-    fun playUrl(url: String) = manager.play(url)
+    fun playUrl(url: String, mediaId: String = "", title: String? = null) = manager.play(url, mediaId, title)
     fun pause() = manager.pause()
     fun resume() = manager.resume()
     fun stop() = manager.stop()
