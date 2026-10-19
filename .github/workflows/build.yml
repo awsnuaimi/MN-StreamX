@@ -79,11 +79,22 @@ jobs:
           fi
           apk_path="app/build/outputs/apk/release/app-release.apk"
           signing_report="$("$signer_path" verify --print-certs "$apk_path")"
-          actual_cert="$(printf '%s\n' "$signing_report" | sed -n 's/^[[:space:]]*Signer #1 certificate SHA-256 digest:[[:space:]]*//p' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+          actual_cert="$(
+            printf '%s\n' "$signing_report" |
+              awk '
+                /^[[:space:]]*(Signer([[:space:]]+#[0-9]+)?|V[0-9]+(\.[0-9]+)?[[:space:]]+Signer([[:space:]]+#[0-9]+)?):?[[:space:]]+certificate SHA-256 digest:/ {
+                  digest = $NF
+                  sub(/\r$/, "", digest)
+                  if (length(digest) == 64 && digest !~ /[^0-9A-Fa-f]/) {
+                    print tolower(digest)
+                  }
+                }
+              ' | sort -u
+          )"
           printf 'APK certificate SHA-256: %s\n' "${actual_cert:-not found}"
           if [[ ! "$actual_cert" =~ ^[0-9a-f]{64}$ ]]; then
             printf '%s\n' "$signing_report"
-            echo "::error::Cannot read the APK certificate digest from the public apksigner report."
+            echo "::error::Cannot read one unique APK signing certificate digest from the public apksigner report."
             exit 1
           fi
           if [[ "$actual_cert" != "$expected_cert" ]]; then
