@@ -25,13 +25,15 @@ import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
 import com.yourapp.iptv.ui.component.common.AppButton
+import com.yourapp.iptv.ui.state.PlayerEpgUiState
 import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
 fun PlayerInfoOverlay(
     channel: Channel?, position: Int, total: Int, canChange: Boolean,
     onPrevious: () -> Unit, onNext: () -> Unit, onChannels: () -> Unit,
-    onControls: () -> Unit, onBack: () -> Unit, onFocusChanged: (Boolean) -> Unit
+    onControls: () -> Unit, onBack: () -> Unit, onFocusChanged: (Boolean) -> Unit,
+    epg: PlayerEpgUiState
 ) {
     Box(Modifier.fillMaxSize().onFocusChanged { onFocusChanged(it.hasFocus) }.focusGroup()) {
         Row(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.76f)).padding(16.dp),
@@ -53,6 +55,7 @@ fun PlayerInfoOverlay(
             .background(Color.Black.copy(alpha = 0.76f)).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (channel != null) PlayerEpgInfo(epg)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 AppButton("السابق", onPrevious, enabled = canChange)
                 AppButton("قائمة القنوات", onChannels, enabled = total > 0)

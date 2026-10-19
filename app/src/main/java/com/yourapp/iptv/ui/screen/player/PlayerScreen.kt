@@ -29,13 +29,20 @@ import com.yourapp.iptv.ui.component.player.PlayerRemoteCommand
 import com.yourapp.iptv.ui.component.player.PlayerSurface
 import com.yourapp.iptv.ui.component.player.PlayerSurfaceHandle
 import com.yourapp.iptv.ui.component.player.handlePlayerRemoteKey
+import com.yourapp.iptv.ui.state.PlayerEpgUiState
+import com.yourapp.iptv.viewmodel.PlayerEpgViewModel
 import com.yourapp.iptv.viewmodel.PlayerViewModel
 import kotlinx.coroutines.delay
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(onBack: (String?) -> Unit, viewModel: PlayerViewModel = hiltViewModel()) {
+fun PlayerScreen(
+    onBack: (String?) -> Unit,
+    viewModel: PlayerViewModel = hiltViewModel(),
+    epgViewModel: PlayerEpgViewModel = hiltViewModel()
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val epg by epgViewModel.uiState.collectAsStateWithLifecycle()
     val channel = state.channel
     val activeChannel by rememberUpdatedState(channel)
     var retry by remember(channel?.id) { mutableIntStateOf(0) }
@@ -101,6 +108,7 @@ fun PlayerScreen(onBack: (String?) -> Unit, viewModel: PlayerViewModel = hiltVie
     }
 
     BackHandler { back() }
+    LaunchedEffect(channel) { epgViewModel.selectChannel(channel) }
     LaunchedEffect(channel?.id) { showInfo() }
     LaunchedEffect(channel?.id, interaction, listOpen, controlsVisible, infoFocused, error) {
         if (!listOpen && !controlsVisible && !infoFocused && error == null) {
@@ -141,7 +149,9 @@ fun PlayerScreen(onBack: (String?) -> Unit, viewModel: PlayerViewModel = hiltVie
                 onPrevious = { changeChannel(false) }, onNext = { changeChannel(true) },
                 onChannels = ::openChannels,
                 onControls = { infoVisible = false; surface.showControls() },
-                onBack = { onBack(channel?.id) }, onFocusChanged = { infoFocused = it })
+                onBack = { onBack(channel?.id) }, onFocusChanged = { infoFocused = it },
+                epg = if (epg.channelId == channel?.id) epg
+                    else PlayerEpgUiState(channelId = channel?.id, isLoading = channel != null))
         }
         if ((state.isLoading || (channel != null && buffering)) && error == null) {
             CircularProgressIndicator(Modifier.align(Alignment.Center))
