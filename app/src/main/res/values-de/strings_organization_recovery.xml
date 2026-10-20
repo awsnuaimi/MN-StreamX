@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="org_recovery_open">Zuordnungen reparieren</string>
+    <string name="org_recovery_undo">Verknüpfung rückgängig</string>
+    <string name="org_recovery_help">Wählen Sie eine Zuordnung ohne vorhandene Gruppe und dann die Ersatzgruppe. Gruppen können beim Anbieter vorübergehend fehlen. Vorschläge werden nie automatisch übernommen.</string>
+    <string name="org_recovery_unknown">Frühere Gruppe — %1$s</string>
+    <string name="org_recovery_choose">Ersatzgruppe für die Vorschau wählen. Bestehende manuelle Gruppenzuordnungen bleiben geschützt.</string>
+    <string name="org_recovery_empty">Keine verwaisten Gruppenzuordnungen in der aktuellen Liste.</string>
+    <string name="org_recovery_confirm">Vorschau der Verknüpfung mit:</string>
+    <string name="org_recovery_counts">Sender in der Gruppe: %1$d · Zieländerungen: %2$d · Einzelzuordnungen bleiben erhalten: %3$d</string>
+    <string name="org_recovery_draft">Dies ändert nur den Entwurf. Rückgängig ist vor dem Speichern möglich. Mit Organisation anwenden und speichern wird das Ergebnis gespeichert.</string>
+    <string name="org_recovery_apply">Im Entwurf verknüpfen</string>
+    <string name="org_recovery_error">Vorschau nicht verfügbar oder Entwurf geändert. Zurückgehen und die Gruppe erneut wählen.</string>
+    <string name="org_recovery_score">Namensähnlichkeit: %1$d%%</string>
+</resources>

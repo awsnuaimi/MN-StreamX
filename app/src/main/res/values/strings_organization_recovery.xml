@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="org_recovery_open">إصلاح التعيينات</string>
+    <string name="org_recovery_undo">تراجع عن إعادة الربط</string>
+    <string name="org_recovery_help">اختر تعيين مجموعة لم تعد موجودة، ثم اختر مجموعتها الجديدة. قد يكون الغياب مؤقتًا لدى المزوّد؛ الاقتراحات لا تُطبّق تلقائيًا.</string>
+    <string name="org_recovery_unknown">مجموعة قديمة — %1$s</string>
+    <string name="org_recovery_choose">اختر المجموعة البديلة للمعاينة. المجموعات ذات التعيين اليدوي الحالي محمية ولا يمكن استبدال تعيينها.</string>
+    <string name="org_recovery_empty">لا توجد تعيينات مجموعات غير مرتبطة في القائمة الحالية.</string>
+    <string name="org_recovery_confirm">معاينة إعادة الربط إلى المجموعة:</string>
+    <string name="org_recovery_counts">قنوات المجموعة: %1$d · تتغير وجهتها: %2$d · تعيينات قنوات فردية محفوظة: %3$d</string>
+    <string name="org_recovery_draft">يُعدّل هذا الإجراء المسودة فقط. يمكنك التراجع قبل الحفظ، وتُحفظ النتيجة بزر تطبيق وحفظ التنظيم.</string>
+    <string name="org_recovery_apply">إعادة الربط في المسودة</string>
+    <string name="org_recovery_error">تعذّر تجهيز المعاينة أو تغيّرت المسودة. ارجع وأعد اختيار المجموعة.</string>
+    <string name="org_recovery_score">تشابه الاسم: %1$d%%</string>
+</resources>

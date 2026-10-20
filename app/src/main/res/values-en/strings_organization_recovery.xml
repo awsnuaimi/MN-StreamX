@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="org_recovery_open">Repair assignments</string>
+    <string name="org_recovery_undo">Undo relink</string>
+    <string name="org_recovery_help">Choose an assignment whose group is absent, then select its replacement. Provider omissions can be temporary. Suggestions are never applied automatically.</string>
+    <string name="org_recovery_unknown">Previous group — %1$s</string>
+    <string name="org_recovery_choose">Choose a replacement to preview. Existing manual group assignments are protected.</string>
+    <string name="org_recovery_empty">No missing group assignments in the current playlist.</string>
+    <string name="org_recovery_confirm">Preview relinking to:</string>
+    <string name="org_recovery_counts">Group channels: %1$d · Destination changes: %2$d · Individual channel rules preserved: %3$d</string>
+    <string name="org_recovery_draft">This changes the draft only. Undo is available before saving. Use Apply and save organization to persist the result.</string>
+    <string name="org_recovery_apply">Relink in draft</string>
+    <string name="org_recovery_error">Could not prepare the preview, or the draft changed. Go back and choose the group again.</string>
+    <string name="org_recovery_score">Name similarity: %1$d%%</string>
+</resources>
