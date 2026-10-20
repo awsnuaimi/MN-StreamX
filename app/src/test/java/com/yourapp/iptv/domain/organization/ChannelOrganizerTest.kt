@@ -8,14 +8,21 @@ class ChannelOrganizerTest {
     private fun c(id: String, group: String?, name: String = id, favorite: Boolean = false) =
         Channel(id, name, "https://unit.test/logo/$id", "https://unit.test/live/$id", group, favorite)
     private val config = OrganizationConfig(enabled = true)
+    private fun sourceFolder(result: OrganizedChannels, id: String) =
+        result.tree.folder(result.assignments.getValue(id).folderId)!!
 
     @Test fun arabicCountryAliasesAndQualityGroupsShareParentsWithoutLosingTheirSources() {
         val input = listOf(c("s1", "AR | SYRIA FHD"), c("s2", "Syria HD"), c("s3", "القنوات السورية"),
             c("e", "AR EGYPT"), c("l", "LB LEBANON"), c("q", "AR Qatar"))
         val result = ChannelOrganizer.project(input, config)
         assertEquals(6, result.tree.counts["arabic"])
-        assertEquals(3, result.tree.counts["arabic-syria"])
-        assertEquals("arabic-egypt", result.assignments.getValue("e").folderId)
+        listOf("s1", "s2", "s3", "e", "l", "q").forEach { id ->
+            val folder = sourceFolder(result, id)
+            assertEquals("arabic", folder.parentId)
+            assertEquals(input.single { it.id == id }.group, folder.name)
+            assertNull(folder.label)
+        }
+        assertEquals(0, result.tree.counts["arabic-syria"] ?: 0)
         result.channels.forEach { current ->
             val original = input.single { it.id == current.id }
             assertEquals(original, current.copy(folderIds = emptyList()))
@@ -33,9 +40,10 @@ class ChannelOrganizerTest {
     @Test fun germanAndPolishGenresAreRecognizedAndCountryCodesRespectWordBoundaries() {
         val result = ChannelOrganizer.project(listOf(c("d", "DE SPORT"), c("p", "PL|INFORMACYJNE"),
             c("k", "PL BAJKI"), c("f", "COTE DE IVOIRE")), config)
-        assertEquals("german-sports", result.assignments.getValue("d").folderId)
-        assertEquals("polish-news", result.assignments.getValue("p").folderId)
-        assertEquals("polish-kids", result.assignments.getValue("k").folderId)
+        assertEquals("german", sourceFolder(result, "d").parentId)
+        assertEquals("polish", sourceFolder(result, "p").parentId)
+        assertEquals("polish", sourceFolder(result, "k").parentId)
+        assertNotEquals(sourceFolder(result, "p").id, sourceFolder(result, "k").id)
         assertTrue(result.channels.single { it.id == "f" }.folderIds.contains("unclassified"))
     }
     @Test fun channelRulesWinOverGroupRulesAndNewChannelsInTheGroupInheritItsRule() {
@@ -55,7 +63,7 @@ class ChannelOrganizerTest {
             c("e", "EGYPT", "News Egypt", true), c("l", "LEBANON", "Music"), c("d", "DE NEWS", "News Germany", true)), config)
         val queue = PlaybackQueue.create(result.channels, FolderFilter.of("arabic"), "News", true)
         assertEquals(setOf("s", "e"), queue.channels.map { it.id }.toSet())
-        assertEquals(FolderFilter.of("arabic-syria"), result.resolveFilter("SYRIA"))
+        assertEquals(FolderFilter.of(result.assignments.getValue("s").folderId), result.resolveFilter("SYRIA"))
         assertEquals(FolderFilter.of("arabic"), result.resolveFilter(FolderFilter.of("arabic")))
     }
     @Test fun disablingOrganizationPreservesProviderOrderAndLiteralGroupNames() {
@@ -86,7 +94,7 @@ class ChannelOrganizerTest {
         val result = ChannelOrganizer.project(input, config)
         assertEquals(10000, result.channels.size)
         assertEquals(5000, result.tree.counts["german"])
-        assertEquals(5000, result.tree.counts["arabic-syria"])
+        assertEquals(5000, result.tree.counts[sourceFolder(result, "id1").id])
         assertEquals(10000, result.channels.map { it.id }.distinct().size)
     }
     @Test fun automaticGroupsAtTheDepthLimitStayReachableThroughEveryAncestor() {
@@ -99,19 +107,17 @@ class ChannelOrganizerTest {
         assertEquals(1, PlaybackQueue.create(result.channels, FolderFilter.of("custom-0")).size)
     }
 
-    @Test fun multilingualPolishGermanAndArabicGroupsGetStableFolderIds() {
-        val cases = mapOf(
-            "PL Ogólnotematyczne" to "polish-general",
-            "PL Kanały" to "polish-general",
-            "DE Sport" to "german-sports",
-            "AR أخبار" to "arabic-news"
-        )
+    @Test fun multilingualSourceGroupsKeepTheirOriginalNamesUnderStableRoots() {
+        val cases = mapOf("PL Ogólnotematyczne" to "polish", "PL Kanały" to "polish",
+            "DE Sport" to "german", "AR أخبار" to "arabic")
         val result = ChannelOrganizer.project(cases.keys.mapIndexed { i, group -> c("case$i", group) }, config)
-        cases.values.forEachIndexed { i, expected ->
-            assertEquals(expected, result.assignments.getValue("case$i").folderId)
-            assertEquals(expected, result.channels.single { it.id == "case$i" }.folderIds.last())
+        cases.entries.forEachIndexed { i, (group, root) ->
+            val folder = sourceFolder(result, "case$i")
+            assertEquals(root, folder.parentId)
+            assertEquals(group, folder.name)
+            assertNull(folder.label)
+            assertEquals(folder.id, result.channels.single { it.id == "case$i" }.folderIds.last())
         }
-        assertNotNull(result.tree.folder("arabic-news"))
     }
 
     @Test fun changingActualHomeLanguageSettingDoesNotReassignAnyChannel() {
@@ -138,8 +144,8 @@ class ChannelOrganizerTest {
         val corrupt = config.copy(channelOverrides = mapOf("p" to "missing-folder"),
             groupOverrides = mapOf(missingGroup to "also-missing"))
         val result = ChannelOrganizer.project(listOf(c("p", "PL Kanały"), c("d", "DE Sport")), corrupt)
-        assertEquals("polish-general", result.assignments.getValue("p").folderId)
-        assertEquals("german-sports", result.assignments.getValue("d").folderId)
+        assertEquals("polish", sourceFolder(result, "p").parentId)
+        assertEquals("german", sourceFolder(result, "d").parentId)
         assertTrue(result.channels.all { it.folderIds.isNotEmpty() })
         assertEquals("missing-folder", corrupt.channelOverrides.getValue("p"))
     }

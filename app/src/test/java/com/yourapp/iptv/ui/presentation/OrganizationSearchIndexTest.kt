@@ -18,7 +18,7 @@ class OrganizationSearchIndexTest {
 
     @Test fun searchMatchesAllWordsAcrossNamesAndLocalizedPathsIgnoringDiacritics() {
         val index = index()
-        assertEquals(listOf("s"), index.find("اخبار سورية").channels.map { it.id })
+        assertEquals(listOf("s"), index.find("اخبار SYRIA").channels.map { it.id })
         assertEquals(listOf("p"), index.find("Wiadomosci").channels.map { it.id })
         assertTrue(index.find("اخبار بولندا").channels.isEmpty())
         assertTrue(index.find("العربية").groups.any { it.name == "AR SYRIA" })

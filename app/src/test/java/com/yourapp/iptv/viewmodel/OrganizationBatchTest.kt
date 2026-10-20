@@ -50,7 +50,10 @@ class OrganizationBatchTest {
         assertFalse(vm.uiState.value.value!!.groupOverrides.containsKey(syria))
         assertEquals("german-news", vm.uiState.value.value!!.groupOverrides[egypt])
         assertEquals("polish-news", vm.uiState.value.preview!!.assignments.getValue("s1").folderId)
-        assertEquals("arabic-syria", vm.uiState.value.preview!!.assignments.getValue("s2").folderId)
+        val preview = requireNotNull(vm.uiState.value.preview)
+        val restored = preview.tree.folder(preview.assignments.getValue("s2").folderId)!!
+        assertEquals("arabic", restored.parentId)
+        assertEquals("AR SYRIA HD", restored.name)
     }
     @Test fun selectionIsTransientAndEmptyMovesDoNotMarkTheDraftDirty() = runTest(dispatcher) {
         val repo = OrganizationMemory(); val vm = OrganizationEditorViewModel(repo, OrganizationChannelsFixture(), dispatcher)

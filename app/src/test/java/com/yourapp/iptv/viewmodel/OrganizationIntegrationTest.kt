@@ -50,7 +50,9 @@ class OrganizationIntegrationTest {
     }
     @Test fun disablingFoldersClearsOldFolderFiltersAndPreservesTheActiveChannel() = runTest(dispatcher) {
         val channels = OrganizationChannelsFixture(); val organization = OrganizationMemory()
-        val args = mapOf("group" to FolderFilter.of("arabic-syria"), "channelId" to "s2")
+        val preview = ChannelOrganizer.project(channels.rows, organization.value.value)
+        val sourceFolder = preview.assignments.getValue("s2").folderId
+        val args = mapOf("group" to FolderFilter.of(sourceFolder), "channelId" to "s2")
         val player = PlayerViewModel(SavedStateHandle(args), channels, dispatcher, FakeFavoriteRepository(), organization)
         val epg = EpgViewModel(SavedStateHandle(args), channels, dispatcher, FakeFavoriteRepository(), organization)
         advanceUntilIdle(); assertEquals(2, player.uiState.value.queue.size)
