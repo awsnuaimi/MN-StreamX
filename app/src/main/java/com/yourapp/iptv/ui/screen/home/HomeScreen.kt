@@ -76,7 +76,7 @@ fun HomeScreen(
     CompositionLocalProvider(LocalLayoutDirection provides if (appearance.sidebarOnRight) LayoutDirection.Rtl else LayoutDirection.Ltr) {
         Row(Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
-                HomeSidebar(appearance, labels, selected, state.isLoading, sidebarFocus, ::select,
+                HomeSidebar(appearance, labels, selected, state.isLoading || state.isRefreshing, sidebarFocus, ::select,
                     organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
@@ -93,7 +93,7 @@ fun HomeScreen(
                         label = { Text(labels.text("البحث عن قناة", "Search channels", "Sender suchen")) }, singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         modifier = Modifier.fillMaxWidth().focusRequester(searchFocus))
-                    if (state.isLoading && state.channels.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    if (state.isRefreshing && state.channels.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
                     FavoriteFeedback(favorites, viewModel::retryFavorites)
                     if (state.organization.readFailed) Text(stringResource(R.string.org_read_warning),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)

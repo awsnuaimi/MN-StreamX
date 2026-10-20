@@ -1,8 +1,10 @@
 package com.yourapp.iptv.domain.repository
 
 import com.yourapp.iptv.domain.model.Channel
+import com.yourapp.iptv.domain.model.AppSettings
 
 interface ChannelRepository {
+    suspend fun getCachedChannels(source: AppSettings): List<Channel>? = null
     suspend fun getChannels(): List<Channel>
     suspend fun getChannel(id: String): Channel?
     suspend fun loadFromM3u(url: String): List<Channel>

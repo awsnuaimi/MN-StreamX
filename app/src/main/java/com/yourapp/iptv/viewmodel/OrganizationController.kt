@@ -3,6 +3,7 @@ package com.yourapp.iptv.viewmodel
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.organization.*
 import com.yourapp.iptv.domain.repository.OrganizationRepository
+import com.yourapp.iptv.util.LoadTimings
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.retryWhen
@@ -79,10 +80,12 @@ internal class OrganizationController(
         }
 
         job = scope.launch {
-            val result = withContext(background) {
-                val worker = currentCoroutineContext()
-                ChannelOrganizer.project(source, settings) {
-                    worker.ensureActive()
+            val result = LoadTimings.measure(LoadTimings.Stage.ORGANIZE) {
+                withContext(background) {
+                    val worker = currentCoroutineContext()
+                    ChannelOrganizer.project(source, settings) {
+                        worker.ensureActive()
+                    }
                 }
             }
 

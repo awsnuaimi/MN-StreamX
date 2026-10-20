@@ -11,6 +11,8 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -55,9 +57,14 @@ class XtreamImportTest {
     }
 
     private fun enqueueSuccess() {
-        server.enqueue(MockResponse().setBody("""{"user_info":{"auth":1,"status":"Active"}}"""))
-        server.enqueue(MockResponse().setBody("""[{"category_id":1,"category_name":"News"}]"""))
-        server.enqueue(MockResponse().setBody("""[{"stream_id":12,"name":"Test","category_id":"1"}]"""))
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) = MockResponse().setBody(
+                when (request.requestUrl!!.queryParameter("action")) {
+                    "get_live_categories" -> """[{"category_id":1,"category_name":"News"}]"""
+                    "get_live_streams" -> """[{"stream_id":12,"name":"Test","category_id":"1"}]"""
+                    else -> """{"user_info":{"auth":1,"status":"Active"}}"""
+                })
+        }
     }
 
     private class Channels : ChannelDao {

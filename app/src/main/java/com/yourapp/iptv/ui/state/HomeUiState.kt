@@ -14,5 +14,6 @@ data class HomeUiState(
     val isLoading: Boolean = true,
     val needsSource: Boolean = false,
     val errorMessage: String? = null,
-    val organization: OrganizationTree = OrganizationTree()
+    val organization: OrganizationTree = OrganizationTree(),
+    val isRefreshing: Boolean = false
 )

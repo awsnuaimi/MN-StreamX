@@ -11,6 +11,10 @@ import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.RecordedRequest
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -49,7 +53,8 @@ class XtreamDataSourceTest {
         assertTrue(channel.channelId.startsWith("xtream_"))
         val requests = (1..3).map { server.takeRequest().requestUrl!! }
         assertTrue(requests.all { it.encodedPath == "/player_api.php" })
-        assertEquals(listOf(null, "get_live_categories", "get_live_streams"), requests.map { it.queryParameter("action") })
+        assertEquals(null, requests.first().queryParameter("action"))
+        assertEquals(setOf("get_live_categories", "get_live_streams"), requests.drop(1).map { it.queryParameter("action") }.toSet())
     }
 
     @Test fun reservedCredentialCharactersAndServerSubdirectoryAreEncodedCorrectly() = runBlocking {
@@ -142,11 +147,47 @@ class XtreamDataSourceTest {
         assertTrue(request.isCancelled)
     }
 
+    @Test fun categoriesAndStreamsOverlapAfterAuthentication() = runBlocking {
+        val listsStarted = CountDownLatch(2)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val action = request.requestUrl!!.queryParameter("action")
+                if (action == null) return MockResponse().setBody(active)
+                listsStarted.countDown()
+                if (!listsStarted.await(5, TimeUnit.SECONDS)) return MockResponse().setResponseCode(504)
+                return MockResponse().setBody(if (action == "get_live_categories") categories else streams)
+            }
+        }
+        assertEquals("News", withTimeout(10_000) { fetch() }.single().categoryName)
+        assertEquals(0L, listsStarted.count)
+    }
+
+    @Test fun failureOfOneListCancelsItsSibling() = runBlocking {
+        val listsStarted = CountDownLatch(2)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val action = request.requestUrl!!.queryParameter("action")
+                if (action == null) return MockResponse().setBody(active)
+                listsStarted.countDown()
+                listsStarted.await(5, TimeUnit.SECONDS)
+                return if (action == "get_live_categories") MockResponse().setBody("invalid")
+                    else MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+            }
+        }
+        assertTrue(withTimeout(10_000) { runCatching { fetch() }.exceptionOrNull() } is PlaylistLoadException)
+        withTimeout(5_000) { while (client.dispatcher.runningCallsCount() != 0) delay(10) }
+    }
+
     private suspend fun fetch() = XtreamDataSource(client).fetchChannels(server.url("/").toString(), "user", "password")
 
     private fun success(account: String = active, live: String = streams) {
-        server.enqueue(MockResponse().setBody(account))
-        server.enqueue(MockResponse().setBody(categories))
-        server.enqueue(MockResponse().setBody(live))
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) = MockResponse().setBody(
+                when (request.requestUrl!!.queryParameter("action")) {
+                    "get_live_categories" -> categories
+                    "get_live_streams" -> live
+                    else -> account
+                })
+        }
     }
 }

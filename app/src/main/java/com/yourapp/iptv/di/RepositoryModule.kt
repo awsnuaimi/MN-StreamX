@@ -1,5 +1,7 @@
 package com.yourapp.iptv.di
 
+import android.content.Context
+import com.yourapp.iptv.data.datastore.ChannelSnapshotDataStore
 import com.yourapp.iptv.data.local.AppDatabase
 import com.yourapp.iptv.data.repository.ChannelRepositoryImpl
 import com.yourapp.iptv.data.repository.PlaylistRepositoryImpl
@@ -11,6 +13,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Singleton
 
 @Module
@@ -18,11 +21,12 @@ import javax.inject.Singleton
 object RepositoryModule {
     @Provides
     @Singleton
-    fun provideChannels(database: AppDatabase): ChannelRepository = ChannelRepositoryImpl(
+    fun provideChannels(database: AppDatabase, @ApplicationContext context: Context): ChannelRepository = ChannelRepositoryImpl(
         m3uDataSource = M3uDataSource(),
         xtreamDataSource = XtreamDataSource(),
         channelDao = database.channelDao(),
-        favoriteDao = database.favoriteDao()
+        favoriteDao = database.favoriteDao(),
+        snapshot = ChannelSnapshotDataStore(context)
     )
 
     @Provides

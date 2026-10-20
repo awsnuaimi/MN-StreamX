@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.PlaylistLoadException
 import com.yourapp.iptv.domain.model.PlaylistSource
+import com.yourapp.iptv.domain.model.AppSettings
+import com.yourapp.iptv.domain.model.PlaylistCacheKey
 import com.yourapp.iptv.domain.model.ChannelFavorites
 import com.yourapp.iptv.domain.model.PlaybackQueue
 import com.yourapp.iptv.domain.repository.FavoriteRepository
@@ -19,11 +21,15 @@ import com.yourapp.iptv.di.DefaultDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import com.yourapp.iptv.util.LoadTimings
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -36,7 +42,11 @@ class HomeViewModel @Inject constructor(
     private val state = MutableStateFlow(HomeUiState())
     val uiState = state.asStateFlow()
     private var loadJob: Job? = null
+    private var settingsJob: Job? = null
     private var filterJob: Job? = null
+    private var activeSource: AppSettings? = null
+    private var generation = 0L
+    private var refreshing = false
     private var favoriteIds: Set<String>? = null
     private val favoriteController = FavoriteController(viewModelScope, favorites) {
         favoriteIds = it
@@ -48,38 +58,86 @@ class HomeViewModel @Inject constructor(
             groups = if (result.tree.enabled) result.tree.folders.map { f -> FolderFilter.of(f.id) }
                 else result.channels.mapNotNull { c -> c.group }.distinct().sorted(),
             selectedGroup = result.resolveFilter(it.selectedGroup), organization = result.tree,
-            isLoading = false, needsSource = false, errorMessage = null) }
+            isLoading = false, needsSource = false, isRefreshing = refreshing) }
         filterChannels()
     }
 
     fun retryFavorites() = favoriteController.retry()
 
-    init { refresh() }
+    init { observeSource() }
 
     fun refresh() {
         if (loadJob?.isActive == true) return
-        organizer.clearChannels()
-        state.update { it.copy(isLoading = true, errorMessage = null) }
+        val source = activeSource
+        if (source == null) observeSource()
+        else if (source.hasSelectedSource()) load(source)
+    }
+
+    private fun observeSource() {
+        settingsJob?.cancel()
+        settingsJob = viewModelScope.launch {
+            try {
+                settings.observeSettings().distinctUntilChangedBy(PlaylistCacheKey::of).collect { source ->
+                    generation++
+                    loadJob?.cancel()
+                    filterJob?.cancel()
+                    organizer.clearChannels()
+                    activeSource = source
+                    refreshing = false
+                    state.value = HomeUiState(isLoading = source.hasSelectedSource(),
+                        needsSource = !source.hasSelectedSource())
+                    if (source.hasSelectedSource()) load(source)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                generation++
+                loadJob?.cancel()
+                organizer.clearChannels()
+                activeSource = null
+                refreshing = false
+                state.update { it.copy(isLoading = false, isRefreshing = false,
+                    errorMessage = "تعذر قراءة إعدادات مصدر القنوات. أعد المحاولة.") }
+            }
+        }
+    }
+
+    private fun load(source: AppSettings) {
+        val token = ++generation
+        refreshing = true
+        state.update { it.copy(isLoading = it.channels.isEmpty(), isRefreshing = true, errorMessage = null) }
         loadJob = viewModelScope.launch {
             try {
-                val source = settings.observeSettings().first()
-                if (!source.hasSelectedSource()) {
-                    state.value = HomeUiState(isLoading = false, needsSource = true)
-                    return@launch
+                if (state.value.channels.isEmpty()) {
+                    // Cache failure is a miss; it must not prevent a network retry.
+                    val cached = try { playlists.cachedPlaylist(source) }
+                    catch (error: CancellationException) { throw error }
+                    catch (_: Exception) { null }
+                    currentCoroutineContext().ensureActive()
+                    if (generation != token) return@launch
+                    cached?.channels?.takeIf { it.isNotEmpty() }?.let(organizer::setChannels)
                 }
-                val channels = when (source.source) {
-                    PlaylistSource.M3U -> playlists.loadPlaylist(source.m3uUrl)
-                    PlaylistSource.XTREAM -> playlists.loadXtream(
-                        source.xtreamServer, source.xtreamUsername, source.xtreamPassword
-                    )
-                }.channels
+                val channels = LoadTimings.measure(LoadTimings.Stage.REFRESH) {
+                    when (source.source) {
+                        PlaylistSource.M3U -> playlists.loadPlaylist(source.m3uUrl)
+                        PlaylistSource.XTREAM -> playlists.loadXtream(
+                            source.xtreamServer, source.xtreamUsername, source.xtreamPassword)
+                    }.channels
+                }
+                currentCoroutineContext().ensureActive()
+                if (generation != token) return@launch
+                refreshing = false
+                state.update { it.copy(isRefreshing = false) }
                 organizer.setChannels(channels)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (generation != token) return@launch
+                refreshing = false
                 state.update {
                     it.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         errorMessage = (error as? PlaylistLoadException)?.message
                             ?: "تعذر تحميل القنوات. تحقق من الشبكة والإعدادات ثم أعد المحاولة."
                     )
