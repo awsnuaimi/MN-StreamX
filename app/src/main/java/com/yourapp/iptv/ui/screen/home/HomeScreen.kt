@@ -9,14 +9,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.*
-import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.iptv.ui.component.channel.FavoriteFeedback
@@ -76,9 +74,11 @@ fun HomeScreen(
     val languageDirection = if (appearance.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
     // Physical sidebar placement is independent of the direction of text and channel names.
     CompositionLocalProvider(LocalLayoutDirection provides if (appearance.sidebarOnRight) LayoutDirection.Rtl else LayoutDirection.Ltr) {
-        Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
-            Spacer(Modifier.width(if (appearance.expandedSidebar) 180.dp else 70.dp))
+            CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
+                HomeSidebar(appearance, labels, selected, state.isLoading, sidebarFocus, ::select,
+                    organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
+            }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 Column(Modifier.weight(1f).fillMaxHeight().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -104,8 +104,10 @@ fun HomeScreen(
                         state.isLoading && state.channels.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                         state.channels.isEmpty() -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
                             labels.section(HomeSection.REFRESH), viewModel::refresh)
-                        else -> Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            val categoryModifier = Modifier.widthIn(min = 140.dp, max = 190.dp).fillMaxWidth(0.24f).fillMaxHeight()
+                        else -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                        val categoryWidth = (maxWidth * 0.28f).coerceIn(160.dp, 220.dp)
+                        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            val categoryModifier = Modifier.width(categoryWidth).fillMaxHeight()
                             val chooseGroup: (String?) -> Unit = { group ->
                                 if (group == null) viewModel.selectAllGroups() else viewModel.selectGroup(group)
                             }
@@ -121,15 +123,10 @@ fun HomeScreen(
                                 onPlayChannel(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
                             }, Modifier.weight(1f).fillMaxHeight(), columns = appearance.columns, showGroup = state.selectedGroup == null)
                         }
+                        }
                     }
                 }
             }
-        }
-        CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
-            HomeSidebar(appearance, labels, selected, state.isLoading, sidebarFocus, ::select,
-                Modifier.align(if (appearance.sidebarOnRight) AbsoluteAlignment.CenterRight else AbsoluteAlignment.CenterLeft).zIndex(1f),
-                organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
-        }
         }
     }
 }

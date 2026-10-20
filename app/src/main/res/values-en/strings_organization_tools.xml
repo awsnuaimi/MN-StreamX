@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="org_sort_title">Group sorting</string>
+    <string name="org_sort_saved">My order</string>
+    <string name="org_sort_name">By name</string>
+    <string name="org_sort_count">Most channels</string>
+    <string name="org_sort_button">Sort: %1$s</string>
+    <string name="org_sort_note">Sorting applies to the folder browser and source groups. Folder editing always shows your manual order.</string>
+    <string name="org_bulk_mode">Select multiple</string>
+    <string name="org_select_results">Select results</string>
+    <string name="org_clear_selection">Clear selection</string>
+    <string name="org_move_selected">Move selected (%1$d)</string>
+    <string name="org_review_only">Unclassified only</string>
+    <string name="org_searching">Preparing results…</string>
+    <string name="org_bulk_hint">Select groups, then move the selection. Searching keeps your selection. Moves include the entire group and respect individual channel assignments.</string>
+    <string name="org_group_results">Groups: %1$d / %2$d</string>
+    <string name="ui_grid_adaptive_hint">Columns adapt to the available space and font size; your choice is the maximum.</string>
+</resources>

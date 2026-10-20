@@ -1,6 +1,7 @@
 package com.yourapp.iptv.ui.tv
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -18,16 +19,23 @@ fun TvChannelGrid(channels: List<Channel>, selectedChannelId: String?, onChannel
     val grid = rememberLazyGridState()
     val restoreFocus = remember { FocusRequester() }
     var focusedIndex by remember { mutableIntStateOf(-1) }
+    var gridHasFocus by remember { mutableStateOf(false) }
+    var restoredId by remember { mutableStateOf<String?>(null) }
     val selectedIndex = channels.indexOfFirst { it.id == selectedChannelId }
-    BoxWithConstraints(modifier) {
-        val columnCount = columns?.coerceIn(2, 4) ?: (maxWidth.value / 220f).toInt().coerceAtLeast(1)
+    BoxWithConstraints(modifier.onFocusChanged { gridHasFocus = it.hasFocus }.focusGroup()) {
         val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val columnCount = TvGridLayout.columns(maxWidth.value, columns ?: 4, (if (columns == null) 220f else 164f) * fontScale)
         val rows = TvGridLayout.rows(maxHeight.value, 96f * fontScale)
-        LaunchedEffect(selectedChannelId, selectedIndex, columnCount) {
-            if (selectedIndex >= 0) {
+        LaunchedEffect(selectedChannelId, selectedIndex) {
+            if (selectedChannelId == null) restoredId = null
+            if (selectedIndex >= 0 && restoredId != selectedChannelId) {
                 grid.scrollToItem(TvGridLayout.rowStart(selectedIndex, columnCount))
                 withFrameNanos { }; runCatching { restoreFocus.requestFocus() }
+                restoredId = selectedChannelId
             }
+        }
+        LaunchedEffect(columnCount) {
+            if (gridHasFocus && focusedIndex >= 0) grid.scrollToItem(TvGridLayout.rowStart(focusedIndex, columnCount))
         }
         LaunchedEffect(grid, columnCount, channels.size, rows.height) {
             var blockedPosition: Pair<Int, Int>? = null

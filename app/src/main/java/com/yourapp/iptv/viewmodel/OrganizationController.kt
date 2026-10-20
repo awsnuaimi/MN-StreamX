@@ -33,7 +33,7 @@ internal class OrganizationController(private val scope: CoroutineScope, reposit
     private fun publish(result: OrganizedChannels) {
         signaledFailure = readFailed
         onChanged(if (!readFailed) result else result.copy(tree = OrganizationTree(result.tree.enabled,
-            result.tree.folders, result.tree.counts, true)))
+            result.tree.folders, result.tree.counts, true, result.tree.folderSort)))
     }
     private fun rebuild(force: Boolean = false) {
         val source = channels ?: return; val settings = config ?: return

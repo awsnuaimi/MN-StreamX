@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="org_sort_title">Gruppen sortieren</string>
+    <string name="org_sort_saved">Meine Reihenfolge</string>
+    <string name="org_sort_name">Nach Name</string>
+    <string name="org_sort_count">Meiste Sender</string>
+    <string name="org_sort_button">Sortierung: %1$s</string>
+    <string name="org_sort_note">Die Sortierung gilt für den Ordnerbrowser und die Quellgruppen. Die Ordnerbearbeitung zeigt immer die manuelle Reihenfolge.</string>
+    <string name="org_bulk_mode">Mehrfachauswahl</string>
+    <string name="org_select_results">Ergebnisse wählen</string>
+    <string name="org_clear_selection">Auswahl aufheben</string>
+    <string name="org_move_selected">Auswahl verschieben (%1$d)</string>
+    <string name="org_review_only">Nur nicht zugeordnet</string>
+    <string name="org_searching">Ergebnisse werden vorbereitet…</string>
+    <string name="org_bulk_hint">Gruppen auswählen und verschieben. Die Suche behält die Auswahl. Ganze Gruppen werden verschoben; einzelne Senderzuordnungen haben Vorrang.</string>
+    <string name="org_group_results">Gruppen: %1$d / %2$d</string>
+    <string name="ui_grid_adaptive_hint">Die Spaltenzahl passt sich an Platz und Schriftgröße an; die Auswahl ist die Obergrenze.</string>
+</resources>

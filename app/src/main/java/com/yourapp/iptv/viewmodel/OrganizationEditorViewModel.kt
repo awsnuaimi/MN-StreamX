@@ -17,7 +17,7 @@ enum class OrganizationIssue { READ, SAVE, INVALID_FOLDER }
 data class OrganizationEditorState(val value: OrganizationConfig? = null,
     val preview: OrganizedChannels? = null, val loading: Boolean = true, val computing: Boolean = false,
     val saving: Boolean = false, val saved: Boolean = false, val dirty: Boolean = false,
-    val issue: OrganizationIssue? = null)
+    val issue: OrganizationIssue? = null, val selectedGroups: Set<String> = emptySet())
 
 @HiltViewModel
 class OrganizationEditorViewModel @Inject constructor(private val repository: OrganizationRepository,
@@ -25,6 +25,7 @@ class OrganizationEditorViewModel @Inject constructor(private val repository: Or
     private val state = MutableStateFlow(OrganizationEditorState())
     val uiState = state.asStateFlow()
     private var source = emptyList<Channel>()
+    private var sourceGroupKeys = emptySet<String>()
     private var loadJob: Job? = null
     private var previewJob: Job? = null
     init { load() }
@@ -37,15 +38,36 @@ class OrganizationEditorViewModel @Inject constructor(private val repository: Or
                 val stored = channels.getChannels()
                 val preview = withContext(background) { ChannelOrganizer.project(stored, config.copy(enabled = true)) }
                 source = stored
+                sourceGroupKeys = stored.map { it.group }.distinct().map(OrganizationNames::groupKey).toSet()
                 state.value = OrganizationEditorState(config.copy(folders = preview.tree.folders), preview, loading = false)
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { state.value = OrganizationEditorState(loading = false, issue = OrganizationIssue.READ) }
         }
     }
     fun enable(value: Boolean) = edit { copy(enabled = value) }
-    fun moveGroup(key: String, folder: String?) = edit {
-        require(folder == null || folders.any { it.id == folder })
-        copy(groupOverrides = groupOverrides.toMutableMap().apply { if (folder == null) remove(key) else put(key, folder) })
+    fun moveGroup(key: String, folder: String?) = moveGroups(setOf(key), folder)
+    fun moveGroups(keys: Set<String>, folder: String?) {
+        if (keys.isEmpty()) return
+        edit { FolderEdits.assignGroups(this, sourceGroupKeys, keys, folder) }
+    }
+    fun setFolderSort(mode: FolderSort) {
+        if (state.value.value?.folderSort != mode) edit { copy(folderSort = mode) }
+    }
+    fun toggleGroupSelection(key: String) {
+        if (state.value.saving || key !in sourceGroupKeys) return
+        state.update { it.copy(selectedGroups = it.selectedGroups.toMutableSet().apply { if (!add(key)) remove(key) }) }
+    }
+    fun selectGroupResults(keys: List<String>) {
+        if (state.value.saving) return
+        state.update { it.copy(selectedGroups = it.selectedGroups + keys.filter { key -> key in sourceGroupKeys }) }
+    }
+    fun clearGroupSelection() { if (!state.value.saving) state.update { it.copy(selectedGroups = emptySet()) } }
+    fun moveSelectedGroups(folder: String?): Boolean {
+        val before = state.value
+        moveGroups(before.selectedGroups, folder)
+        val accepted = state.value.value !== before.value && state.value.issue == null
+        if (accepted) clearGroupSelection()
+        return accepted
     }
     fun moveChannel(id: String, folder: String?) = edit {
         require(source.any { it.id == id }); require(folder == null || folders.any { it.id == folder })
@@ -55,7 +77,10 @@ class OrganizationEditorViewModel @Inject constructor(private val repository: Or
         FolderEdits.upsert(this, id ?: "custom-${UUID.randomUUID()}", name, parent)
     }
     fun reorder(id: String, direction: Int) = edit { FolderEdits.move(this, id, direction) }
-    fun reset() = edit { OrganizationConfig(sourceKey, enabled, revision = revision) }
+    fun reset() {
+        edit { OrganizationConfig(sourceKey, enabled, revision = revision, folderSort = folderSort) }
+        clearGroupSelection()
+    }
     private fun edit(change: OrganizationConfig.() -> OrganizationConfig) {
         val current = state.value
         if (current.loading || current.saving || current.value == null || current.issue == OrganizationIssue.READ) return

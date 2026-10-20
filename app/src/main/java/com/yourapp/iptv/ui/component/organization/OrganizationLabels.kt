@@ -8,7 +8,14 @@ import com.yourapp.iptv.domain.organization.*
 @Composable
 fun folderName(folder: ChannelFolder): String {
     if (folder.name.isNotBlank()) return folder.name
-    return stringResource(when (folder.label) {
+    return stringResource(folderLabelResource(folder.label))
+}
+
+@Composable
+internal fun organizationFolderLabels(): Map<FolderLabel, String> =
+    FolderLabel.entries.associateWith { stringResource(folderLabelResource(it)) }
+
+internal fun folderLabelResource(label: FolderLabel?): Int = when (label) {
         FolderLabel.ARABIC -> R.string.org_folder_arabic
         FolderLabel.BEIN -> R.string.org_folder_bein
         FolderLabel.GERMAN -> R.string.org_folder_german
@@ -46,7 +53,6 @@ fun folderName(folder: ChannelFolder): String {
         FolderLabel.MUSIC -> R.string.org_folder_music
         FolderLabel.OTHER -> R.string.org_folder_other
         null -> R.string.org_folder_other
-    })
 }
 
 @Composable

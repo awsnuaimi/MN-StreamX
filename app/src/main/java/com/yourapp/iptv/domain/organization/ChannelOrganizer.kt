@@ -41,7 +41,7 @@ object ChannelOrganizer {
             }
             channel.id to assignment
         }
-        val tree = OrganizationTree(true, folders.values.toList())
+        val tree = OrganizationTree(true, folders.values.toList(), folderSort = config.folderSort)
         val siblingOrder = mutableMapOf<String, Int>()
         folders.values.map { it.parentId }.distinct().forEach { parent ->
             tree.children(parent).forEachIndexed { index, folder -> siblingOrder[folder.id] = index }

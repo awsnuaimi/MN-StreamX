@@ -5,6 +5,11 @@ import kotlin.math.floor
 internal data class TvGridRows(val count: Int, val height: Float)
 
 internal object TvGridLayout {
+    fun columns(viewport: Float, preferred: Int, minimum: Float, gap: Float = 12f, padding: Float = 4f): Int {
+        val available = (viewport - padding * 2).coerceAtLeast(1f)
+        return floor((available + gap) / (minimum.coerceAtLeast(1f) + gap)).toInt()
+            .coerceAtLeast(1).coerceAtMost(preferred.coerceIn(1, 4))
+    }
     fun rows(viewport: Float, minimum: Float, gap: Float = 12f, padding: Float = 4f): TvGridRows {
         val available = (viewport - padding * 2).coerceAtLeast(1f)
         val count = floor((available + gap) / (minimum.coerceAtLeast(1f) + gap)).toInt().coerceAtLeast(1)

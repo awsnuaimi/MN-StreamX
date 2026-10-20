@@ -9,25 +9,32 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.R
 import com.yourapp.iptv.domain.organization.*
+import com.yourapp.iptv.ui.presentation.OrganizationSearchRows
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.component.organization.*
 
 @Composable
-internal fun OrganizationGroups(preview: OrganizedChannels, value: OrganizationConfig, query: String,
-    enabled: Boolean, onMove: (SourceGroup) -> Unit, onClear: (String) -> Unit) {
-    val groups = preview.groups.filter { it.name.orEmpty().contains(query, true) }
+internal fun OrganizationGroups(preview: OrganizedChannels, value: OrganizationConfig, rows: OrganizationSearchRows,
+    enabled: Boolean, bulk: Boolean, selected: Set<String>, onMove: (SourceGroup) -> Unit,
+    onClear: (String) -> Unit, onToggle: (String) -> Unit) {
+    val groups = rows.groups
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(3.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item("@hint") {
-            Text(stringResource(R.string.org_move), style = MaterialTheme.typography.labelLarge)
-            Text(stringResource(R.string.org_rule_hint), style = MaterialTheme.typography.bodySmall)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.org_group_results, groups.size, preview.groups.size), style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(if (bulk) R.string.org_bulk_hint else R.string.org_rule_hint), style = MaterialTheme.typography.bodySmall)
+            }
         }
         items(groups, key = { it.key }) { group ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val target = group.folderIds.singleOrNull()?.let { folderPath(preview.tree, it) }
+                val target = group.folderIds.singleOrNull()?.let { rows.paths[it] }
                     ?: stringResource(R.string.org_destinations, group.folderIds.size)
                 OrganizerRow(group.name?.takeIf { it.isNotBlank() } ?: stringResource(R.string.org_no_group),
-                    subtitle = stringResource(R.string.org_count, group.count) + " · " + target, enabled = enabled) { onMove(group) }
-                if (group.key in value.groupOverrides) AppButton(stringResource(R.string.org_clear_rule),
+                    subtitle = stringResource(R.string.org_count, group.count) + " · " + target,
+                    enabled = enabled, selected = bulk && group.key in selected, checked = if (bulk) group.key in selected else null) {
+                    if (bulk) onToggle(group.key) else onMove(group)
+                }
+                if (!bulk && group.key in value.groupOverrides) AppButton(stringResource(R.string.org_clear_rule),
                     { onClear(group.key) }, enabled = enabled)
             }
         }
@@ -36,15 +43,15 @@ internal fun OrganizationGroups(preview: OrganizedChannels, value: OrganizationC
 }
 
 @Composable
-internal fun OrganizationChannels(preview: OrganizedChannels, value: OrganizationConfig, query: String,
+internal fun OrganizationChannels(preview: OrganizedChannels, value: OrganizationConfig, rows: OrganizationSearchRows,
     enabled: Boolean, onMove: (String) -> Unit, onClear: (String) -> Unit) {
-    val channels = preview.channels.filter { it.name.contains(query, true) || it.group.orEmpty().contains(query, true) }
+    val channels = rows.channels
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(3.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item("@hint") { Text(stringResource(R.string.org_move), style = MaterialTheme.typography.labelLarge) }
         items(channels, key = { it.id }) { channel ->
             val assignment = preview.assignments.getValue(channel.id)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OrganizerRow(channel.name, subtitle = folderPath(preview.tree, assignment.folderId) + " · " + assignmentName(assignment.reason),
+                OrganizerRow(channel.name, subtitle = rows.paths[assignment.folderId].orEmpty() + " · " + assignmentName(assignment.reason),
                     enabled = enabled) { onMove(channel.id) }
                 Text(stringResource(R.string.org_source, channel.group ?: stringResource(R.string.org_no_group)),
                     style = MaterialTheme.typography.labelSmall)
@@ -58,11 +65,10 @@ internal fun OrganizationChannels(preview: OrganizedChannels, value: Organizatio
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun OrganizationFolders(tree: OrganizationTree, query: String, enabled: Boolean,
+internal fun OrganizationFolders(tree: OrganizationTree, rows: OrganizationSearchRows, enabled: Boolean,
     onEdit: (ChannelFolder?) -> Unit, onReorder: (String, Int) -> Unit) {
-    val labels = mutableMapOf<String, String>()
-    for (folder in tree.folders) labels[folder.id] = folderPath(tree, folder.id)
-    val folders = tree.orderedFolders().filter { labels.getValue(it.id).contains(query, true) }
+    val labels = rows.paths
+    val folders = rows.folders
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(3.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item("@new") { AppButton(stringResource(R.string.org_new_folder), { onEdit(null) }, enabled = enabled) }
         items(folders, key = { it.id }) { folder ->

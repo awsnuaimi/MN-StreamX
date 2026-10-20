@@ -23,7 +23,7 @@ class OrganizationDataStoreTest {
             store.edit { it[stringPreferencesKey("future")] = "keep" }
             val repo = OrganizationDataStore(store, settings)
             val original = repo.observe().first()
-            repo.save(original.copy(enabled = true, folders = original.folders + custom,
+            repo.save(original.copy(enabled = true, folderSort = FolderSort.COUNT, folders = original.folders + custom,
                 groupOverrides = mapOf(OrganizationNames.groupKey("SYRIA") to custom.id),
                 channelOverrides = mapOf("channel-1" to "arabic-egypt")))
             assertEquals("keep", store.data.first()[stringPreferencesKey("future")])
@@ -32,7 +32,7 @@ class OrganizationDataStoreTest {
         try {
             val repo = OrganizationDataStore(PreferenceDataStoreFactory.create(scope = scope) { file }, settings)
             val value = repo.observe().first()
-            assertTrue(value.enabled); assertEquals(1L, value.revision)
+            assertTrue(value.enabled); assertEquals(1L, value.revision); assertEquals(FolderSort.COUNT, value.folderSort)
             assertTrue(value.folders.contains(custom))
             assertEquals(custom.id, value.groupOverrides[OrganizationNames.groupKey("SYRIA")])
             assertEquals("arabic-egypt", value.channelOverrides["channel-1"])

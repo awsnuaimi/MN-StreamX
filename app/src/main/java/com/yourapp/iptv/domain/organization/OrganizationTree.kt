@@ -3,7 +3,8 @@ package com.yourapp.iptv.domain.organization
 import com.yourapp.iptv.domain.model.Channel
 
 class OrganizationTree(val enabled: Boolean = false, val folders: List<ChannelFolder> = emptyList(),
-    val counts: Map<String, Int> = emptyMap(), val readFailed: Boolean = false) {
+    val counts: Map<String, Int> = emptyMap(), val readFailed: Boolean = false,
+    val folderSort: FolderSort = FolderSort.SAVED) {
     private val byId = folders.associateBy { it.id }
     private val children = folders.groupBy { it.parentId }.mapValues { (_, rows) ->
         rows.sortedWith(compareBy<ChannelFolder> { it.order }.thenBy { it.id })
@@ -28,7 +29,7 @@ class OrganizationTree(val enabled: Boolean = false, val folders: List<ChannelFo
     fun withCounts(channels: List<Channel>): OrganizationTree {
         val values = mutableMapOf<String, Int>()
         channels.forEach { c -> c.folderIds.forEach { values[it] = (values[it] ?: 0) + 1 } }
-        return OrganizationTree(enabled, folders, values, readFailed)
+        return OrganizationTree(enabled, folders, values, readFailed, folderSort)
     }
 }
 
@@ -47,6 +48,14 @@ data class OrganizedChannels(val channels: List<Channel>, val tree: Organization
 }
 
 object FolderEdits {
+    fun assignGroups(config: OrganizationConfig, available: Set<String>, selected: Set<String>, destination: String?): OrganizationConfig {
+        if (selected.isEmpty()) return config
+        require(selected.all { it in available })
+        require(destination == null || config.folders.any { it.id == destination })
+        return validate(config.copy(groupOverrides = config.groupOverrides.toMutableMap().apply {
+            selected.forEach { key -> if (destination == null) remove(key) else put(key, destination) }
+        }))
+    }
     fun validate(config: OrganizationConfig): OrganizationConfig {
         require(config.revision >= 0 && config.revision < Long.MAX_VALUE)
         require(config.folders.size <= 10000 && config.folders.map { it.id }.distinct().size == config.folders.size)

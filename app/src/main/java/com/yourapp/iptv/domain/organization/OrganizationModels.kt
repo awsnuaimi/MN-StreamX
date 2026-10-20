@@ -13,7 +13,9 @@ data class ChannelFolder(val id: String, val parentId: String? = null, val label
 data class OrganizationConfig(val sourceKey: String = "", val enabled: Boolean = false,
     val folders: List<ChannelFolder> = OrganizationDefaults.folders(),
     val groupOverrides: Map<String, String> = emptyMap(), val channelOverrides: Map<String, String> = emptyMap(),
-    val revision: Long = 0)
+    val revision: Long = 0, val folderSort: FolderSort = FolderSort.SAVED)
+
+enum class FolderSort { SAVED, NAME, COUNT }
 
 enum class AssignmentReason { CHANNEL_RULE, GROUP_RULE, NETWORK, COUNTRY, UNCLASSIFIED }
 data class FolderAssignment(val folderId: String, val reason: AssignmentReason)

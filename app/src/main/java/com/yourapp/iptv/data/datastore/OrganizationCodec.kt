@@ -22,13 +22,15 @@ internal object OrganizationCodec {
             }
             return FolderEdits.validate(OrganizationConfig(source, enabled, folders,
                 readMap(root.getAsJsonObject("groups")), readMap(root.getAsJsonObject("channels")),
-                root.get("revision").asLong.also { require(it >= 0) }))
+                root.get("revision").asLong.also { require(it >= 0) },
+                root.string("folderSort")?.let { name -> requireNotNull(FolderSort.entries.firstOrNull { it.name == name }) } ?: FolderSort.SAVED))
         } catch (error: Exception) { throw IOException("Cannot read organization configuration", error) }
     }
     fun encode(value: OrganizationConfig): String {
         FolderEdits.validate(value)
         val root = JsonObject().apply {
             addProperty("version", 1); addProperty("enabled", value.enabled); addProperty("revision", value.revision)
+            addProperty("folderSort", value.folderSort.name)
             add("folders", com.google.gson.JsonArray().apply { value.folders.forEach { f -> add(JsonObject().apply {
                 addProperty("id", f.id); addProperty("parent", f.parentId); addProperty("label", f.label?.name)
                 addProperty("name", f.name); addProperty("order", f.order)

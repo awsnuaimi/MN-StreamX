@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="org_sort_title">فرز المجموعات</string>
+    <string name="org_sort_saved">ترتيبي</string>
+    <string name="org_sort_name">حسب الاسم</string>
+    <string name="org_sort_count">الأكثر قنوات</string>
+    <string name="org_sort_button">الفرز: %1$s</string>
+    <string name="org_sort_note">يخص الفرز متصفح المجلدات ومجموعات المصدر. تعرض شاشة تعديل المجلدات ترتيبك اليدوي دائمًا.</string>
+    <string name="org_bulk_mode">تحديد متعدد</string>
+    <string name="org_select_results">تحديد النتائج</string>
+    <string name="org_clear_selection">مسح التحديد</string>
+    <string name="org_move_selected">نقل المحدد (%1$d)</string>
+    <string name="org_review_only">غير المصنّف فقط</string>
+    <string name="org_searching">جارٍ تجهيز النتائج…</string>
+    <string name="org_bulk_hint">حدد المجموعات ثم انقل المحدد. البحث لا يمسح التحديد. النقل يشمل المجموعة كاملة ويحترم تعيينات القنوات الفردية.</string>
+    <string name="org_group_results">المجموعات: %1$d / %2$d</string>
+    <string name="ui_grid_adaptive_hint">يتكيّف عدد الأعمدة مع المساحة وحجم الخط؛ العدد المختار هو الحد الأقصى.</string>
+</resources>

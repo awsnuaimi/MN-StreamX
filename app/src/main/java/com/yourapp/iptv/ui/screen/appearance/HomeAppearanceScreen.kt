@@ -45,6 +45,7 @@ fun HomeAppearanceScreen(onBack: () -> Unit, viewModel: HomeAppearanceSettingsVi
                     listOf(2 to stringResource(R.string.ui_columns_two), 3 to stringResource(R.string.ui_columns_three), 4 to stringResource(R.string.ui_columns_four)), enabled) {
                     viewModel.update(value.copy(columns = it))
                 }
+                Text(stringResource(R.string.ui_grid_adaptive_hint), style = MaterialTheme.typography.bodySmall)
                 AppearanceToggle(stringResource(R.string.ui_sidebar_expanded), value.expandedSidebar, enabled) {
                     viewModel.update(value.copy(expandedSidebar = it))
                 }
