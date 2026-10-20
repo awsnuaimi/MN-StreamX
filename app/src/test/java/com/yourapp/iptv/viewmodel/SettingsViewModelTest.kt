@@ -1,5 +1,6 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.ui.state.SettingsIssue
 import com.yourapp.iptv.domain.model.AppSettings
 import com.yourapp.iptv.domain.model.PlaylistSource
 import com.yourapp.iptv.domain.repository.SettingsRepository
@@ -16,6 +17,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -69,11 +71,13 @@ class SettingsViewModelTest {
         advanceUntilIdle()
         model.saveSettings()
         assertTrue(model.uiState.value.loadFailed)
+        assertEquals(SettingsIssue.READ_FAILED, model.uiState.value.issue)
         assertEquals(0, repository.saves)
         repository.failRead = false
         model.loadSavedSettings()
         advanceUntilIdle()
         assertFalse(model.uiState.value.loadFailed)
+        assertNull(model.uiState.value.issue)
     }
 
     @Test fun writeFailureKeepsFormAndReportsFailure() = runTest(dispatcher) {
@@ -87,6 +91,7 @@ class SettingsViewModelTest {
         assertFalse(model.uiState.value.isSaved)
         assertNotNull(model.uiState.value.errorMessage)
         assertEquals("https://unit.test/list.m3u", model.uiState.value.settings.m3uUrl)
+        assertEquals(SettingsIssue.SAVE_FAILED, model.uiState.value.issue)
     }
 
     @Test fun xtreamSavesWithoutM3uAndPreservesPasswordExactly() = runTest(dispatcher) {
@@ -121,6 +126,31 @@ class SettingsViewModelTest {
         model.saveSettings()
         advanceUntilIdle()
         assertEquals(1, repository.saves)
+    }
+
+    @Test fun validationIssuesIdentifyTheProblemAndClearWhenTheFormIsEdited() = runTest(dispatcher) {
+        val valid = AppSettings(m3uUrl = "https://unit.test/list.m3u")
+        val xtream = valid.copy(source = PlaylistSource.XTREAM, xtreamServer = "https://unit.test",
+            xtreamUsername = "user", xtreamPassword = "password")
+        val cases = listOf(
+            valid.copy(m3uUrl = "") to SettingsIssue.M3U_REQUIRED,
+            valid.copy(m3uUrl = "https://") to SettingsIssue.M3U_INVALID,
+            xtream.copy(xtreamUsername = "") to SettingsIssue.XTREAM_REQUIRED,
+            xtream.copy(xtreamServer = "not-a-url") to SettingsIssue.SERVER_INVALID,
+            valid.copy(epgUrl = "not-a-url") to SettingsIssue.EPG_INVALID
+        )
+        for ((value, expected) in cases) {
+            val repository = FakeSettings(value)
+            val model = SettingsViewModel(repository)
+            advanceUntilIdle()
+            model.saveSettings()
+            advanceUntilIdle()
+            assertEquals(expected, model.uiState.value.issue)
+            assertEquals(0, repository.saves)
+            assertFalse(model.uiState.value.isSaved)
+            model.updateM3uUrl(valid.m3uUrl)
+            assertNull(model.uiState.value.issue)
+        }
     }
 
     private class FakeSettings(var value: AppSettings = AppSettings()) : SettingsRepository {

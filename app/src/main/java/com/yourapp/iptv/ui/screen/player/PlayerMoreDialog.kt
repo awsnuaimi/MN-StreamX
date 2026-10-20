@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
@@ -46,7 +48,7 @@ internal fun PlayerMoreDialog(channel: Channel, appearance: PlayerAppearance, fa
                 .onPreviewKeyEvent { onRemoteKey(it.nativeKeyEvent, false) },
                 color = Color(0xFF101C32), contentColor = Color.White, shape = MaterialTheme.shapes.large) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("المزيد · أدوات القناة الحالية", color = NeonBlue, style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.player_more_title), color = NeonBlue, style = MaterialTheme.typography.titleLarge)
                     Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                     LazyColumn(state = list, modifier = Modifier.weight(1f, fill = false),
                         contentPadding = PaddingValues(3.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -58,9 +60,11 @@ internal fun PlayerMoreDialog(channel: Channel, appearance: PlayerAppearance, fa
                                 }, modifier = if (action == initial) Modifier.focusRequester(focus) else Modifier,
                                 onClick = { onAction(action) })
                         }
-                        item("feedback") { FavoriteFeedback(favorites, onRetryFavorites) }
+                        item("feedback") { FavoriteFeedback(favorites, onRetryFavorites,
+                            messageOverride = stringResource(R.string.player_favorites_error),
+                            retryLabel = stringResource(R.string.player_favorites_retry)) }
                     }
-                    AppButton("رجوع للبطاقات", onDismiss, Modifier.fillMaxWidth())
+                    AppButton(stringResource(R.string.player_back_cards), onDismiss, Modifier.fillMaxWidth())
                 }
             }
         }
@@ -71,21 +75,21 @@ internal fun PlayerMoreDialog(channel: Channel, appearance: PlayerAppearance, fa
 private fun MoreActionRow(action: PlayerMoreAction, isFavorite: Boolean, favorites: FavoriteUiState,
     enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    val label = when (action) {
+    val label = stringResource(when (action) {
         PlayerMoreAction.FAVORITE -> when {
-            favorites.isLoading -> "جارٍ قراءة المفضلة…"
-            favorites.isSaving -> "جارٍ حفظ المفضلة…"
-            isFavorite -> "إزالة من المفضلة"
-            else -> "إضافة للمفضلة"
+            favorites.isLoading -> R.string.player_favorites_loading
+            favorites.isSaving -> R.string.player_favorites_saving
+            isFavorite -> R.string.player_favorite_remove
+            else -> R.string.player_favorite_add
         }
-        PlayerMoreAction.DETAILS -> "تفاصيل البرنامج"
-        PlayerMoreAction.GUIDE -> "دليل البرامج"
-        PlayerMoreAction.CHANNELS -> "قائمة القنوات"
-        PlayerMoreAction.CONTROLS -> "التحكم بالتشغيل"
-        PlayerMoreAction.APPEARANCE -> "مظهر المشغّل"
-        PlayerMoreAction.PREVIOUS -> "القناة السابقة"
-        PlayerMoreAction.NEXT -> "القناة التالية"
-    }
+        PlayerMoreAction.DETAILS -> R.string.player_details
+        PlayerMoreAction.GUIDE -> R.string.player_guide
+        PlayerMoreAction.CHANNELS -> R.string.player_channels
+        PlayerMoreAction.CONTROLS -> R.string.player_controls
+        PlayerMoreAction.APPEARANCE -> R.string.player_appearance
+        PlayerMoreAction.PREVIOUS -> R.string.player_previous_channel
+        PlayerMoreAction.NEXT -> R.string.player_next_channel
+    })
     val icon = when (action) {
         PlayerMoreAction.FAVORITE -> DeckIcon.FAVORITE
         PlayerMoreAction.DETAILS -> DeckIcon.DETAILS

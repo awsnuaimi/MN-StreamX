@@ -1,5 +1,8 @@
 package com.yourapp.iptv.ui.screen.epg
 
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.yourapp.iptv.R
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -42,27 +45,27 @@ fun EpgFilters(
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) {
-                Text("دليل البرامج", style = MaterialTheme.typography.headlineSmall,
+                Text(stringResource(R.string.ui_epg_title), style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.primary)
-                Text("${state.queue.size} قناة · " + (if (state.favoritesOnly) "★ المفضلة · " else "") +
-                    (state.selectedGroup ?: "كل التصنيفات"),
+                Text(pluralStringResource(if (state.favoritesOnly) R.plurals.ui_epg_favorite_summary else R.plurals.ui_epg_summary,
+                    state.queue.size, state.queue.size, state.selectedGroup ?: stringResource(R.string.player_all_categories)),
                     maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
             }
-            AppButton("رجوع", onBack)
+            AppButton(stringResource(R.string.ui_back), onBack)
         }
         if (!compact) OutlinedTextField(value = state.query, onValueChange = onQuery, singleLine = true,
-            enabled = !state.isLoading, label = { Text("البحث عن قناة في الدليل") },
+            enabled = !state.isLoading, label = { Text(stringResource(R.string.ui_epg_search)) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             modifier = Modifier.fillMaxWidth().focusRequester(searchFocus))
         if (!compact) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {
                     FilterChip(selected = state.selectedGroup == null && !state.favoritesOnly, onClick = { onGroup(null) },
-                        enabled = !state.isLoading, label = { Text("الكل") })
+                        enabled = !state.isLoading, label = { Text(stringResource(R.string.ui_all)) })
                 }
                 item {
                     FilterChip(selected = state.favoritesOnly, onClick = onFavorites,
-                        enabled = !state.isLoading, label = { Text("★ المفضلة") })
+                        enabled = !state.isLoading, label = { Text(stringResource(R.string.ui_favorites_star)) })
                 }
                 items(state.groups, key = { it }) { group ->
                     FilterChip(selected = state.selectedGroup == group, onClick = { onGroup(group) },

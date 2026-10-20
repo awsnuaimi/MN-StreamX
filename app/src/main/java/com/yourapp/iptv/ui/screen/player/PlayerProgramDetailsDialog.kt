@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -77,13 +79,13 @@ internal fun PlayerProgramDetailsDialog(channelName: String, state: PlayerEpgUiS
                         Column(Modifier.verticalScroll(scroll).padding(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             val current = state.schedule.current(state.nowMillis)
                             val next = state.schedule.next(state.nowMillis)
-                            if (current != null) ProgramDetailsText("البرنامج الحالي", current)
+                            if (current != null) ProgramDetailsText(stringResource(R.string.player_current_program), current)
                             else Text(playerEpgStatus(state))
-                            if (next != null) ProgramDetailsText("البرنامج التالي", next)
-                            if (state.schedule.isStale) Text("هذه معلومات محفوظة مؤقتًا.", color = Color(0xFFFFD180))
+                            if (next != null) ProgramDetailsText(stringResource(R.string.player_next_program), next)
+                            if (state.schedule.isStale) Text(stringResource(R.string.player_cached), color = Color(0xFFFFD180))
                         }
                     }
-                    AppButton("إغلاق التفاصيل", onDismiss, Modifier.fillMaxWidth())
+                    AppButton(stringResource(R.string.player_close_details), onDismiss, Modifier.fillMaxWidth())
                 }
             }
         }
@@ -96,6 +98,6 @@ private fun ProgramDetailsText(label: String, program: Program) {
     Text(program.title, style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Content))
     Text(ProgramPresentation.timeRange(program.startTime, program.endTime), color = Color(0xFFBCCDE1),
         style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr))
-    Text(program.description?.takeIf { it.isNotBlank() } ?: "لا يتوفر وصف لهذا البرنامج.",
+    Text(program.description?.takeIf { it.isNotBlank() } ?: stringResource(R.string.player_no_description),
         style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content))
 }

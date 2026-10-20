@@ -1,5 +1,7 @@
 package com.yourapp.iptv.ui.screen.epg
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -57,7 +59,7 @@ fun EpgChannelList(
         Column(Modifier.fillMaxSize().padding(8.dp)
             .onFocusChanged { if (it.hasFocus) onFocused() }.focusGroup(),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("القنوات", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.ui_channels), style = MaterialTheme.typography.titleMedium)
             LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(state.queue.channels, key = { _, channel -> channel.id }) { index, channel ->

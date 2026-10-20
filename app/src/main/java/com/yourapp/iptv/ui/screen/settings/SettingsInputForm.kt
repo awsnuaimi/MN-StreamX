@@ -1,5 +1,7 @@
 package com.yourapp.iptv.ui.screen.settings
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +10,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -33,7 +37,7 @@ fun SettingsInputForm(
     onEpgChanged: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("مصدر القنوات")
+        Text(stringResource(R.string.ui_source))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             FilterChip(selected = settings.source == PlaylistSource.M3U,
                 onClick = { onSourceChanged(PlaylistSource.M3U) }, enabled = enabled, label = { Text("M3U") })
@@ -41,16 +45,16 @@ fun SettingsInputForm(
                 onClick = { onSourceChanged(PlaylistSource.XTREAM) }, enabled = enabled, label = { Text("Xtream Codes") })
         }
         if (settings.source == PlaylistSource.M3U) {
-            SettingsField("رابط قائمة القنوات M3U", settings.m3uUrl, enabled, onM3uChanged,
+            SettingsField(stringResource(R.string.ui_m3u_url), settings.m3uUrl, enabled, onM3uChanged,
                 placeholder = "https://example.com/playlist.m3u", uri = true)
         } else {
-            SettingsField("سيرفر Xtream", settings.xtreamServer, enabled, onServerChanged,
+            SettingsField(stringResource(R.string.ui_xtream_server), settings.xtreamServer, enabled, onServerChanged,
                 placeholder = "https://example.com:8080", uri = true)
-            SettingsField("اسم مستخدم Xtream", settings.xtreamUsername, enabled, onUsernameChanged)
-            SettingsField("كلمة مرور Xtream", settings.xtreamPassword, enabled, onPasswordChanged, password = true)
-            Text("سيتم التحقق من الحساب وتحميل القنوات والتصنيفات عند الحفظ.")
+            SettingsField(stringResource(R.string.ui_xtream_user), settings.xtreamUsername, enabled, onUsernameChanged)
+            SettingsField(stringResource(R.string.ui_xtream_password), settings.xtreamPassword, enabled, onPasswordChanged, password = true)
+            Text(stringResource(R.string.ui_xtream_hint))
         }
-        SettingsField("رابط EPG (اختياري)", settings.epgUrl, enabled, onEpgChanged, uri = true)
+        SettingsField(stringResource(R.string.ui_epg_url), settings.epgUrl, enabled, onEpgChanged, uri = true)
     }
 }
 
@@ -72,6 +76,7 @@ private fun SettingsField(
         label = { Text(label) },
         placeholder = { Text(placeholder) },
         singleLine = true,
+        textStyle = LocalTextStyle.current.copy(textDirection = if (uri || password) TextDirection.Ltr else TextDirection.Content),
         modifier = Modifier.fillMaxWidth(),
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(

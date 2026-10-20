@@ -26,7 +26,7 @@ import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
-fun ChannelCard(channel: Channel, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun ChannelCard(channel: Channel, onClick: () -> Unit, modifier: Modifier = Modifier, showGroup: Boolean = true) {
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
@@ -44,7 +44,7 @@ fun ChannelCard(channel: Channel, onClick: () -> Unit, modifier: Modifier = Modi
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(channel.name, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleSmall)
-                channel.group?.let {
+                if (showGroup) channel.group?.let {
                     Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         color = Color(0xFFBECDE4), style = MaterialTheme.typography.bodySmall)
                 }

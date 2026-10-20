@@ -1,5 +1,7 @@
 package com.yourapp.iptv.ui.screen.appearance
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,24 +34,25 @@ fun PlayerAppearanceScreen(onBack: () -> Unit, viewModel: PlayerAppearanceSettin
     }
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("مظهر المشغّل", style = MaterialTheme.typography.headlineSmall,
+            Text(stringResource(R.string.ui_player_title), style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary)
-            AppButton("رجوع", onBack, enabled = !state.isSaving)
+            AppButton(stringResource(R.string.ui_back), onBack, enabled = !state.isSaving)
         }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("لوحة البطاقات هي واجهة المشغّل. خصّص النص والخلفية والمعلومات التي تظهر فيها.")
+            Text(stringResource(R.string.ui_player_hint))
             if (state.isLoading) CircularProgressIndicator()
-            else if (state.loadFailed) AppButton("إعادة قراءة المظهر", viewModel::load)
+            else if (state.loadFailed) AppButton(stringResource(R.string.ui_player_reload), viewModel::load)
             else {
                 PlayerAppearancePreview(state.appearance)
                 PlayerAppearanceForm(state.appearance, enabled, viewModel::update)
             }
-            state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (state.errorMessage != null) Text(stringResource(if (state.loadFailed) R.string.ui_player_read_error
+                else R.string.ui_player_save_error), color = MaterialTheme.colorScheme.error)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppButton(if (state.isSaving) "جارٍ الحفظ…" else "حفظ المظهر", viewModel::save, enabled = enabled)
-            AppButton("استعادة الافتراضي", viewModel::reset, enabled = enabled)
+            AppButton(if (state.isSaving) stringResource(R.string.ui_saving) else stringResource(R.string.ui_save_appearance), viewModel::save, enabled = enabled)
+            AppButton(stringResource(R.string.ui_reset), viewModel::reset, enabled = enabled)
         }
     }
 }

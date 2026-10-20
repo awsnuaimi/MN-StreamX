@@ -1,5 +1,7 @@
 package com.yourapp.iptv.ui.screen.settings
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.iptv.ui.component.common.AppButton
+import com.yourapp.iptv.ui.state.SettingsIssue
 import com.yourapp.iptv.viewmodel.SettingsViewModel
 
 @Composable
@@ -40,13 +43,13 @@ fun SettingsScreen(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("إعدادات التطبيق", style = MaterialTheme.typography.headlineMedium,
+        Text(stringResource(R.string.ui_settings_title), style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary)
-        AppButton("مظهر الرئيسية والشريط الجانبي", onHomeAppearance, enabled = !state.isSaving)
-        AppButton("مظهر المشغّل", onPlayerAppearance, enabled = !state.isSaving)
+        AppButton(stringResource(R.string.ui_home_appearance), onHomeAppearance, enabled = !state.isSaving)
+        AppButton(stringResource(R.string.ui_player_title), onPlayerAppearance, enabled = !state.isSaving)
         if (state.isLoading) {
             CircularProgressIndicator()
-            Text("جارٍ قراءة الإعدادات...")
+            Text(stringResource(R.string.ui_settings_loading))
         } else {
             SettingsInputForm(
                 settings = state.settings,
@@ -59,12 +62,20 @@ fun SettingsScreen(
                 onEpgChanged = viewModel::updateEpgUrl
             )
         }
-        state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        state.issue?.let { issue -> Text(stringResource(when (issue) {
+            SettingsIssue.READ_FAILED -> R.string.ui_settings_read_error
+            SettingsIssue.SAVE_FAILED -> R.string.ui_settings_save_error
+            SettingsIssue.M3U_REQUIRED -> R.string.ui_settings_m3u_required
+            SettingsIssue.M3U_INVALID -> R.string.ui_settings_m3u_invalid
+            SettingsIssue.XTREAM_REQUIRED -> R.string.ui_settings_xtream_required
+            SettingsIssue.SERVER_INVALID -> R.string.ui_settings_server_invalid
+            SettingsIssue.EPG_INVALID -> R.string.ui_settings_epg_invalid
+        }), color = MaterialTheme.colorScheme.error) }
         if (state.loadFailed) {
-            AppButton("إعادة قراءة الإعدادات", viewModel::loadSavedSettings)
+            AppButton(stringResource(R.string.ui_settings_reload), viewModel::loadSavedSettings)
         } else {
             AppButton(
-                text = if (state.isSaving) "جارٍ الحفظ..." else "حفظ الإعدادات وفتح القنوات",
+                text = if (state.isSaving) stringResource(R.string.ui_saving) else stringResource(R.string.ui_settings_save),
                 onClick = viewModel::saveSettings,
                 enabled = !state.isLoading && !state.isSaving,
                 modifier = Modifier.fillMaxWidth()
@@ -72,7 +83,7 @@ fun SettingsScreen(
         }
         if (state.isSaving) CircularProgressIndicator()
         if (onBack != null) {
-            Row { AppButton("رجوع", onBack, enabled = !state.isSaving) }
+            Row { AppButton(stringResource(R.string.ui_back), onBack, enabled = !state.isSaving) }
         }
     }
 }

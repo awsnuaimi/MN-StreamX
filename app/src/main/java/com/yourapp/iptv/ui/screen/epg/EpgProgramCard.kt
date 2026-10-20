@@ -1,7 +1,11 @@
 package com.yourapp.iptv.ui.screen.epg
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,7 +35,7 @@ fun EpgProgramCard(
 ) {
     var focused by remember { mutableStateOf(false) }
     val live = program.startTime <= now && now < program.endTime
-    val label = when { live -> "الآن"; now >= program.endTime -> "انتهى"; else -> "قادم" }
+    val label = when { live -> stringResource(R.string.ui_epg_now); now >= program.endTime -> stringResource(R.string.ui_epg_ended); else -> stringResource(R.string.ui_epg_upcoming) }
     val times = "${formatter.format(Instant.ofEpochMilli(program.startTime))} – " +
         formatter.format(Instant.ofEpochMilli(program.endTime))
     Surface(onClick = { onSelect(); onPlay() },
@@ -43,12 +47,16 @@ fun EpgProgramCard(
         border = BorderStroke(if (focused) 3.dp else 1.dp,
             if (focused || selected) NeonBlue else Color(0xFF2D3F58))) {
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("$label · $times", color = if (live) Color(0xFF8FE4A0) else NeonBlue,
-                style = MaterialTheme.typography.labelMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(label, color = if (live) Color(0xFF8FE4A0) else NeonBlue,
+                    style = MaterialTheme.typography.labelMedium)
+                Text(times, Modifier.weight(1f), color = NeonBlue,
+                    style = MaterialTheme.typography.labelMedium.copy(textDirection = TextDirection.Ltr))
+            }
             Text(program.title, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.titleSmall)
             if (selected) {
-                Text(program.description?.takeIf { it.isNotBlank() } ?: "لا يتوفر وصف لهذا البرنامج.",
+                Text(program.description?.takeIf { it.isNotBlank() } ?: stringResource(R.string.player_no_description),
                     maxLines = 3, overflow = TextOverflow.Ellipsis, color = Color(0xFFCCD9E8),
                     style = MaterialTheme.typography.bodySmall)
             }

@@ -1,5 +1,7 @@
 package com.yourapp.iptv.ui.screen.epg
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -115,11 +117,11 @@ fun EpgScreen(
                     contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(state.errorMessage ?: if (state.favoritesOnly) "لا توجد قنوات مفضلة مطابقة. غيّر البحث أو التصنيف."
-                            else "لا توجد قنوات مطابقة. غيّر البحث أو التصنيف.",
+                        Text(if (state.errorMessage != null) stringResource(R.string.ui_epg_read_error) else if (state.favoritesOnly) stringResource(R.string.ui_epg_no_favorites)
+                            else stringResource(R.string.ui_epg_no_channels),
                             style = MaterialTheme.typography.bodyLarge)
-                        if (state.errorMessage != null) AppButton("إعادة المحاولة", viewModel::reload)
-                        else AppButton("عرض كل القنوات", viewModel::clearFilters)
+                        if (state.errorMessage != null) AppButton(stringResource(R.string.ui_retry), viewModel::reload)
+                        else AppButton(stringResource(R.string.ui_show_all_channels), viewModel::clearFilters)
                     }
                 }
                 wide -> Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -135,9 +137,9 @@ fun EpgScreen(
                 else -> {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(selected = mobilePane == EpgFocusArea.CHANNELS.name,
-                            onClick = { requestArea(EpgFocusArea.CHANNELS) }, label = { Text("القنوات") })
+                            onClick = { requestArea(EpgFocusArea.CHANNELS) }, label = { Text(stringResource(R.string.ui_channels)) })
                         FilterChip(selected = mobilePane == EpgFocusArea.PROGRAMS.name,
-                            onClick = { requestArea(EpgFocusArea.PROGRAMS) }, label = { Text("البرامج") })
+                            onClick = { requestArea(EpgFocusArea.PROGRAMS) }, label = { Text(stringResource(R.string.ui_programs)) })
                     }
                     if (mobilePane == EpgFocusArea.CHANNELS.name) {
                         EpgChannelList(state, request, viewModel::selectChannel,
@@ -152,7 +154,7 @@ fun EpgScreen(
                     }
                 }
             }
-            Text("↑ ↓ للتصفح · ← → للقنوات والبرامج · OK بث القناة · رجوع للخروج",
+            Text(stringResource(R.string.ui_epg_hint),
                 style = MaterialTheme.typography.labelSmall)
         }
     }

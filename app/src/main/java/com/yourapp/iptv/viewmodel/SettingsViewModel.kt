@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.AppSettings
 import com.yourapp.iptv.domain.model.PlaylistSource
 import com.yourapp.iptv.domain.repository.SettingsRepository
+import com.yourapp.iptv.ui.state.SettingsIssue
 import com.yourapp.iptv.ui.state.SettingsUiState
 import com.yourapp.iptv.util.validator.UrlValidator
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,7 +28,7 @@ class SettingsViewModel @Inject constructor(
 
     fun loadSavedSettings() {
         if (state.value.isSaving) return
-        state.update { it.copy(isLoading = true, loadFailed = false, errorMessage = null) }
+        state.update { it.copy(isLoading = true, loadFailed = false, issue = null) }
         viewModelScope.launch {
             try {
                 val settings = settingsRepository.observeSettings().first()
@@ -36,7 +37,7 @@ class SettingsViewModel @Inject constructor(
                 throw error
             } catch (_: Exception) {
                 state.update {
-                    it.copy(isLoading = false, loadFailed = true, errorMessage = "تعذر قراءة الإعدادات المحفوظة.")
+                    it.copy(isLoading = false, loadFailed = true, issue = SettingsIssue.READ_FAILED)
                 }
             }
         }
@@ -51,7 +52,7 @@ class SettingsViewModel @Inject constructor(
 
     private fun edit(change: AppSettings.() -> AppSettings) {
         if (state.value.isLoading || state.value.isSaving || state.value.loadFailed) return
-        state.update { it.copy(settings = it.settings.change(), errorMessage = null, isSaved = false) }
+        state.update { it.copy(settings = it.settings.change(), issue = null, isSaved = false) }
     }
 
     fun saveSettings() {
@@ -67,10 +68,10 @@ class SettingsViewModel @Inject constructor(
         }
         val error = validationError(settings)
         if (error != null) {
-            state.update { it.copy(errorMessage = error, isSaved = false) }
+            state.update { it.copy(issue = error, isSaved = false) }
             return
         }
-        state.update { it.copy(isSaving = true, errorMessage = null, isSaved = false) }
+        state.update { it.copy(isSaving = true, issue = null, isSaved = false) }
         viewModelScope.launch {
             try {
                 settingsRepository.saveSettings(settings)
@@ -78,23 +79,23 @@ class SettingsViewModel @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                state.update { it.copy(isSaving = false, errorMessage = "تعذر حفظ الإعدادات. أعد المحاولة.") }
+                state.update { it.copy(isSaving = false, issue = SettingsIssue.SAVE_FAILED) }
             }
         }
     }
 
     fun resetSaveStatus() { state.update { it.copy(isSaved = false) } }
 
-    private fun validationError(settings: AppSettings): String? {
+    private fun validationError(settings: AppSettings): SettingsIssue? {
         val xtream = settings.source == PlaylistSource.XTREAM
         return when {
-            !xtream && settings.m3uUrl.isBlank() -> "أدخل رابط قائمة M3U."
+            !xtream && settings.m3uUrl.isBlank() -> SettingsIssue.M3U_REQUIRED
             !xtream && !UrlValidator.isValidUrl(settings.m3uUrl) ->
-                "رابط M3U غير صالح. استخدم رابط http:// أو https:// كاملًا."
+                SettingsIssue.M3U_INVALID
             xtream && (settings.xtreamServer.isBlank() || settings.xtreamUsername.isBlank() ||
-                settings.xtreamPassword.isBlank()) -> "أكمل السيرفر واسم المستخدم وكلمة المرور."
-            xtream && !UrlValidator.isValidUrl(settings.xtreamServer) -> "عنوان السيرفر غير صالح."
-            settings.epgUrl.isNotBlank() && !UrlValidator.isValidUrl(settings.epgUrl) -> "رابط EPG غير صالح."
+                settings.xtreamPassword.isBlank()) -> SettingsIssue.XTREAM_REQUIRED
+            xtream && !UrlValidator.isValidUrl(settings.xtreamServer) -> SettingsIssue.SERVER_INVALID
+            settings.epgUrl.isNotBlank() && !UrlValidator.isValidUrl(settings.epgUrl) -> SettingsIssue.EPG_INVALID
             else -> null
         }
     }

@@ -13,10 +13,8 @@ object PlayerDeckWindow {
         return (start until start + count).map { DeckChannelItem(channels[it], it + 1) }
     }
 
-    fun remaining(end: Long, now: Long): String? {
-        if (end <= now) return null
-        val difference = end.toDouble() - now.toDouble()
-        val minutes = kotlin.math.ceil(difference / 60000.0).toLong()
-        return "متبقٍ $minutes د"
-    }
+    fun remainingMinutes(end: Long, now: Long): Long? = if (end > now)
+        kotlin.math.ceil((end.toDouble() - now.toDouble()) / 60000.0).toLong() else null
+
+    fun remaining(end: Long, now: Long): String? = remainingMinutes(end, now)?.let { "متبقٍ $it د" }
 }

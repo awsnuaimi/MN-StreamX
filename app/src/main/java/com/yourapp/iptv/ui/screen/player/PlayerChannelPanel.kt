@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,15 +78,15 @@ fun PlayerChannelPanel(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column(Modifier.weight(1f)) {
-                            Text("قائمة القنوات · ${channels.size}", style = MaterialTheme.typography.titleLarge)
-                            Text((if (favoritesOnly) "★ المفضلة · " else "") + (group ?: "كل التصنيفات"), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            Text(stringResource(R.string.player_channels) + " · ${channels.size}", style = MaterialTheme.typography.titleLarge)
+                            Text((if (favoritesOnly) "★ " + stringResource(R.string.player_favorites) + " · " else "") + (group ?: stringResource(R.string.player_all_categories)), maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 color = NeonBlue, style = MaterialTheme.typography.bodyMedium)
                         }
-                        AppButton("إغلاق", onDismiss)
+                        AppButton(stringResource(R.string.player_close), onDismiss)
                     }
-                    if (query.isNotBlank()) Text("البحث: $query", maxLines = 1,
+                    if (query.isNotBlank()) Text(stringResource(R.string.player_search, query), maxLines = 1,
                         overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-                    if (channels.isEmpty()) Text("لا توجد قنوات في قائمة المفضلة الحالية. يستمر بث القناة حتى تختار غيرها.")
+                    if (channels.isEmpty()) Text(stringResource(R.string.player_empty_list))
                     LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(channels, key = { _, channel -> channel.id }) { index, channel ->
@@ -94,7 +96,7 @@ fun PlayerChannelPanel(
                                     else Modifier)
                         }
                     }
-                    Text("↑ ↓ للتنقل · OK لتشغيل القناة · رجوع لإغلاق القائمة",
+                    Text(stringResource(R.string.player_list_hint),
                         style = MaterialTheme.typography.bodySmall, color = Color(0xFFBCCDE1))
                 }
             }
@@ -122,7 +124,7 @@ private fun PlayerChannelRow(
             Column(Modifier.weight(1f)) {
                 Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleMedium)
-                if (playing) Text("تعمل الآن", color = NeonBlue, style = MaterialTheme.typography.labelSmall)
+                if (playing) Text(stringResource(R.string.player_playing), color = NeonBlue, style = MaterialTheme.typography.labelSmall)
             }
         }
     }

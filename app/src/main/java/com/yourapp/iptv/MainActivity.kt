@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import com.yourapp.iptv.ui.component.common.AppLanguageHost
 import com.yourapp.iptv.navigation.AppNavGraph
 import com.yourapp.iptv.ui.theme.IPTVAppTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -17,8 +18,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             IPTVAppTheme {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AppNavGraph()
+                AppLanguageHost {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        AppNavGraph()
+                    }
                 }
             }
         }

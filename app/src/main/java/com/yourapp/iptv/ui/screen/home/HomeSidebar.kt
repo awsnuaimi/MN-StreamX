@@ -20,11 +20,11 @@ import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
 internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selected: HomeSection,
-    loading: Boolean, returnFocus: FocusRequester, onSelect: (HomeSection) -> Unit) {
+    loading: Boolean, returnFocus: FocusRequester, onSelect: (HomeSection) -> Unit, modifier: Modifier = Modifier) {
     var hasFocus by remember { mutableStateOf(false) }
     val expanded = appearance.expandedSidebar || hasFocus
     val width by animateDpAsState(if (expanded) 180.dp else 70.dp, label = "sidebarWidth")
-    Column(Modifier.width(width).fillMaxHeight().background(Color(0xED0C1428))
+    Column(modifier.width(width).fillMaxHeight().background(Color(0xFF0C1428))
         .onFocusChanged { hasFocus = it.hasFocus }.focusGroup().padding(8.dp)
         .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(if (expanded) "MN StreamX" else "MN", Modifier.padding(horizontal = 8.dp, vertical = 14.dp),

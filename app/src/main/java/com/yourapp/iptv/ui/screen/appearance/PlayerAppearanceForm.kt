@@ -1,5 +1,7 @@
 package com.yourapp.iptv.ui.screen.appearance
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
@@ -11,27 +13,27 @@ import com.yourapp.iptv.domain.model.PlayerTextSize
 @Composable
 internal fun PlayerAppearanceForm(value: PlayerAppearance, enabled: Boolean, onChange: (PlayerAppearance) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        AppearanceChoice("حجم النص", value.textSize,
-            listOf(PlayerTextSize.SMALL to "صغير", PlayerTextSize.NORMAL to "عادي", PlayerTextSize.LARGE to "كبير"), enabled) {
+        AppearanceChoice(stringResource(R.string.ui_text_size), value.textSize,
+            listOf(PlayerTextSize.SMALL to stringResource(R.string.ui_small), PlayerTextSize.NORMAL to stringResource(R.string.ui_normal), PlayerTextSize.LARGE to stringResource(R.string.ui_large)), enabled) {
             onChange(value.copy(textSize = it))
         }
-        AppearanceChoice("خلفية المعلومات", value.panelShade,
-            listOf(PlayerPanelShade.SOFT to "شفافة", PlayerPanelShade.BALANCED to "متوازنة", PlayerPanelShade.SOLID to "داكنة"), enabled) {
+        AppearanceChoice(stringResource(R.string.ui_panel_background), value.panelShade,
+            listOf(PlayerPanelShade.SOFT to stringResource(R.string.ui_shade_soft), PlayerPanelShade.BALANCED to stringResource(R.string.ui_shade_balanced), PlayerPanelShade.SOLID to stringResource(R.string.ui_shade_solid)), enabled) {
             onChange(value.copy(panelShade = it))
         }
-        AppearanceChoice("الإخفاء التلقائي بعد", value.displaySeconds,
-            listOf(3 to "3 ثوانٍ", 5 to "5 ثوانٍ", 8 to "8 ثوانٍ"), enabled) {
+        AppearanceChoice(stringResource(R.string.ui_autohide), value.displaySeconds,
+            listOf(3 to stringResource(R.string.ui_seconds_three), 5 to stringResource(R.string.ui_seconds_five), 8 to stringResource(R.string.ui_seconds_eight)), enabled) {
             onChange(value.copy(displaySeconds = it))
         }
-        AppearanceToggle("إظهار شعار القناة", value.showLogo, enabled) { onChange(value.copy(showLogo = it)) }
-        AppearanceToggle("إظهار تصنيف القناة", value.showGroup, enabled) { onChange(value.copy(showGroup = it)) }
-        AppearanceToggle("إظهار ترتيب القناة وعدد القنوات", value.showCounter, enabled) { onChange(value.copy(showCounter = it)) }
-        AppearanceToggle("إظهار البرنامج التالي", value.showNext, enabled) { onChange(value.copy(showNext = it)) }
-        AppearanceToggle("إظهار سطر وصف مختصر", value.showDescription,
+        AppearanceToggle(stringResource(R.string.ui_show_logo), value.showLogo, enabled) { onChange(value.copy(showLogo = it)) }
+        AppearanceToggle(stringResource(R.string.ui_show_group), value.showGroup, enabled) { onChange(value.copy(showGroup = it)) }
+        AppearanceToggle(stringResource(R.string.ui_show_counter), value.showCounter, enabled) { onChange(value.copy(showCounter = it)) }
+        AppearanceToggle(stringResource(R.string.ui_show_next), value.showNext, enabled) { onChange(value.copy(showNext = it)) }
+        AppearanceToggle(stringResource(R.string.ui_show_description), value.showDescription,
             enabled) { onChange(value.copy(showDescription = it)) }
-        AppearanceToggle("إظهار السابق والتالي داخل قائمة المزيد", value.showChannelButtons, enabled) {
+        AppearanceToggle(stringResource(R.string.ui_show_zap), value.showChannelButtons, enabled) {
             onChange(value.copy(showChannelButtons = it))
         }
-        AppearanceToggle("إظهار شرح اختصارات الريموت", value.showHints, enabled) { onChange(value.copy(showHints = it)) }
+        AppearanceToggle(stringResource(R.string.ui_show_hints), value.showHints, enabled) { onChange(value.copy(showHints = it)) }
     }
 }

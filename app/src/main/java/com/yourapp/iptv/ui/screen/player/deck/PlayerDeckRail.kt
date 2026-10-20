@@ -6,13 +6,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
+import com.yourapp.iptv.ui.presentation.PlayerTileLayout
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.PlayerAppearance
 import com.yourapp.iptv.ui.presentation.PlayerDeckWindow
 
 @Composable
 internal fun PlayerDeckRail(channels: List<Channel>, currentIndex: Int, currentId: String?,
-    appearance: PlayerAppearance, focusEpoch: Int, focusMore: Boolean, dense: Boolean,
+    appearance: PlayerAppearance, focusEpoch: Int, focusMore: Boolean,
     onMore: () -> Unit, onSelect: (String) -> Unit, onFocusChannel: (String?) -> Unit) {
     val window = remember(channels, currentIndex) { PlayerDeckWindow.channels(channels, currentIndex) }
     val list = rememberLazyListState()
@@ -27,14 +31,14 @@ internal fun PlayerDeckRail(channels: List<Channel>, currentIndex: Int, currentI
             withFrameNanos { }; runCatching { selectedFocus.requestFocus() }
         }
     }
-    LazyRow(state = list, modifier = Modifier.fillMaxWidth().height(if (dense) 86.dp else 96.dp),
+    LazyRow(state = list, modifier = Modifier.fillMaxWidth().height(PlayerTileLayout.height(appearance.showLogo, LocalDensity.current.fontScale).dp + 8.dp),
         contentPadding = PaddingValues(4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        item("more") { DeckShortcutTile(DeckIcon.MORE, "المزيد", true, onMore,
+        item("more") { DeckShortcutTile(DeckIcon.MORE, stringResource(R.string.player_more), true, onMore,
             Modifier.width(92.dp).fillParentMaxHeight().focusRequester(moreFocus)
                 .onFocusChanged { if (it.isFocused) onFocusChannel(null) }) }
         items(window, key = { "channel:${it.channel.id}" }) { item ->
             val playing = item.channel.id == currentId
-            DeckChannelTile(item, playing, if (playing) "● تعمل الآن" else "", appearance.showLogo,
+            DeckChannelTile(item, playing, appearance.showLogo,
                 { onSelect(item.channel.id) }, Modifier.width(156.dp).fillParentMaxHeight()
                     .onFocusChanged { if (it.isFocused) onFocusChannel(item.channel.id) }
                     .then(if (playing) Modifier.focusRequester(selectedFocus) else Modifier))

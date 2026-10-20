@@ -1,5 +1,7 @@
 package com.yourapp.iptv.ui.component.channel
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
@@ -15,27 +17,29 @@ import com.yourapp.iptv.ui.state.FavoriteUiState
 
 @Composable
 fun FavoriteBadge(isFavorite: Boolean) {
+    val description = stringResource(R.string.ui_favorite_badge)
     if (isFavorite) Text("★", color = Color(0xFFFFD54F),
         style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.semantics { contentDescription = "قناة ضمن المفضلة" })
+        modifier = Modifier.semantics { contentDescription = description })
 }
 
 @Composable
 fun FavoriteButton(isFavorite: Boolean, state: FavoriteUiState, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     AppButton(when {
-        state.isLoading -> "جارٍ قراءة المفضلة…"
-        state.isSaving -> "جارٍ حفظ المفضلة…"
-        isFavorite -> "★ إزالة من المفضلة"
-        else -> "☆ إضافة للمفضلة"
+        state.isLoading -> stringResource(R.string.player_favorites_loading)
+        state.isSaving -> stringResource(R.string.player_favorites_saving)
+        isFavorite -> "★ " + stringResource(R.string.player_favorite_remove)
+        else -> "☆ " + stringResource(R.string.player_favorite_add)
     }, onToggle, modifier)
 }
 
 @Composable
-fun FavoriteFeedback(state: FavoriteUiState, onRetry: () -> Unit) {
-    state.errorMessage?.let { message ->
+fun FavoriteFeedback(state: FavoriteUiState, onRetry: () -> Unit,
+    messageOverride: String? = null, retryLabel: String? = null) {
+    state.errorMessage?.let {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            AppButton("تحديث المفضلة", onRetry, enabled = !state.isSaving)
+            Text(messageOverride ?: stringResource(R.string.player_favorites_error), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            AppButton(retryLabel ?: stringResource(R.string.player_favorites_retry), onRetry, enabled = !state.isSaving)
         }
     }
 }

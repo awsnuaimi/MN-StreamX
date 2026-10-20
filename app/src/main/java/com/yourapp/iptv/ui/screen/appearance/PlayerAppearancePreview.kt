@@ -1,5 +1,7 @@
 package com.yourapp.iptv.ui.screen.appearance
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,10 +30,10 @@ internal fun PlayerAppearancePreview(value: PlayerAppearance) {
     CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * value.textSize.scale)) {
         Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = value.panelShade.alpha)).padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("معاينة حجم النص والخلفية", color = NeonBlue, style = MaterialTheme.typography.labelMedium)
-            Text("اسم القناة · عنوان البرنامج الحالي", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.ui_preview_title), color = NeonBlue, style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.ui_preview_program), color = Color.White, style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(DeckIcon.MORE to "المزيد", DeckIcon.CHANNELS to "قناة", DeckIcon.CHANNELS to "قناة").forEach { (icon, label) ->
+                listOf(DeckIcon.MORE to stringResource(R.string.player_more), DeckIcon.CHANNELS to stringResource(R.string.ui_preview_channel), DeckIcon.CHANNELS to stringResource(R.string.ui_preview_channel)).forEach { (icon, label) ->
                     Surface(Modifier.weight(1f).height(68.dp), color = Color(0xFF1D2C36), contentColor = Color.White) {
                         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             PlayerDeckIcon(icon, NeonBlue, 22.dp)
@@ -40,7 +42,7 @@ internal fun PlayerAppearancePreview(value: PlayerAppearance) {
                     }
                 }
             }
-            if (value.showNext) Text("التالي: عنوان البرنامج القادم", color = Color(0xFFCCD9E8),
+            if (value.showNext) Text(stringResource(R.string.ui_preview_next), color = Color(0xFFCCD9E8),
                 style = MaterialTheme.typography.bodyMedium)
         }
     }

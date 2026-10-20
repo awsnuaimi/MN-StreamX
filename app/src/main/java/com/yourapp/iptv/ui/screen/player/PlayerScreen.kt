@@ -35,8 +35,26 @@ fun PlayerScreen(
     appearanceViewModel: PlayerAppearanceViewModel = hiltViewModel(),
     onAppearance: () -> Unit = {},
     onGuide: (String?, String?, String, Boolean) -> Unit = { _, _, _, _ -> },
-    previewViewModel: PlayerEpgViewModel = hiltViewModel(key = "deck-preview-epg")
+    previewViewModel: PlayerEpgViewModel = hiltViewModel(key = "deck-preview-epg"),
+    homeAppearanceViewModel: HomeAppearanceViewModel = hiltViewModel()
 ) {
+    val home by homeAppearanceViewModel.appearance.collectAsStateWithLifecycle()
+    val language = home?.language
+    if (language == null) {
+        Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+    LocalizedPlayer(language) {
+        PlayerScreenContent(onBack, viewModel, epgViewModel, appearanceViewModel, onAppearance, onGuide, previewViewModel)
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+@Composable
+private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerViewModel,
+    epgViewModel: PlayerEpgViewModel, appearanceViewModel: PlayerAppearanceViewModel,
+    onAppearance: () -> Unit, onGuide: (String?, String?, String, Boolean) -> Unit,
+    previewViewModel: PlayerEpgViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
     val epg by epgViewModel.uiState.collectAsStateWithLifecycle()

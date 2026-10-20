@@ -1,5 +1,7 @@
 package com.yourapp.iptv.ui.screen.epg
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +40,7 @@ import com.yourapp.iptv.ui.state.PlayerEpgUiState
 import com.yourapp.iptv.ui.theme.NeonBlue
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
+import androidx.compose.ui.platform.LocalConfiguration
 
 @Composable
 fun EpgProgramPane(
@@ -57,7 +59,7 @@ fun EpgProgramPane(
     val playFocus = remember { FocusRequester() }
     val list = key(channel.id) { rememberLazyListState() }
     val zone = ZoneId.systemDefault()
-    val locale = Locale.getDefault()
+    val locale = LocalConfiguration.current.locales[0]
     val formatter = remember(zone, locale) { DateTimeFormatter.ofPattern("dd/MM HH:mm", locale).withZone(zone) }
     LaunchedEffect(request.serial, missingSelection) {
         if (request.area == EpgFocusArea.PROGRAMS) {
@@ -77,13 +79,13 @@ fun EpgProgramPane(
                 Column(Modifier.weight(1f)) {
                     Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleLarge, color = NeonBlue)
-                    Text("جدول المزوّد · التوقيت المحلي", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_epg_provider_time), style = MaterialTheme.typography.bodySmall)
                 }
-                AppButton("بث القناة", onPlay, Modifier.focusRequester(playFocus))
+                AppButton(stringResource(R.string.ui_watch_live), onPlay, Modifier.focusRequester(playFocus))
             }
             FavoriteButton(channel.isFavorite, favorites, onToggleFavorite)
             if (epg.schedule.isStale) {
-                Text("جدول محفوظ مؤقتًا · تعذر تحديثه الآن", color = Color(0xFFFFD180),
+                Text(stringResource(R.string.ui_epg_cached), color = Color(0xFFFFD180),
                     style = MaterialTheme.typography.bodySmall)
             }
             if (programs.isEmpty()) {
@@ -92,10 +94,10 @@ fun EpgProgramPane(
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (epg.isLoading) CircularProgressIndicator(Modifier.size(28.dp))
                         Text(when {
-                            epg.isLoading -> "جارٍ تحميل جدول البرامج…"
-                            epg.errorMessage != null -> epg.errorMessage
-                            !epg.isSupported -> "دليل Xtream غير متاح لهذه القناة. يمكنك تشغيل بثها."
-                            else -> "لا يوفّر المزوّد جدول برامج لهذه القناة حاليًا."
+                            epg.isLoading -> stringResource(R.string.ui_epg_loading)
+                            epg.errorMessage != null -> stringResource(R.string.player_epg_error)
+                            !epg.isSupported -> stringResource(R.string.ui_epg_unsupported)
+                            else -> stringResource(R.string.ui_epg_missing)
                         }, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
@@ -110,7 +112,7 @@ fun EpgProgramPane(
                     }
                 }
             }
-            Text("OK يشغّل البث المباشر للقناة", color = Color(0xFFBCCDE1),
+            Text(stringResource(R.string.ui_epg_ok_hint), color = Color(0xFFBCCDE1),
                 style = MaterialTheme.typography.labelSmall)
         }
     }

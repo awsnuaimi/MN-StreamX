@@ -6,12 +6,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.*
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.iptv.ui.component.channel.FavoriteFeedback
@@ -69,10 +71,9 @@ fun HomeScreen(
     val languageDirection = if (appearance.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
     // Physical sidebar placement is independent of the direction of text and channel names.
     CompositionLocalProvider(LocalLayoutDirection provides if (appearance.sidebarOnRight) LayoutDirection.Rtl else LayoutDirection.Ltr) {
+        Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
-            CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
-                HomeSidebar(appearance, labels, selected, state.isLoading, sidebarFocus, ::select)
-            }
+            Spacer(Modifier.width(if (appearance.expandedSidebar) 180.dp else 70.dp))
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 Column(Modifier.weight(1f).fillMaxHeight().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -82,7 +83,6 @@ fun HomeScreen(
                                 "${state.visibleChannels.size} of ${state.channels.size} channels",
                                 "${state.visibleChannels.size} von ${state.channels.size} Sendern"), style = MaterialTheme.typography.bodySmall)
                         }
-                        Text("MN StreamX", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                     }
                     if (searching || state.query.isNotBlank()) OutlinedTextField(state.query, viewModel::updateQuery,
                         label = { Text(labels.text("البحث عن قناة", "Search channels", "Sender suchen")) }, singleLine = true,
@@ -111,11 +111,16 @@ fun HomeScreen(
                             } else TvChannelGrid(state.visibleChannels, state.selectedChannelId, { channel ->
                                 viewModel.selectChannel(channel.id)
                                 onPlayChannel(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
-                            }, Modifier.weight(1f).fillMaxHeight(), columns = appearance.columns)
+                            }, Modifier.weight(1f).fillMaxHeight(), columns = appearance.columns, showGroup = state.selectedGroup == null)
                         }
                     }
                 }
             }
+        }
+        CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
+            HomeSidebar(appearance, labels, selected, state.isLoading, sidebarFocus, ::select,
+                Modifier.align(if (appearance.sidebarOnRight) AbsoluteAlignment.CenterRight else AbsoluteAlignment.CenterLeft).zIndex(1f))
+        }
         }
     }
 }

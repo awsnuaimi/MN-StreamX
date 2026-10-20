@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -51,12 +53,15 @@ fun PlayerErrorOverlay(
             shape = MaterialTheme.shapes.large, contentColor = Color.White) {
             Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(error, style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.player_error), style = MaterialTheme.typography.titleMedium)
+                Regex("ERROR_CODE_[A-Z0-9_]+").find(error)?.value?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (canRetry) AppButton("إعادة التشغيل", onRetry, Modifier.focusRequester(focus))
-                    if (hasChannels) AppButton("اختيار قناة", onChannels,
+                    if (canRetry) AppButton(stringResource(R.string.player_retry), onRetry, Modifier.focusRequester(focus))
+                    if (hasChannels) AppButton(stringResource(R.string.player_pick_channel), onChannels,
                         if (!canRetry) Modifier.focusRequester(focus) else Modifier)
-                    AppButton("العودة للقنوات", onBack,
+                    AppButton(stringResource(R.string.player_back_channels), onBack,
                         if (!canRetry && !hasChannels) Modifier.focusRequester(focus) else Modifier)
                 }
             }
