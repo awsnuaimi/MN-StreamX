@@ -1,5 +1,8 @@
 package com.yourapp.iptv.ui.screen.home
 
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
+import com.yourapp.iptv.ui.component.organization.FolderBrowser
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
@@ -31,7 +34,8 @@ fun HomeScreen(
     onReturnHandled: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
     appearanceViewModel: HomeAppearanceViewModel = hiltViewModel(),
-    onHomeAppearance: () -> Unit = {}
+    onHomeAppearance: () -> Unit = {},
+    onOrganization: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
@@ -65,6 +69,7 @@ fun HomeScreen(
             HomeSection.GUIDE -> onOpenGuide(state.selectedChannelId, state.selectedGroup, state.query, state.favoritesOnly)
             HomeSection.SETTINGS -> onSettings()
             HomeSection.APPEARANCE -> onHomeAppearance()
+            HomeSection.ORGANIZE -> onOrganization()
             HomeSection.REFRESH -> viewModel.refresh()
         }
     }
@@ -90,6 +95,8 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth().focusRequester(searchFocus))
                     if (state.isLoading && state.channels.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
                     FavoriteFeedback(favorites, viewModel::retryFavorites)
+                    if (state.organization.readFailed) Text(stringResource(R.string.org_read_warning),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     when {
                         state.needsSource -> HomeMessage(labels.text("أدخل مصدر القنوات من الإعدادات.", "Add a source in settings.", "Quelle in Einstellungen hinzufügen."),
@@ -98,11 +105,12 @@ fun HomeScreen(
                         state.channels.isEmpty() -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
                             labels.section(HomeSection.REFRESH), viewModel::refresh)
                         else -> Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            HomeCategories(state.groups, state.selectedGroup, labels,
-                                Modifier.widthIn(min = 140.dp, max = 190.dp).fillMaxWidth(0.24f).fillMaxHeight()) { group ->
-                                // Selecting all categories must preserve the Favorites section.
+                            val categoryModifier = Modifier.widthIn(min = 140.dp, max = 190.dp).fillMaxWidth(0.24f).fillMaxHeight()
+                            val chooseGroup: (String?) -> Unit = { group ->
                                 if (group == null) viewModel.selectAllGroups() else viewModel.selectGroup(group)
                             }
+                            if (state.organization.enabled) FolderBrowser(state.organization, state.selectedGroup, categoryModifier, chooseGroup)
+                            else HomeCategories(state.groups, state.selectedGroup, labels, categoryModifier, chooseGroup)
                             if (state.visibleChannels.isEmpty()) Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Text(labels.text("لا توجد قنوات تطابق الاختيار.", "No matching channels.", "Keine passenden Sender."))
@@ -119,7 +127,8 @@ fun HomeScreen(
         }
         CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
             HomeSidebar(appearance, labels, selected, state.isLoading, sidebarFocus, ::select,
-                Modifier.align(if (appearance.sidebarOnRight) AbsoluteAlignment.CenterRight else AbsoluteAlignment.CenterLeft).zIndex(1f))
+                Modifier.align(if (appearance.sidebarOnRight) AbsoluteAlignment.CenterRight else AbsoluteAlignment.CenterLeft).zIndex(1f),
+                organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
         }
         }
     }

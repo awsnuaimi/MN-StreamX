@@ -1,5 +1,7 @@
 package com.yourapp.iptv.ui.screen.epg
 
+import com.yourapp.iptv.ui.component.organization.FolderFilterButton
+import com.yourapp.iptv.ui.component.organization.organizationFilterName
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import com.yourapp.iptv.R
@@ -48,7 +50,7 @@ fun EpgFilters(
                 Text(stringResource(R.string.ui_epg_title), style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.primary)
                 Text(pluralStringResource(if (state.favoritesOnly) R.plurals.ui_epg_favorite_summary else R.plurals.ui_epg_summary,
-                    state.queue.size, state.queue.size, state.selectedGroup ?: stringResource(R.string.player_all_categories)),
+                    state.queue.size, state.queue.size, organizationFilterName(state.selectedGroup, state.organization) ?: stringResource(R.string.player_all_categories)),
                     maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
             }
             AppButton(stringResource(R.string.ui_back), onBack)
@@ -67,7 +69,9 @@ fun EpgFilters(
                     FilterChip(selected = state.favoritesOnly, onClick = onFavorites,
                         enabled = !state.isLoading, label = { Text(stringResource(R.string.ui_favorites_star)) })
                 }
-                items(state.groups, key = { it }) { group ->
+                if (state.organization.enabled) item("@folders") {
+                    FolderFilterButton(state.organization, state.selectedGroup, onGroup, enabled = !state.isLoading)
+                } else items(state.groups, key = { it }) { group ->
                     FilterChip(selected = state.selectedGroup == group, onClick = { onGroup(group) },
                         modifier = Modifier.widthIn(max = 260.dp), enabled = !state.isLoading,
                         label = { Text(group, maxLines = 1, overflow = TextOverflow.Ellipsis) })

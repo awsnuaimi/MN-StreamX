@@ -1,5 +1,6 @@
 package com.yourapp.iptv.ui.state
 
+import com.yourapp.iptv.domain.organization.OrganizationTree
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.PlaybackQueue
 
@@ -11,7 +12,8 @@ data class PlayerUiState(
     val detachedChannel: Channel? = null,
     val query: String = "",
     val isLoading: Boolean = true,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val organization: OrganizationTree = OrganizationTree()
 ) {
     val channel: Channel? get() = queue.channels.getOrNull(currentIndex) ?: detachedChannel
     val canChangeChannel: Boolean get() = channel != null &&

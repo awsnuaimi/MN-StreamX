@@ -20,7 +20,7 @@ import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
 internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selected: HomeSection,
-    loading: Boolean, returnFocus: FocusRequester, onSelect: (HomeSection) -> Unit, modifier: Modifier = Modifier) {
+    loading: Boolean, returnFocus: FocusRequester, onSelect: (HomeSection) -> Unit, modifier: Modifier = Modifier, organizationReady: Boolean = true) {
     var hasFocus by remember { mutableStateOf(false) }
     val expanded = appearance.expandedSidebar || hasFocus
     val width by animateDpAsState(if (expanded) 180.dp else 70.dp, label = "sidebarWidth")
@@ -32,7 +32,7 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
         HomeSection.entries.forEach { section ->
             var focused by remember(section) { mutableStateOf(false) }
             val active = selected == section
-            Surface(onClick = { onSelect(section) }, enabled = !(loading && section == HomeSection.REFRESH),
+            Surface(onClick = { onSelect(section) }, enabled = !(loading && section == HomeSection.REFRESH) && (section != HomeSection.ORGANIZE || organizationReady),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)
                     .then(if (section == HomeSection.LIVE) Modifier.focusRequester(returnFocus) else Modifier)
                     .onFocusChanged { focused = it.isFocused }.semantics { this.selected = active; contentDescription = labels.section(section) },

@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.organization.*
+import com.yourapp.iptv.domain.repository.OrganizationRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.PlaylistLoadException
@@ -28,7 +30,8 @@ class HomeViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val playlists: PlaylistRepository,
     @DefaultDispatcher private val background: CoroutineDispatcher,
-    favorites: FavoriteRepository
+    favorites: FavoriteRepository,
+    organization: OrganizationRepository = OrganizationRepository.Disabled
 ) : ViewModel() {
     private val state = MutableStateFlow(HomeUiState())
     val uiState = state.asStateFlow()
@@ -40,6 +43,14 @@ class HomeViewModel @Inject constructor(
         filterChannels()
     }
     val favoriteState = favoriteController.uiState
+    private val organizer = OrganizationController(viewModelScope, organization, background) { result ->
+        state.update { it.copy(channels = result.channels,
+            groups = if (result.tree.enabled) result.tree.folders.map { f -> FolderFilter.of(f.id) }
+                else result.channels.mapNotNull { c -> c.group }.distinct().sorted(),
+            selectedGroup = result.resolveFilter(it.selectedGroup), organization = result.tree,
+            isLoading = false, needsSource = false, errorMessage = null) }
+        filterChannels()
+    }
 
     fun retryFavorites() = favoriteController.retry()
 
@@ -47,6 +58,7 @@ class HomeViewModel @Inject constructor(
 
     fun refresh() {
         if (loadJob?.isActive == true) return
+        organizer.clearChannels()
         state.update { it.copy(isLoading = true, errorMessage = null) }
         loadJob = viewModelScope.launch {
             try {
@@ -61,20 +73,7 @@ class HomeViewModel @Inject constructor(
                         source.xtreamServer, source.xtreamUsername, source.xtreamPassword
                     )
                 }.channels
-                val groups = withContext(background) {
-                    channels.mapNotNull { it.group }.distinct().sorted()
-                }
-                state.update {
-                    it.copy(
-                        channels = channels,
-                        groups = groups,
-                        selectedGroup = it.selectedGroup?.takeIf { group -> group in groups },
-                        isLoading = false,
-                        needsSource = false,
-                        errorMessage = null
-                    )
-                }
-                filterChannels()
+                organizer.setChannels(channels)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -133,13 +132,14 @@ class HomeViewModel @Inject constructor(
         val snapshot = state.value
         val ids = favoriteIds
         filterJob = viewModelScope.launch {
-            val (marked, visible) = withContext(background) {
+            val result = withContext(background) {
                 val marked = ChannelFavorites.apply(snapshot.channels, ids)
-                marked to PlaybackQueue.create(marked, snapshot.selectedGroup, snapshot.query,
-                    snapshot.favoritesOnly).channels
+                val matching = PlaybackQueue.create(marked, query = snapshot.query, favoritesOnly = snapshot.favoritesOnly).channels
+                Triple(marked, PlaybackQueue.create(matching, snapshot.selectedGroup).channels, snapshot.organization.withCounts(matching))
             }
+            val (marked, visible, tree) = result
             state.update { current ->
-                current.copy(channels = marked, visibleChannels = visible,
+                current.copy(channels = marked, visibleChannels = visible, organization = tree,
                     selectedChannelId = current.selectedChannelId?.let { id ->
                         visible.firstOrNull { it.id == id }?.id ?: visible.firstOrNull()?.id
                     })

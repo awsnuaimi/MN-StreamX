@@ -1,5 +1,6 @@
 package com.yourapp.iptv.ui.screen.player
 
+import com.yourapp.iptv.ui.component.organization.organizationFilterName
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -204,7 +205,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         if (error != null) PlayerErrorOverlay(error, channel != null, state.queue.size > 0, errorFocus,
             onRetry = { retry++; focusEpoch++ }, onChannels = ::openChannels, onBack = { onBack(channel?.id) })
         if (panels.panel == PlayerPanel.CHANNELS) PlayerChannelPanel(state.queue.channels, state.currentIndex,
-            state.selectedGroup, state.query, state.favoritesOnly, onSelect = ::selectChannel,
+            organizationFilterName(state.selectedGroup, state.organization), state.query, state.favoritesOnly, onSelect = ::selectChannel,
             onDismiss = ::back, onRemoteKey = ::handleRemote)
         if (panels.panel == PlayerPanel.MORE && channel != null) PlayerMoreDialog(channel, appearance, favorites,
             state.canChangeChannel, moreInitial, onRemoteKey = ::handleRemote, onDismiss = ::back,

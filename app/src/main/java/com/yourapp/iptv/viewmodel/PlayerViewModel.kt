@@ -1,6 +1,8 @@
 package com.yourapp.iptv.viewmodel
 
 import androidx.lifecycle.SavedStateHandle
+import com.yourapp.iptv.domain.organization.*
+import com.yourapp.iptv.domain.repository.OrganizationRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.di.DefaultDispatcher
@@ -15,6 +17,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -25,7 +28,8 @@ class PlayerViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val channels: ChannelRepository,
     @DefaultDispatcher private val background: CoroutineDispatcher,
-    favorites: FavoriteRepository
+    favorites: FavoriteRepository,
+    organization: OrganizationRepository = OrganizationRepository.Disabled
 ) : ViewModel() {
     private val state = MutableStateFlow(PlayerUiState(
         selectedGroup = savedStateHandle["group"],
@@ -42,12 +46,18 @@ class PlayerViewModel @Inject constructor(
         rebuildQueue()
     }
     val favoriteState = favoriteController.uiState
+    private val organizer = OrganizationController(viewModelScope, organization, background) { result ->
+        available = result.channels
+        val group = result.resolveFilter(state.value.selectedGroup)
+        savedStateHandle["group"] = group
+        state.update { it.copy(selectedGroup = group, organization = result.tree) }
+        rebuildQueue()
+    }
 
     init {
         viewModelScope.launch {
             try {
-                available = channels.getChannels()
-                rebuildQueue()
+                organizer.setChannels(channels.getChannels())
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {

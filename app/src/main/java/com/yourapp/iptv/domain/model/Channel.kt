@@ -6,5 +6,6 @@ data class Channel(
     val logoUrl: String? = null,
     val streamUrl: String,
     val group: String? = null,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val folderIds: List<String> = emptyList()
 )

@@ -1,5 +1,6 @@
 package com.yourapp.iptv.ui.state
 
+import com.yourapp.iptv.domain.organization.OrganizationTree
 import com.yourapp.iptv.domain.model.Channel
 
 data class HomeUiState(
@@ -12,5 +13,6 @@ data class HomeUiState(
     val selectedChannelId: String? = null,
     val isLoading: Boolean = true,
     val needsSource: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val organization: OrganizationTree = OrganizationTree()
 )

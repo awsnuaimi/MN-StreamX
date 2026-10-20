@@ -1,5 +1,6 @@
 package com.yourapp.iptv.ui.state
 
+import com.yourapp.iptv.domain.organization.OrganizationTree
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.PlaybackQueue
 
@@ -13,7 +14,8 @@ data class EpgUiState(
     val selectedProgramKey: String? = null,
     val isLoading: Boolean = true,
     val isFiltering: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val organization: OrganizationTree = OrganizationTree()
 ) {
     val selectedIndex: Int get() = queue.indexOf(selectedChannelId)
     val channel: Channel? get() = queue.channels.getOrNull(selectedIndex)

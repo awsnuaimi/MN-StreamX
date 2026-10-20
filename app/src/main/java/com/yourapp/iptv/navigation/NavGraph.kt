@@ -13,6 +13,7 @@ import com.yourapp.iptv.ui.screen.appearance.HomeAppearanceScreen
 import com.yourapp.iptv.ui.screen.home.HomeScreen
 import com.yourapp.iptv.ui.screen.epg.EpgScreen
 import com.yourapp.iptv.ui.screen.player.PlayerScreen
+import com.yourapp.iptv.ui.screen.organization.OrganizationScreen
 import com.yourapp.iptv.ui.screen.settings.SettingsScreen
 import com.yourapp.iptv.ui.screen.appearance.PlayerAppearanceScreen
 
@@ -24,6 +25,7 @@ fun AppNavGraph() {
             val returnedChannel by entry.savedStateHandle
                 .getStateFlow<String?>("lastPlayedChannelId", null).collectAsStateWithLifecycle()
             HomeScreen(
+                onOrganization = { nav.navigate("organization") { launchSingleTop = true } },
                 onHomeAppearance = { nav.navigate("home_appearance") { launchSingleTop = true } },
                 returnedChannelId = returnedChannel,
                 onReturnHandled = { entry.savedStateHandle["lastPlayedChannelId"] = null },
@@ -57,6 +59,7 @@ fun AppNavGraph() {
                 }
             )
         }
+        composable("organization") { OrganizationScreen(onBack = { nav.popBackStack() }) }
         composable("home_appearance") { HomeAppearanceScreen(onBack = { nav.popBackStack() }) }
         composable(Destinations.PLAYER_APPEARANCE) {
             PlayerAppearanceScreen(onBack = { nav.popBackStack() })

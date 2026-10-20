@@ -23,7 +23,7 @@ fun TvChannelGrid(channels: List<Channel>, selectedChannelId: String?, onChannel
         val columnCount = columns?.coerceIn(2, 4) ?: (maxWidth.value / 220f).toInt().coerceAtLeast(1)
         val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
         val rows = TvGridLayout.rows(maxHeight.value, 96f * fontScale)
-        LaunchedEffect(selectedChannelId, columnCount) {
+        LaunchedEffect(selectedChannelId, selectedIndex, columnCount) {
             if (selectedIndex >= 0) {
                 grid.scrollToItem(TvGridLayout.rowStart(selectedIndex, columnCount))
                 withFrameNanos { }; runCatching { restoreFocus.requestFocus() }

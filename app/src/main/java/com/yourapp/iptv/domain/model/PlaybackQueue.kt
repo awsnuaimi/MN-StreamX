@@ -17,7 +17,8 @@ class PlaybackQueue private constructor(val channels: List<Channel>) {
             val search = query.trim()
             return PlaybackQueue(channels.asSequence()
                 .filter { !favoritesOnly || it.isFavorite }
-                .filter { group == null || it.group == group }
+                .filter { group == null || it.group == group ||
+                    com.yourapp.iptv.domain.organization.FolderFilter.id(group)?.let { id -> id in it.folderIds } == true }
                 .filter { it.name.contains(search, ignoreCase = true) }
                 .distinctBy { it.id }
                 .toList())

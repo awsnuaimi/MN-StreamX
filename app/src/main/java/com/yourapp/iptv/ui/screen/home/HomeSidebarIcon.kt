@@ -46,6 +46,13 @@ internal fun HomeSidebarIcon(section: HomeSection, color: Color) {
                         drawPath(palette, color, style = stroke)
                         listOf(7f to 10f, 11f to 6f, 16f to 8f).forEach { (x, y) -> drawCircle(color, 1.5f, Offset(x, y)) }
                     }
+                    HomeSection.ORGANIZE -> {
+                        val path = Path().apply {
+                            moveTo(2f, 6f); lineTo(9f, 6f); lineTo(12f, 9f); lineTo(22f, 9f)
+                            lineTo(22f, 21f); lineTo(2f, 21f); close()
+                        }
+                        drawPath(path, color, style = stroke)
+                    }
                     HomeSection.SEARCH -> {
                         drawCircle(color, 7f, Offset(10f, 10f), style = stroke)
                         drawLine(color, Offset(15f, 15f), Offset(22f, 22f), 1.8f)

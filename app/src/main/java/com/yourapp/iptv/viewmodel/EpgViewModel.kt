@@ -1,6 +1,8 @@
 package com.yourapp.iptv.viewmodel
 
 import androidx.lifecycle.SavedStateHandle
+import com.yourapp.iptv.domain.organization.*
+import com.yourapp.iptv.domain.repository.OrganizationRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.di.DefaultDispatcher
@@ -26,7 +28,8 @@ class EpgViewModel @Inject constructor(
     private val saved: SavedStateHandle,
     private val channels: ChannelRepository,
     @DefaultDispatcher private val background: CoroutineDispatcher,
-    favorites: FavoriteRepository
+    favorites: FavoriteRepository,
+    organization: OrganizationRepository = OrganizationRepository.Disabled
 ) : ViewModel() {
     private val state = MutableStateFlow(EpgUiState(
         selectedGroup = saved["group"], query = saved.get<String>("query").orEmpty(),
@@ -44,6 +47,15 @@ class EpgViewModel @Inject constructor(
         filterChannels(showLoading = false)
     }
     val favoriteState = favoriteController.uiState
+    private val organizer = OrganizationController(viewModelScope, organization, background) { result ->
+        available = result.channels; loaded = true
+        val group = result.resolveFilter(state.value.selectedGroup)
+        saved["group"] = group
+        state.update { it.copy(organization = result.tree, selectedGroup = group, isLoading = false,
+            groups = if (result.tree.enabled) result.tree.folders.map { f -> FolderFilter.of(f.id) }
+                else available.mapNotNull { c -> c.group }.distinct().sorted()) }
+        filterChannels()
+    }
 
     fun toggleFavorite() { state.value.channel?.let { favoriteController.toggle(it.id) } }
 
@@ -53,6 +65,7 @@ class EpgViewModel @Inject constructor(
 
     fun reload() {
         if (loadJob?.isActive == true) return
+        organizer.clearChannels()
         filterJob?.cancel()
         loaded = false
         state.update { it.copy(queue = PlaybackQueue.empty(), isLoading = true,
@@ -60,16 +73,7 @@ class EpgViewModel @Inject constructor(
         loadJob = viewModelScope.launch {
             try {
                 val stored = channels.getChannels()
-                val (unique, groups) = withContext(background) {
-                    val unique = stored.distinctBy { it.id }
-                    unique to unique.mapNotNull { it.group }.distinct().sorted()
-                }
-                available = unique
-                loaded = true
-                val group = state.value.selectedGroup?.takeIf { it in groups }
-                saved["group"] = group
-                state.update { it.copy(groups = groups, selectedGroup = group, isLoading = false) }
-                filterChannels()
+                organizer.setChannels(stored)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
@@ -152,15 +156,16 @@ class EpgViewModel @Inject constructor(
         val ids = favoriteIds
         if (showLoading) state.update { it.copy(isFiltering = true) }
         filterJob = viewModelScope.launch {
-            val queue = withContext(background) {
-                PlaybackQueue.create(ChannelFavorites.apply(available, ids), snapshot.selectedGroup,
-                    snapshot.query, snapshot.favoritesOnly)
+            val (queue, tree) = withContext(background) {
+                val matching = PlaybackQueue.create(ChannelFavorites.apply(available, ids), query = snapshot.query,
+                    favoritesOnly = snapshot.favoritesOnly).channels
+                PlaybackQueue.create(matching, snapshot.selectedGroup) to snapshot.organization.withCounts(matching)
             }
             val requested = saved.get<String>("channelId")
             val selected = queue.channels.getOrNull(queue.indexOf(requested))?.id ?: queue.channels.firstOrNull()?.id
             if (selected != requested) saved["epgProgramKey"] = null
             saved["channelId"] = selected
-            state.update { it.copy(queue = queue, selectedChannelId = selected,
+            state.update { it.copy(queue = queue, organization = tree, selectedChannelId = selected,
                 selectedProgramKey = saved["epgProgramKey"], isFiltering = false) }
         }
     }
