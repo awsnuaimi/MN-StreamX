@@ -14,6 +14,10 @@ object OrganizationNames {
         Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFKD), "")
         .replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا').replace('ى', 'ي').replace('ة', 'ه'))
         .joinToString(" ") { it.value }
+    /** Alias for persisted grouping semantics; never fold Polish ł here. */
+    fun normalizeIdentity(value: String): String = normalize(value)
+    /** Language-independent matching only; must not be used in groupKey. */
+    fun normalizeMatch(value: String): String = TextNormalizer.normalizeMatch(value)
     fun canonicalGroup(value: String?): String = value?.let(::normalize)?.split(' ')
         ?.filterIndexed { index, word -> index == 0 || word !in qualities }?.joinToString(" ")?.takeIf { it.isNotBlank() } ?: "~ungrouped"
     fun groupKey(value: String?) = digest(canonicalGroup(value)).take(32)

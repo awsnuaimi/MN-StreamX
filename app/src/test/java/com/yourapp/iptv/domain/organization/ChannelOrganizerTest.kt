@@ -98,4 +98,58 @@ class ChannelOrganizerTest {
         assertTrue(result.channels.single().folderIds.contains("custom-0"))
         assertEquals(1, PlaybackQueue.create(result.channels, FolderFilter.of("custom-0")).size)
     }
+
+    @Test fun multilingualPolishGermanAndArabicGroupsGetStableFolderIds() {
+        val cases = mapOf(
+            "PL Ogólnotematyczne" to "polish-general",
+            "PL Kanały" to "polish-general",
+            "DE Sport" to "german-sports",
+            "AR أخبار" to "arabic-news"
+        )
+        val result = ChannelOrganizer.project(cases.keys.mapIndexed { i, group -> c("case$i", group) }, config)
+        cases.values.forEachIndexed { i, expected ->
+            assertEquals(expected, result.assignments.getValue("case$i").folderId)
+            assertEquals(expected, result.channels.single { it.id == "case$i" }.folderIds.last())
+        }
+        assertNotNull(result.tree.folder("arabic-news"))
+    }
+
+    @Test fun changingActualHomeLanguageSettingDoesNotReassignAnyChannel() {
+        val original = com.yourapp.iptv.domain.model.HomeAppearance(
+            language = com.yourapp.iptv.domain.model.HomeLanguage.GERMAN)
+        val changed = original.copy(language = com.yourapp.iptv.domain.model.HomeLanguage.ARABIC)
+        assertNotEquals(original.language, changed.language)
+        val input = listOf(c("p", "PL Kanały"), c("n", "AR أخبار"), c("d", "DE Sport"))
+        val previous = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.GERMANY)
+            val german = ChannelOrganizer.project(input, config)
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("ar"))
+            val arabic = ChannelOrganizer.project(input, config)
+            assertEquals(german.assignments.mapValues { it.value.folderId },
+                arabic.assignments.mapValues { it.value.folderId })
+            assertEquals(german.channels.associate { it.id to it.folderIds },
+                arabic.channels.associate { it.id to it.folderIds })
+        } finally { java.util.Locale.setDefault(previous) }
+    }
+
+    @Test fun missingChannelOrGroupDestinationUsesAutoFallbackWithoutCrash() {
+        val missingGroup = OrganizationNames.groupKey("DE Sport")
+        val corrupt = config.copy(channelOverrides = mapOf("p" to "missing-folder"),
+            groupOverrides = mapOf(missingGroup to "also-missing"))
+        val result = ChannelOrganizer.project(listOf(c("p", "PL Kanały"), c("d", "DE Sport")), corrupt)
+        assertEquals("polish-general", result.assignments.getValue("p").folderId)
+        assertEquals("german-sports", result.assignments.getValue("d").folderId)
+        assertTrue(result.channels.all { it.folderIds.isNotEmpty() })
+        assertEquals("missing-folder", corrupt.channelOverrides.getValue("p"))
+    }
+
+    @Test fun invalidDirectOverrideStillPermitsValidGroupOverride() {
+        val group = "PL Kanały"
+        val manual = config.copy(channelOverrides = mapOf("p" to "missing-folder"),
+            groupOverrides = mapOf(OrganizationNames.groupKey(group) to "polish-news"))
+        val result = ChannelOrganizer.project(listOf(c("p", group)), manual)
+        assertEquals("polish-news", result.assignments.getValue("p").folderId)
+        assertEquals(AssignmentReason.GROUP_RULE, result.assignments.getValue("p").reason)
+    }
 }
