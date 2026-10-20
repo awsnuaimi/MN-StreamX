@@ -9,6 +9,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.player.controller.PlayerController
+import com.yourapp.iptv.util.LoadTimings
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class PlayerPlaybackSession(
@@ -52,9 +53,17 @@ internal class PlayerPlaybackSession(
         val selected = channel
         val request = ++generation
         val mediaId = "${selected.id}:$request"
+        val startedAt = System.nanoTime()
+        var firstFrameRecorded = false
         fun isCurrent() = generation == request && player === created &&
             created.currentMediaItem?.mediaId == mediaId
         listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                if (!isCurrent() || firstFrameRecorded) return
+                firstFrameRecorded = true
+                LoadTimings.recordSince(LoadTimings.Stage.FIRST_FRAME, startedAt)
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (!isCurrent()) return
                 onBuffering(selected.id, playbackState == Player.STATE_BUFFERING)

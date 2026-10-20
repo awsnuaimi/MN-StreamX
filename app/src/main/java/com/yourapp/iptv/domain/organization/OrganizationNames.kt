@@ -18,11 +18,21 @@ object OrganizationNames {
     fun normalizeIdentity(value: String): String = normalize(value)
     /** Language-independent matching only; must not be used in groupKey. */
     fun normalizeMatch(value: String): String = TextNormalizer.normalizeMatch(value)
-    fun canonicalGroup(value: String?): String = value?.let(::normalize)?.split(' ')
-        ?.filterIndexed { index, word -> index == 0 || word !in qualities }?.joinToString(" ")?.takeIf { it.isNotBlank() } ?: "~ungrouped"
+    fun canonicalGroup(value: String?): String = value?.let { canonicalNormalized(normalize(it)) } ?: "~ungrouped"
+    internal fun canonicalNormalized(value: String): String = value.split(' ')
+        .filterIndexed { index, word -> index == 0 || word !in qualities }
+        .joinToString(" ").takeIf { it.isNotBlank() } ?: "~ungrouped"
     fun groupKey(value: String?) = digest(canonicalGroup(value)).take(32)
-    fun digest(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
-        .joinToString("") { "%02x".format(it) }
+    fun digest(value: String): String {
+        val bytes = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
+        val hex = "0123456789abcdef"
+        return buildString(64) {
+            for (byte in bytes) {
+                val unsigned = byte.toInt() and 255
+                append(hex[unsigned ushr 4]); append(hex[unsigned and 15])
+            }
+        }
+    }
     fun sourceKey(value: AppSettings): String = digest(when (value.source) {
         PlaylistSource.M3U -> "m3u\u0000${value.m3uUrl.trim()}"
         PlaylistSource.XTREAM -> "xtream\u0000${value.xtreamServer.trim().trimEnd('/')}\u0000${value.xtreamUsername.trim()}"

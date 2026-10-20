@@ -7,9 +7,10 @@ internal object OrganizationChannelOrder {
     private val full = Regex("(?:^| )(?:fhd|1080p)(?: |$)")
     private val high = Regex("(?:^| )hd(?: |$)")
     private val standard = Regex("(?:^| )sd(?: |$)")
-    private data class Key(val path: List<Int>, val parts: List<String>, val quality: Int)
+    private val pattern = Regex("[0-9]+|[^0-9]+")
+    private data class Part(val text: String, val number: String?)
+    private data class Key(val path: List<Int>, val parts: List<Part>, val quality: Int)
     fun sort(channels: List<Channel>, names: Map<String, String>, orders: Map<String, Int>): List<Channel> {
-        val pattern = Regex("[0-9]+|[^0-9]+")
         val keys = channels.associate { c ->
             val name = names.getValue(c.id)
             val quality = when {
@@ -19,7 +20,11 @@ internal object OrganizationChannelOrder {
                 standard.containsMatchIn(name) -> 3
                 else -> 4
             }
-            c.id to Key(c.folderIds.map { orders[it] ?: 0 }, pattern.findAll(OrganizationNames.canonicalGroup(name)).map { it.value }.toList(), quality)
+            val parts = pattern.findAll(OrganizationNames.canonicalNormalized(name)).map {
+                val text = it.value
+                Part(text, if (text.firstOrNull()?.isDigit() == true) text.trimStart('0').ifEmpty { "0" } else null)
+            }.toList()
+            c.id to Key(c.folderIds.map { orders[it] ?: 0 }, parts, quality)
         }
         return channels.sortedWith { a, b ->
             val x = keys.getValue(a.id); val y = keys.getValue(b.id)
@@ -28,15 +33,20 @@ internal object OrganizationChannelOrder {
         }
     }
     private fun comparePaths(a: List<Int>, b: List<Int>): Int {
-        a.zip(b).forEach { (x, y) -> if (x != y) return x.compareTo(y) }
+        for (i in 0 until minOf(a.size, b.size)) {
+            val result = a[i].compareTo(b[i])
+            if (result != 0) return result
+        }
         return a.size.compareTo(b.size)
     }
-    private fun compareNames(a: List<String>, b: List<String>): Int {
-        a.zip(b).forEach { (x, y) ->
-            val result = if (x.firstOrNull()?.isDigit() == true && y.firstOrNull()?.isDigit() == true) {
-                val u = x.trimStart('0').ifEmpty { "0" }; val v = y.trimStart('0').ifEmpty { "0" }
+    private fun compareNames(a: List<Part>, b: List<Part>): Int {
+        for (i in 0 until minOf(a.size, b.size)) {
+            val x = a[i]
+            val y = b[i]
+            val result = if (x.number != null && y.number != null) {
+                val u = x.number; val v = y.number
                 u.length.compareTo(v.length).takeIf { it != 0 } ?: u.compareTo(v)
-            } else x.compareTo(y)
+            } else x.text.compareTo(y.text)
             if (result != 0) return result
         }
         return a.size.compareTo(b.size)

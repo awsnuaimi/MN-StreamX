@@ -4,6 +4,8 @@ import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.AppSettings
 
 interface ChannelRepository {
+    /** Optional fast path: selected channel only, without preparing the full queue. */
+    suspend fun getPlaybackChannel(id: String): Channel? = null
     suspend fun getCachedChannels(source: AppSettings): List<Channel>? = null
     suspend fun getChannels(): List<Channel>
     suspend fun getChannel(id: String): Channel?

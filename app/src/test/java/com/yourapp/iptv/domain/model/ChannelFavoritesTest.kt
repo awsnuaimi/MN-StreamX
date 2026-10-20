@@ -21,6 +21,16 @@ class ChannelFavoritesTest {
         assertEquals(0, PlaybackQueue.create(result, favoritesOnly = true).size)
     }
 
+    @Test fun unchangedFavoritesReuseTheListAndChangesPreserveUnmodifiedRows() {
+        assertSame(channels, ChannelFavorites.apply(channels, emptySet()))
+        val changed = ChannelFavorites.apply(channels, setOf("b"))
+        assertSame(channels[0], changed[0])
+        assertSame(channels[2], changed[2])
+        assertTrue(changed[1].isFavorite)
+        assertFalse(channels[1].isFavorite)
+        assertSame(changed, ChannelFavorites.apply(changed, setOf("b")))
+    }
+
     @Test fun favoritesPreserveOrderAndIntersectCategoryAndSearch() {
         val marked = ChannelFavorites.apply(channels + channels.first(), setOf("a", "c"))
         assertEquals(listOf("a", "c"), PlaybackQueue.create(marked, favoritesOnly = true).channels.map { it.id })

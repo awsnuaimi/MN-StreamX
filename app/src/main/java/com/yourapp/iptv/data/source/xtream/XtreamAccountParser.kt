@@ -24,8 +24,8 @@ internal object XtreamAccountParser {
             ?.mapNotNull { it.takeIf { value -> value.isJsonPrimitive }?.asString?.trim()?.lowercase(Locale.ROOT) }
         return when {
             formats == null || formats.isEmpty() -> "ts"
-            "m3u8" in formats -> "m3u8"
             "ts" in formats -> "ts"
+            "m3u8" in formats -> "m3u8"
             else -> throw PlaylistLoadException("الحساب لا يتيح صيغة بث HLS أو TS المدعومة.")
         }
     }

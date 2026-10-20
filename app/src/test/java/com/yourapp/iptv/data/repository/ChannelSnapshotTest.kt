@@ -20,6 +20,7 @@ import java.io.IOException
 class ChannelSnapshotTest {
     private val database = Channels()
     private val stamp = Stamp()
+    private val favoriteRows = Favorites()
     private lateinit var server: MockWebServer
     private lateinit var client: OkHttpClient
     private lateinit var source: AppSettings
@@ -107,8 +108,38 @@ class ChannelSnapshotTest {
         assertEquals(importing.await(), reading.await())
     }
 
+    @Test fun repeatedScreenReadsReuseRowsButStillSeeExternalFavoriteChanges() = runBlocking {
+        val repository = repository()
+        val first = repository.getChannels()
+        assertSame(first, repository.getChannels())
+        assertEquals(1, database.reads)
+        favoriteRows.addFavorite(FavoriteEntity(first.single().id))
+        val changed = repository.getChannels()
+        assertTrue(changed.single().isFavorite)
+        assertFalse(first.single().isFavorite)
+        assertSame(changed, repository.getChannels())
+        assertEquals(1, database.reads)
+    }
+
+    @Test fun unchangedRefreshKeepsSnapshotIdentityAndAvoidsDatabaseReplacement() = runBlocking {
+        val repository = repository()
+        enqueuePlaylist()
+        val first = repository.loadFromM3u(source.m3uUrl)
+        enqueuePlaylist()
+        val second = repository.loadFromM3u(source.m3uUrl)
+        assertSame(first, second)
+        assertEquals(1, database.replacements)
+        assertEquals(0, database.reads)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun selectedChannelLookupDoesNotReadTheEntireTable() = runBlocking {
+        assertEquals("legacy", repository().getPlaybackChannel("legacy")?.id)
+        assertEquals(0, database.reads)
+    }
+
     private fun repository() = ChannelRepositoryImpl(M3uDataSource(client), XtreamDataSource(client),
-        database, Favorites(), stamp)
+        database, favoriteRows, stamp)
 
     private fun enqueuePlaylist() {
         server.enqueue(MockResponse().setBody("#EXTM3U\n#EXTINF:-1 group-title=\"News\",Alpha\nhttps://unit.test/alpha.ts\n"))
@@ -128,12 +159,15 @@ class ChannelSnapshotTest {
         var values = listOf(ChannelEntity("legacy", "Legacy", null, "https://unit.test/old"))
         var failWrite = false
         var gate: CompletableDeferred<Unit>? = null
+        var reads = 0
+        var replacements = 0
         val writeStarted = CompletableDeferred<Unit>()
         override suspend fun insertChannels(channels: List<ChannelEntity>) { values = channels }
-        override suspend fun getAllChannels() = values
+        override suspend fun getAllChannels(): List<ChannelEntity> { reads++; return values }
         override suspend fun getChannel(id: String) = values.firstOrNull { it.id == id }
         override suspend fun clearAll() { values = emptyList() }
         override suspend fun replaceAll(channels: List<ChannelEntity>) {
+            replacements++
             writeStarted.complete(Unit)
             gate?.await()
             if (failWrite) throw IOException("Cannot replace rows")
@@ -141,10 +175,11 @@ class ChannelSnapshotTest {
         }
     }
     private class Favorites : FavoriteDao {
-        override suspend fun addFavorite(favorite: FavoriteEntity) = Unit
-        override suspend fun removeFavorite(channelId: String) = Unit
-        override suspend fun getAllFavorites() = emptyList<FavoriteEntity>()
+        private val rows = mutableMapOf<String, FavoriteEntity>()
+        override suspend fun addFavorite(favorite: FavoriteEntity) { rows[favorite.channelId] = favorite }
+        override suspend fun removeFavorite(channelId: String) { rows.remove(channelId) }
+        override suspend fun getAllFavorites() = rows.values.toList()
         override fun observeFavoriteIds() = flowOf(emptyList<String>())
-        override suspend fun isFavorite(channelId: String) = false
+        override suspend fun isFavorite(channelId: String) = channelId in rows
     }
 }

@@ -8,6 +8,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultLoadControl
 import java.util.Locale
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -18,7 +19,14 @@ class ExoPlayerManager(context: Context) {
 
     fun initialize() {
         if (player != null) return
-        player = ExoPlayer.Builder(appContext).build().apply {
+        val buffering = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(LivePlaybackTuning.MIN_BUFFER_MS, LivePlaybackTuning.MAX_BUFFER_MS,
+                LivePlaybackTuning.START_BUFFER_MS, LivePlaybackTuning.REBUFFER_MS)
+            .setTargetBufferBytes(LivePlaybackTuning.TARGET_BUFFER_BYTES)
+            .setPrioritizeTimeOverSizeThresholds(false)
+            .setBackBuffer(0, false)
+            .build()
+        player = ExoPlayer.Builder(appContext).setLoadControl(buffering).build().apply {
             setAudioAttributes(AudioAttributes.DEFAULT, true)
             setHandleAudioBecomingNoisy(true)
         }

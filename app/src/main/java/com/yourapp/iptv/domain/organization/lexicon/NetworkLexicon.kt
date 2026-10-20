@@ -23,8 +23,12 @@ internal object NetworkLexicon {
 
     fun find(text: String): String? {
         val normalized = OrganizationNames.normalizeMatch(text)
+        return findNormalized(normalized)
+    }
+
+    private fun findNormalized(normalized: String): String? {
         return when {
-            isBeinEntertainment(normalized) -> null
+            entertainmentNormalized(normalized) -> null
             compactSports.containsMatchIn(normalized) || numbered.containsMatchIn(normalized) -> "bein"
             else -> LexiconMatcher.match(normalized, entries)?.value
         }
@@ -32,6 +36,14 @@ internal object NetworkLexicon {
 
     fun isBeinEntertainment(text: String): Boolean {
         val normalized = OrganizationNames.normalizeMatch(text)
-        return movies.containsMatchIn(normalized) || compactMovies.containsMatchIn(normalized)
+        return entertainmentNormalized(normalized)
     }
+
+    fun isBeinSports(text: String, groupIsBein: Boolean): Boolean {
+        val normalized = OrganizationNames.normalizeMatch(text)
+        return !entertainmentNormalized(normalized) && (groupIsBein || findNormalized(normalized) == "bein")
+    }
+
+    private fun entertainmentNormalized(text: String) =
+        movies.containsMatchIn(text) || compactMovies.containsMatchIn(text)
 }

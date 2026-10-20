@@ -192,8 +192,8 @@ class HomeViewModel @Inject constructor(
         filterJob = viewModelScope.launch {
             val result = withContext(background) {
                 val marked = ChannelFavorites.apply(snapshot.channels, ids)
-                val matching = PlaybackQueue.create(marked, query = snapshot.query, favoritesOnly = snapshot.favoritesOnly).channels
-                Triple(marked, PlaybackQueue.create(matching, snapshot.selectedGroup).channels, snapshot.organization.withCounts(matching))
+                val matching = PlaybackQueue.filterChannels(marked, query = snapshot.query, favoritesOnly = snapshot.favoritesOnly)
+                Triple(marked, PlaybackQueue.filterChannels(matching, snapshot.selectedGroup), snapshot.organization.withCounts(matching))
             }
             val (marked, visible, tree) = result
             state.update { current ->

@@ -141,14 +141,15 @@ object ChannelOrganizer {
         val sorted = OrganizationChannelOrder.sort(projected, names, siblingOrder)
         checkpoint()
 
-        val groups = sourceGroups.map { (key, members) ->
+        val groupsWithNames = sourceGroups.map { (key, members) ->
             SourceGroup(
                 key,
                 members.first().group,
                 members.size,
                 members.map { assignments.getValue(it.id).folderId }.toSet()
-            )
-        }.sortedBy { OrganizationNames.normalize(it.name.orEmpty()) }
+            ).let { it to OrganizationNames.normalize(it.name.orEmpty()) }
+        }
+        val groups = groupsWithNames.sortedBy { it.second }.map { it.first }
 
         return OrganizedChannels(sorted, tree.withCounts(sorted), assignments, groups)
     }

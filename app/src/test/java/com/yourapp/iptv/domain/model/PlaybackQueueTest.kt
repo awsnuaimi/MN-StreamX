@@ -37,4 +37,18 @@ class PlaybackQueueTest {
         assertEquals("Alpha News", queue.channels.first().name)
         assertEquals(0, queue.indexOf("a"))
     }
+
+    @Test fun browsingAndPlaybackKeepTheSameFolderSearchAndFavoriteOrder() {
+        val marked = channels.map { it.copy(isFavorite = it.id != "b", folderIds = listOf("root", "source")) }
+        val input = marked + marked.first().copy(name = "Duplicate")
+        for (group in listOf(null, "News", "mnx-folder:root", "mnx-folder:missing")) {
+            for (query in listOf("", " alpha ")) for (favorites in listOf(false, true)) {
+                val rows = PlaybackQueue.filterChannels(input, group, query, favorites)
+                val queue = PlaybackQueue.create(input, group, query, favorites)
+                assertEquals(rows, queue.channels)
+                rows.forEachIndexed { index, channel -> assertEquals(index, queue.indexOf(channel.id)) }
+            }
+        }
+        assertEquals(listOf("a", "c"), PlaybackQueue.filterChannels(input, "mnx-folder:root", "alpha", true).map { it.id })
+    }
 }

@@ -22,13 +22,29 @@ internal data class LexiconEntry<T>(
 
 /** Whole-token phrases, not arbitrary substrings. Longest phrase is considered first. */
 internal object LexiconMatcher {
-    fun contains(text: String, phrase: String): Boolean =
-        (" $text ").contains(" $phrase ")
+    fun contains(text: String, phrase: String): Boolean {
+        if (phrase.isEmpty()) return text.isEmpty() || text.startsWith(' ') || text.endsWith(' ') || text.contains("  ")
+        var start = text.indexOf(phrase)
+        while (start >= 0) {
+            val end = start + phrase.length
+            if ((start == 0 || text[start - 1] == ' ') && (end == text.length || text[end] == ' ')) return true
+            start = text.indexOf(phrase, start + 1)
+        }
+        return false
+    }
 
-    fun <T> match(text: String, entries: List<LexiconEntry<T>>): LexiconEntry<T>? =
-        entries.asSequence().flatMap { entry -> entry.phrases.asSequence()
-            .filter { contains(text, it) }.map { entry to it } }
-            .sortedWith(compareByDescending<Pair<LexiconEntry<T>, String>> { it.second.split(' ').size }
-                .thenByDescending { it.second.length }.thenBy { it.first.id })
-            .firstOrNull()?.first
+    fun <T> match(text: String, entries: List<LexiconEntry<T>>): LexiconEntry<T>? {
+        var best: LexiconEntry<T>? = null
+        var words = -1
+        var length = -1
+        for (entry in entries) for (phrase in entry.phrases) {
+            if (!contains(text, phrase)) continue
+            val count = phrase.count { it == ' ' } + 1
+            if (count > words || (count == words && (phrase.length > length ||
+                    (phrase.length == length && (best == null || entry.id < best.id))))) {
+                best = entry; words = count; length = phrase.length
+            }
+        }
+        return best
+    }
 }

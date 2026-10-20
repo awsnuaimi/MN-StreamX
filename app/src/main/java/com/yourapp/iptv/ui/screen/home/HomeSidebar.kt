@@ -1,6 +1,5 @@
 package com.yourapp.iptv.ui.screen.home
 
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -23,7 +22,8 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
     loading: Boolean, returnFocus: FocusRequester, onSelect: (HomeSection) -> Unit, modifier: Modifier = Modifier, organizationReady: Boolean = true) {
     var hasFocus by remember { mutableStateOf(false) }
     val expanded = appearance.expandedSidebar || hasFocus
-    val width by animateDpAsState(if (expanded) 180.dp else 70.dp, label = "sidebarWidth")
+    // Avoid remeasuring the entire channel grid on every animation frame.
+    val width = if (expanded) 180.dp else 70.dp
     Column(modifier.width(width).fillMaxHeight().background(Color(0xFF0C1428))
         .onFocusChanged { hasFocus = it.hasFocus }.focusGroup().padding(8.dp)
         .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {

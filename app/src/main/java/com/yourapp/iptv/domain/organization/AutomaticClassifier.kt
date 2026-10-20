@@ -16,8 +16,7 @@ internal class AutomaticClassifier(private val detectGroup: (String?) -> String?
             val text = OrganizationNames.normalizeMatch(group.orEmpty())
             GroupHint(root(text), NetworkLexicon.find(text) == "bein")
         }
-        if (!NetworkLexicon.isBeinEntertainment(name) &&
-            (NetworkLexicon.find(name) == "bein" || hint.bein)) {
+        if (NetworkLexicon.isBeinSports(name, hint.bein)) {
             return AutomaticFolder("bein", null, AssignmentReason.NETWORK)
         }
         val identified = hint.root ?: detectGroup(group)?.takeIf { it in roots }

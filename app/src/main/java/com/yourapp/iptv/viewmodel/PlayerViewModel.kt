@@ -12,6 +12,7 @@ import com.yourapp.iptv.domain.model.PlaybackQueue
 import com.yourapp.iptv.domain.repository.ChannelRepository
 import com.yourapp.iptv.domain.repository.FavoriteRepository
 import com.yourapp.iptv.ui.state.PlayerUiState
+import com.yourapp.iptv.util.LoadTimings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -57,11 +58,23 @@ class PlayerViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             try {
+                val id = savedStateHandle.get<String>("channelId")
+                val selected = try {
+                    if (id == null) null else LoadTimings.measure(LoadTimings.Stage.CHANNEL_LOOKUP) {
+                        channels.getPlaybackChannel(id)
+                    }
+                } catch (error: CancellationException) { throw error }
+                catch (_: Exception) { null } // Full-list recovery remains available.
+                if (selected != null && selected.id == id) {
+                    val marked = favoriteIds?.let { selected.copy(isFavorite = selected.id in it) } ?: selected
+                    state.update { it.copy(detachedChannel = marked, isLoading = false, errorMessage = null) }
+                }
                 organizer.setChannels(channels.getChannels())
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                state.value = state.value.copy(isLoading = false, errorMessage = "تعذر فتح بيانات القناة.")
+                state.update { it.copy(isLoading = false,
+                    errorMessage = if (it.channel == null) "تعذر فتح بيانات القناة." else null) }
             }
         }
     }

@@ -83,7 +83,7 @@ internal class OrganizationController(
             val result = LoadTimings.measure(LoadTimings.Stage.ORGANIZE) {
                 withContext(background) {
                     val worker = currentCoroutineContext()
-                    ChannelOrganizer.project(source, settings) {
+                    OrganizationProjectionCache.Shared.project(source, settings) {
                         worker.ensureActive()
                     }
                 }

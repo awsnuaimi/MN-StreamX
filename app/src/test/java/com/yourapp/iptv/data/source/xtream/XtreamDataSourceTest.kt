@@ -47,7 +47,7 @@ class XtreamDataSourceTest {
         val channel = fetch().single()
         assertEquals("News", channel.categoryName)
         assertEquals("Test", channel.name)
-        assertEquals(server.url("/live/user/password/123.m3u8").toString(), channel.streamUrl)
+        assertEquals(server.url("/live/user/password/123.ts").toString(), channel.streamUrl)
         assertEquals(server.url("/icons/test.png").toString(), channel.icon)
         assertEquals("123", channel.streamId)
         assertTrue(channel.channelId.startsWith("xtream_"))
@@ -72,7 +72,7 @@ class XtreamDataSourceTest {
             assertEquals(null, request.queryParameter("old"))
         }
         val stream = channel.streamUrl.toHttpUrl()
-        assertEquals(listOf("panel", "live", username, password, "123.m3u8"), stream.pathSegments)
+        assertEquals(listOf("panel", "live", username, password, "123.ts"), stream.pathSegments)
     }
 
     @Test fun rejectedLoginStopsBeforeCategoriesAndDoesNotExposeCredentials() = runBlocking {
@@ -97,6 +97,11 @@ class XtreamDataSourceTest {
     @Test fun tsOnlyAccountsUseTsAndStringAuthIsAccepted() = runBlocking {
         success("""{"user_info":{"auth":"1","status":"Active","allowed_output_formats":["ts"]}}""")
         assertTrue(fetch().single().streamUrl.endsWith("/123.ts"))
+    }
+
+    @Test fun hlsOnlyAccountsKeepTheirSupportedFormat() = runBlocking {
+        success("""{"user_info":{"auth":1,"status":"Active","allowed_output_formats":["m3u8"]}}""")
+        assertTrue(fetch().single().streamUrl.endsWith("/123.m3u8"))
     }
 
     @Test fun unsupportedOutputFormatFailsBeforeLoadingChannels() = runBlocking {

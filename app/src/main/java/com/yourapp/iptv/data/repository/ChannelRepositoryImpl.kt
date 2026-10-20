@@ -10,6 +10,7 @@ import com.yourapp.iptv.data.mapper.toDomain
 import com.yourapp.iptv.data.source.m3u.M3uDataSource
 import com.yourapp.iptv.data.source.xtream.XtreamDataSource
 import com.yourapp.iptv.domain.model.Channel
+import com.yourapp.iptv.domain.model.ChannelFavorites
 import com.yourapp.iptv.domain.model.AppSettings
 import com.yourapp.iptv.domain.model.PlaylistCacheKey
 import com.yourapp.iptv.domain.model.PlaylistSource
@@ -31,20 +32,32 @@ class ChannelRepositoryImpl(
 ) : ChannelRepository {
     private val importLock = Mutex()
     private val snapshotLock = Mutex()
+    private var memory: List<Channel>? = null
 
     override suspend fun getCachedChannels(source: AppSettings): List<Channel>? =
         LoadTimings.measure(LoadTimings.Stage.CACHE_READ) {
             withContext(Dispatchers.IO) {
                 snapshotLock.withLock {
                     if (!source.hasSelectedSource() || snapshot.read() != PlaylistCacheKey.of(source)) null
-                    else getChannels().takeIf { it.isNotEmpty() }
+                    else readChannelsLocked().takeIf { it.isNotEmpty() }
                 }
             }
         }
 
     override suspend fun getChannels(): List<Channel> = withContext(Dispatchers.IO) {
+        snapshotLock.withLock { readChannelsLocked() }
+    }
+
+    private suspend fun readChannelsLocked(): List<Channel> {
         val favorites = favoriteDao.getAllFavorites().map { it.channelId }.toSet()
-        channelDao.getAllChannels().map { it.toDomain().copy(isFavorite = it.id in favorites) }
+        val base = memory ?: channelDao.getAllChannels().map { it.toDomain() }
+        return ChannelFavorites.apply(base, favorites).also { memory = it }
+    }
+
+    override suspend fun getPlaybackChannel(id: String): Channel? = withContext(Dispatchers.IO) {
+        snapshotLock.withLock {
+            memory?.firstOrNull { it.id == id } ?: channelDao.getChannel(id)?.toDomain()
+        }
     }
 
     override suspend fun getChannel(id: String): Channel? = withContext(Dispatchers.IO) {
@@ -85,15 +98,31 @@ class ChannelRepositoryImpl(
             withContext(Dispatchers.IO) {
                 snapshotLock.withLock {
                     currentCoroutineContext().ensureActive()
+                    val fingerprint = PlaylistCacheKey.of(source)
+                    val previous = memory
+                    if (previous != null && snapshot.read() == fingerprint && sameContent(previous, channels)) {
+                        return@withLock readChannelsLocked()
+                    }
                     // Invalidate BEFORE Room changes. A crash cannot label new rows as the old account.
                     snapshot.write(null)
                     ChannelCache.clearCache()
+                    memory = null
                     channelDao.replaceAll(channels.map { it.toEntity() })
-                    snapshot.write(PlaylistCacheKey.of(source))
-                    getChannels()
+                    snapshot.write(fingerprint)
+                    memory = channels
+                    readChannelsLocked()
                 }
             }
         }
+
+    private fun sameContent(a: List<Channel>, b: List<Channel>): Boolean {
+        if (a.size != b.size) return false
+        return a.indices.all { index ->
+            val old = a[index]; val new = b[index]
+            old.id == new.id && old.name == new.name && old.logoUrl == new.logoUrl &&
+                old.streamUrl == new.streamUrl && old.group == new.group
+        }
+    }
 
     private fun Channel.toEntity() = ChannelEntity(id, name, logoUrl, streamUrl, group)
 }
