@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="caption_title">Subtitles</string>
+    <string name="caption_off">Subtitles off</string>
+    <string name="caption_embedded">Use stream subtitles</string>
+    <string name="caption_generate">Enable local generation and download models if needed</string>
+    <string name="caption_local_description">Channel audio is processed on this device. Generated subtitles can be delayed or inaccurate. Generation stops if the device cannot keep up.</string>
+    <string name="caption_download_size">First-time model size: about %1$d MB. Downloaded models are reused.</string>
+    <string name="caption_target">Preferred subtitle language</string>
+    <string name="caption_source">Speech language: %1$s — press to change</string>
+    <string name="caption_auto">Auto-detect</string>
+    <string name="caption_small">Small</string>
+    <string name="caption_medium">Medium</string>
+    <string name="caption_large">Large</string>
+    <string name="caption_size">Text size: %1$s</string>
+    <string name="caption_background_on">Text background: on</string>
+    <string name="caption_background_off">Text background: off</string>
+    <string name="caption_tracks">Subtitle tracks available on this channel</string>
+    <string name="caption_tracks_loading">Checking stream tracks…</string>
+    <string name="caption_no_tracks">This stream has no available subtitle tracks.</string>
+    <string name="caption_checking">Checking device resources…</string>
+    <string name="caption_downloading">Preparing speech model…</string>
+    <string name="caption_loading">Loading speech engine into memory…</string>
+    <string name="caption_listening">Local generation active — waiting for speech</string>
+    <string name="caption_translation_model">Preparing local translation model…</string>
+    <string name="caption_slow">The device cannot keep up with this stream. Generation stopped to preserve playback.</string>
+    <string name="caption_low_memory">Not enough available memory for local generation.</string>
+    <string name="caption_unavailable">Local generation is unavailable on this device.</string>
+    <string name="caption_unsupported">This speech language is not supported for local generation.</string>
+    <string name="caption_failed">Could not prepare models or process audio. Check connectivity and storage, then retry.</string>
+    <string name="caption_retry">Retry generation</string>
+    <string name="caption_read_error">Could not read subtitle preferences.</string>
+    <string name="caption_save_error">Subtitle preferences were not saved.</string>
+    <string name="caption_device">Device: %1$s · CPU cores: %2$d · RAM %3$d MB · available %4$d MB</string>
+</resources>

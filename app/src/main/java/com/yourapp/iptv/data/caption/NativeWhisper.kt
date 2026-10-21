@@ -1,0 +1,13 @@
+package com.yourapp.iptv.data.caption
+
+import androidx.annotation.Keep
+
+/** Loaded only after the user enables local generation and the verified model is ready. */
+@Keep
+internal class NativeWhisper {
+    external fun create(path: String, threads: Int): Long
+    external fun decode(handle: Long, samples: FloatArray, language: String): Array<String>
+    external fun cancel(handle: Long)
+    external fun release(handle: Long)
+    companion object { init { System.loadLibrary("mnx-whisper") } }
+}

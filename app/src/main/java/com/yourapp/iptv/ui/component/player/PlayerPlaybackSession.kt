@@ -30,6 +30,26 @@ internal class PlayerPlaybackSession(
     private var wasLive = true
     private var shouldPlay = true
 
+    private var captionAudio: com.yourapp.iptv.player.caption.CaptionAudioTap? = null
+    fun configureCaptionAudio(tap: com.yourapp.iptv.player.caption.CaptionAudioTap?) {
+        if (captionAudio === tap) return
+        val running = started
+        val previousTracks = player?.trackSelectionParameters
+        val previousVolume = player?.volume
+        val previousSpeed = player?.playbackParameters
+        if (running) stop()
+        captionAudio = tap
+        controller.configureCaptionAudio(tap)
+        if (running) {
+            start()
+            player?.let { current ->
+                previousTracks?.let { current.trackSelectionParameters = it }
+                previousVolume?.let { current.volume = it }
+                previousSpeed?.let { current.playbackParameters = it }
+            }
+        }
+    }
+
     fun selectChannel(selected: Channel, retry: Int) {
         if (selected.id == channel.id && selected.streamUrl == channel.streamUrl && retry == retryToken) return
         channel = selected

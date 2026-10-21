@@ -34,6 +34,13 @@ class PlayerPanelStateTest {
         assertEquals(PlayerPanel.CARDS, history.closeTop().closeTop().panel)
         assertEquals(PlayerPanel.WATCHING, history.afterSelection().panel)
     }
+    @Test fun captionsReturnToMoreAndNeverChangeTheWatchingState() {
+        val state = PlayerPanelState().cards().more().captions()
+        assertTrue(state.isModal)
+        assertEquals(PlayerPanel.MORE, state.closeTop().panel)
+        assertEquals(PlayerPanel.CARDS, state.closeTop().closeTop().panel)
+        assertEquals(PlayerPanel.WATCHING, state.afterSelection().panel)
+    }
     @Test fun repeatedDownAndUpPressesImplementTheWholeVisibilitySequence() {
         var state = PlayerPanelState(); var next = 0; var previous = 0
         val keys = PlayerRemoteKeyGate()

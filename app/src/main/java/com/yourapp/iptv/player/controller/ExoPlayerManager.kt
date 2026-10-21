@@ -1,6 +1,8 @@
 package com.yourapp.iptv.player.controller
 
 import android.content.Context
+import com.yourapp.iptv.player.caption.CaptionAudioTap
+import com.yourapp.iptv.player.caption.CaptionRenderers
 import android.net.Uri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
@@ -14,6 +16,8 @@ import java.util.Locale
 @androidx.annotation.OptIn(UnstableApi::class)
 class ExoPlayerManager(context: Context) {
     private val appContext = context.applicationContext
+    private var captionAudio: CaptionAudioTap? = null
+    fun configureCaptionAudio(tap: CaptionAudioTap?) { captionAudio = tap }
     var player: ExoPlayer? = null
         private set
 
@@ -26,7 +30,9 @@ class ExoPlayerManager(context: Context) {
             .setPrioritizeTimeOverSizeThresholds(false)
             .setBackBuffer(0, false)
             .build()
-        player = ExoPlayer.Builder(appContext).setLoadControl(buffering).build().apply {
+        val builder = captionAudio?.let { ExoPlayer.Builder(appContext, CaptionRenderers(appContext, it)) }
+            ?: ExoPlayer.Builder(appContext)
+        player = builder.setLoadControl(buffering).build().apply {
             setAudioAttributes(AudioAttributes.DEFAULT, true)
             setHandleAudioBecomingNoisy(true)
         }

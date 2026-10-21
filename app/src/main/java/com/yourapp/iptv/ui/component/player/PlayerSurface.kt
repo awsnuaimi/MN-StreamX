@@ -2,6 +2,12 @@ package com.yourapp.iptv.ui.component.player
 
 import android.view.KeyEvent
 import android.view.View
+import android.util.TypedValue
+import androidx.media3.ui.CaptionStyleCompat
+import androidx.media3.exoplayer.ExoPlayer
+import com.yourapp.iptv.domain.model.CaptionSettings
+import com.yourapp.iptv.domain.model.CaptionMode
+import com.yourapp.iptv.player.caption.CaptionAudioTap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -34,7 +40,9 @@ fun PlayerSurface(
     controllerTimeoutMs: Int = 4500,
     technicalInfoEnabled: Boolean = false,
     onTechnicalInfo: (String, PlaybackTechnicalInfo) -> Unit = { _, _ -> },
-    onPlaybackStarted: (Channel) -> Unit = {}
+    onPlaybackStarted: (Channel) -> Unit = {},
+    captionSettings: CaptionSettings = CaptionSettings(),
+    onCaptionBinding: (ExoPlayer?, CaptionAudioTap?) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current.applicationContext
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -43,11 +51,20 @@ fun PlayerSurface(
     val handleKey by rememberUpdatedState(onRemoteKey)
     val reportControls by rememberUpdatedState(onControllerVisibilityChanged)
     val reportStarted by rememberUpdatedState(onPlaybackStarted)
+    val reportCaptionBinding by rememberUpdatedState(onCaptionBinding)
+    val audioTap = remember { CaptionAudioTap() }
+    val generatedAudio = captionSettings.mode == CaptionMode.GENERATED
     val session = remember(context) {
         PlayerPlaybackSession(PlayerController(context), channel,
             onError = { id, error -> reportError(id, error) },
             onBuffering = { id, loading -> reportBuffering(id, loading) },
             onStarted = { reportStarted(it) })
+    }
+
+    LaunchedEffect(session, generatedAudio) { session.configureCaptionAudio(if (generatedAudio) audioTap else null) }
+    DisposableEffect(session.player, generatedAudio) {
+        reportCaptionBinding(session.player, if (generatedAudio) audioTap else null)
+        onDispose { reportCaptionBinding(null, null) }
     }
 
     PlayerTechnicalInfoObserver(if (technicalInfoEnabled) session.player else null, channel.id, onTechnicalInfo)
@@ -98,6 +115,14 @@ fun PlayerSurface(
         update = { view ->
             val timeout = controllerTimeoutMs.coerceIn(3000, 8000)
             if (view.controllerShowTimeoutMs != timeout) view.controllerShowTimeoutMs = timeout
+            view.subtitleView?.apply {
+                visibility = if (captionSettings.mode == CaptionMode.EMBEDDED) View.VISIBLE else View.GONE
+                setApplyEmbeddedStyles(false)
+                setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, captionSettings.textSize.sp.toFloat())
+                setStyle(CaptionStyleCompat(android.graphics.Color.WHITE,
+                    if (captionSettings.shaded) 0xB0000000.toInt() else android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, android.graphics.Color.BLACK, null))
+            }
             view.player = session.player
             view.keepScreenOn = session.player != null
         },

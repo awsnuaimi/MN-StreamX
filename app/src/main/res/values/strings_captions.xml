@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="caption_title">الترجمة النصية</string>
+    <string name="caption_off">إيقاف الترجمة</string>
+    <string name="caption_embedded">ترجمة البث الجاهزة</string>
+    <string name="caption_generate">تشغيل التوليد المحلي وتنزيل نماذجه عند الحاجة</string>
+    <string name="caption_local_description">يُعالج صوت القناة داخل الجهاز. الترجمة المولدة قد تتأخر أو تخطئ. يُوقَف التوليد إذا تعذر على الجهاز مواكبة البث.</string>
+    <string name="caption_download_size">حجم النماذج المطلوب أول مرة: نحو %1$d ميغابايت. يُعاد استخدامها بعد التنزيل.</string>
+    <string name="caption_target">لغة الترجمة المفضلة</string>
+    <string name="caption_source">لغة الصوت: %1$s — اضغط للتغيير</string>
+    <string name="caption_auto">كشف تلقائي</string>
+    <string name="caption_small">صغير</string>
+    <string name="caption_medium">متوسط</string>
+    <string name="caption_large">كبير</string>
+    <string name="caption_size">حجم النص: %1$s</string>
+    <string name="caption_background_on">خلفية النص: مفعّلة</string>
+    <string name="caption_background_off">خلفية النص: معطّلة</string>
+    <string name="caption_tracks">مسارات الترجمة المتاحة في هذه القناة</string>
+    <string name="caption_tracks_loading">جارٍ التحقق من مسارات البث…</string>
+    <string name="caption_no_tracks">لا توجد ترجمة جاهزة متاحة في هذا البث.</string>
+    <string name="caption_checking">جارٍ فحص موارد الجهاز…</string>
+    <string name="caption_downloading">تجهيز نموذج التعرف على الكلام…</string>
+    <string name="caption_loading">جارٍ تحميل محرك الكلام في الذاكرة…</string>
+    <string name="caption_listening">التوليد المحلي يعمل — بانتظار الكلام</string>
+    <string name="caption_translation_model">تجهيز نموذج الترجمة المحلي…</string>
+    <string name="caption_slow">الجهاز لا يواكب البث حاليًا. أُوقف التوليد لحماية سلاسة المشاهدة.</string>
+    <string name="caption_low_memory">الذاكرة المتاحة غير كافية للتوليد المحلي حاليًا.</string>
+    <string name="caption_unavailable">تعذر وصول صوت مناسب أو محرك التوليد غير متاح على هذا الجهاز.</string>
+    <string name="caption_unsupported">لغة الصوت غير مدعومة للتوليد المحلي.</string>
+    <string name="caption_failed">تعذر تجهيز النماذج أو معالجة الصوت. تحقق من الشبكة والمساحة ثم أعد المحاولة.</string>
+    <string name="caption_retry">إعادة محاولة التوليد</string>
+    <string name="caption_read_error">تعذر قراءة إعدادات الترجمة.</string>
+    <string name="caption_save_error">لم يُحفظ تعديل إعدادات الترجمة.</string>
+    <string name="caption_device">الجهاز: %1$s · %2$d أنوية · الذاكرة %3$d MB · المتاح %4$d MB</string>
+</resources>

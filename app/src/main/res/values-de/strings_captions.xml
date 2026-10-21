@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="caption_title">Untertitel</string>
+    <string name="caption_off">Untertitel aus</string>
+    <string name="caption_embedded">Untertitel des Streams</string>
+    <string name="caption_generate">Lokal erzeugen und benötigte Modelle herunterladen</string>
+    <string name="caption_local_description">Der Senderton wird auf diesem Gerät verarbeitet. Erzeugte Untertitel können verzögert oder fehlerhaft sein. Bei Überlastung wird die Erzeugung gestoppt.</string>
+    <string name="caption_download_size">Modellgröße beim ersten Download: etwa %1$d MB. Heruntergeladene Modelle werden wiederverwendet.</string>
+    <string name="caption_target">Bevorzugte Untertitelsprache</string>
+    <string name="caption_source">Gesprochene Sprache: %1$s — zum Ändern drücken</string>
+    <string name="caption_auto">Automatisch erkennen</string>
+    <string name="caption_small">Klein</string>
+    <string name="caption_medium">Mittel</string>
+    <string name="caption_large">Groß</string>
+    <string name="caption_size">Schriftgröße: %1$s</string>
+    <string name="caption_background_on">Texthintergrund: an</string>
+    <string name="caption_background_off">Texthintergrund: aus</string>
+    <string name="caption_tracks">Verfügbare Untertitelspuren dieses Senders</string>
+    <string name="caption_tracks_loading">Stream-Spuren werden geprüft…</string>
+    <string name="caption_no_tracks">Dieser Stream bietet keine verfügbaren Untertitelspuren.</string>
+    <string name="caption_checking">Geräteressourcen werden geprüft…</string>
+    <string name="caption_downloading">Sprachmodell wird vorbereitet…</string>
+    <string name="caption_loading">Spracherkennung wird in den Speicher geladen…</string>
+    <string name="caption_listening">Lokale Erzeugung aktiv — warte auf Sprache</string>
+    <string name="caption_translation_model">Lokales Übersetzungsmodell wird vorbereitet…</string>
+    <string name="caption_slow">Das Gerät hält mit dem Stream nicht Schritt. Die Erzeugung wurde für eine flüssige Wiedergabe gestoppt.</string>
+    <string name="caption_low_memory">Zurzeit ist nicht genug Speicher für die lokale Erzeugung verfügbar.</string>
+    <string name="caption_unavailable">Lokale Erzeugung ist auf diesem Gerät nicht verfügbar.</string>
+    <string name="caption_unsupported">Diese gesprochene Sprache wird lokal nicht unterstützt.</string>
+    <string name="caption_failed">Modelle oder Audio konnten nicht verarbeitet werden. Verbindung und Speicher prüfen, dann erneut versuchen.</string>
+    <string name="caption_retry">Erzeugung erneut versuchen</string>
+    <string name="caption_read_error">Untertiteleinstellungen konnten nicht gelesen werden.</string>
+    <string name="caption_save_error">Untertiteleinstellungen wurden nicht gespeichert.</string>
+    <string name="caption_device">Gerät: %1$s · %2$d Kerne · RAM %3$d MB · verfügbar %4$d MB</string>
+</resources>

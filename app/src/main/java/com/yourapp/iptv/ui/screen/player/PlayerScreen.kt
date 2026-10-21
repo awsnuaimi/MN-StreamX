@@ -81,6 +81,11 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     var technical by remember(channel?.id, retry) { mutableStateOf(PlaybackTechnicalInfo()) }
     val error = if (state.sourceChanged) stringResource(R.string.history_source_changed) else state.errorMessage ?: playbackError
     val surface = remember { PlayerSurfaceHandle() }
+    val captionModel: CaptionViewModel = hiltViewModel()
+    val captionState by captionModel.uiState.collectAsStateWithLifecycle()
+    var captionPlayer by remember { mutableStateOf<androidx.media3.exoplayer.ExoPlayer?>(null) }
+    var captionAudio by remember { mutableStateOf<com.yourapp.iptv.player.caption.CaptionAudioTap?>(null) }
+    val captionSelection = rememberCaptionBinding(captionPlayer, captionAudio, channel?.id, captionState.settings, captionModel)
     val errorFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
     val activation = remember { PlayerDeckActivation() }
@@ -123,6 +128,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                 if (panels.panel == PlayerPanel.CONTROLS) surface.hideControls()
                 if (panels.panel == PlayerPanel.DETAILS) moreInitial = PlayerMoreAction.DETAILS
                 if (panels.panel == PlayerPanel.HISTORY) moreInitial = PlayerMoreAction.HISTORY
+                if (panels.panel == PlayerPanel.CAPTIONS) moreInitial = PlayerMoreAction.CAPTIONS
                 panels = panels.closeTop(); focusedId = null; focusEpoch++
             }
         }
@@ -202,7 +208,11 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
             modifier = Modifier.fillMaxSize(), controllerTimeoutMs = appearance.timeoutMillis.toInt(),
             technicalInfoEnabled = true,
             onPlaybackStarted = viewModel::onPlaybackStarted,
+            captionSettings = captionState.settings,
+            onCaptionBinding = { player, audio -> captionPlayer = player; captionAudio = audio },
             onTechnicalInfo = { id, value -> if (id == activeChannel?.id) technical = value })
+        GeneratedCaptionOverlay(captionModel, captionAudio, captionState.settings,
+            raised = panels.panel != PlayerPanel.WATCHING || bannerVisible)
         if ((cardsOpen || (bannerVisible && panels.panel == PlayerPanel.WATCHING)) && error == null) {
             PlayerInfoOverlay(channel, state.currentIndex + 1, state.queue.channels, appearance, activeEpg, technical,
                 cardsOpen, focused, preview, focusEpoch, panels.focusMore, ::openMore, ::selectChannel,
@@ -240,6 +250,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                         if (!viewModel.selectHistoryChannel(target.channel, target.sourceKey))
                             onOpenHistoryChannel(target.channel.id, target.sourceKey)
                     }
+                    PlayerMoreAction.CAPTIONS -> panels = panels.captions()
                     PlayerMoreAction.HISTORY -> panels = panels.history()
                     PlayerMoreAction.DETAILS -> panels = panels.details()
                     PlayerMoreAction.CHANNELS -> openChannels()
@@ -256,6 +267,8 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         }
         if (panels.panel == PlayerPanel.DETAILS && channel != null)
             PlayerProgramDetailsDialog(channel.name, activeEpg, appearance, ::back)
+        if (panels.panel == PlayerPanel.CAPTIONS)
+            PlayerCaptionDialog(captionModel, captionSelection, ::back)
         if (panels.panel == PlayerPanel.HISTORY) WatchHistoryDialog(channel?.id, ::back, { selected, source ->
             panels = panels.watching(); focusedId = null; focusEpoch++; showBanner()
             if (!viewModel.selectHistoryChannel(selected, source)) onOpenHistoryChannel(selected.id, source)

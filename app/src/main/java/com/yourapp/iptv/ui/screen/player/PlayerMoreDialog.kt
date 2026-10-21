@@ -28,7 +28,7 @@ import com.yourapp.iptv.ui.state.LastChannelError
 import com.yourapp.iptv.ui.state.LastChannelUiState
 import com.yourapp.iptv.ui.theme.NeonBlue
 
-internal enum class PlayerMoreAction { FAVORITE, LAST_CHANNEL, HISTORY, DETAILS, GUIDE, CHANNELS, CONTROLS, APPEARANCE, PREVIOUS, NEXT }
+internal enum class PlayerMoreAction { FAVORITE, LAST_CHANNEL, HISTORY, DETAILS, GUIDE, CHANNELS, CONTROLS, APPEARANCE, PREVIOUS, NEXT, CAPTIONS }
 
 @Composable
 internal fun PlayerMoreDialog(channel: Channel, appearance: PlayerAppearance, favorites: FavoriteUiState,
@@ -94,6 +94,7 @@ private fun MoreActionRow(action: PlayerMoreAction, isFavorite: Boolean, favorit
             lastChannel.isLoading -> R.string.last_channel_loading
             else -> R.string.last_channel_title
         }
+        PlayerMoreAction.CAPTIONS -> R.string.caption_title
         PlayerMoreAction.HISTORY -> R.string.history_title
         PlayerMoreAction.GUIDE -> R.string.player_guide
         PlayerMoreAction.CHANNELS -> R.string.player_channels
@@ -106,6 +107,7 @@ private fun MoreActionRow(action: PlayerMoreAction, isFavorite: Boolean, favorit
         PlayerMoreAction.FAVORITE -> DeckIcon.FAVORITE
         PlayerMoreAction.DETAILS -> DeckIcon.DETAILS
         PlayerMoreAction.LAST_CHANNEL -> DeckIcon.LAST_CHANNEL
+        PlayerMoreAction.CAPTIONS -> DeckIcon.DETAILS
         PlayerMoreAction.HISTORY -> DeckIcon.HISTORY
         PlayerMoreAction.GUIDE -> DeckIcon.GUIDE
         PlayerMoreAction.CHANNELS -> DeckIcon.CHANNELS

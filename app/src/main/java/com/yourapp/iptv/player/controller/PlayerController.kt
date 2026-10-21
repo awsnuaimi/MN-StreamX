@@ -9,6 +9,7 @@ class PlayerController(context: Context) {
     private val manager = ExoPlayerManager(context.applicationContext)
     val player: ExoPlayer? get() = manager.player
 
+    fun configureCaptionAudio(tap: com.yourapp.iptv.player.caption.CaptionAudioTap?) = manager.configureCaptionAudio(tap)
     fun initialize() = manager.initialize()
     fun playUrl(url: String, mediaId: String = "", title: String? = null) = manager.play(url, mediaId, title)
     fun pause() = manager.pause()

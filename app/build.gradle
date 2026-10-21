@@ -38,6 +38,7 @@ if (stableSigningReady && !file(stableStore).isFile()) {
 android {
     namespace 'com.yourapp.iptv'
     compileSdk 35
+    ndkVersion "27.2.12479018"
 
     defaultConfig {
         applicationId 'com.yourapp.iptv'
@@ -45,6 +46,17 @@ android {
         targetSdk 35
         versionCode updateVersionCode.toInteger()
         versionName updateVersionName
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                targets 'mnx-whisper'
+                def localWhisper = providers.gradleProperty('captionWhisperSource').orNull
+                if (localWhisper) arguments "-DWHISPER_SOURCE_DIR=${localWhisper}"
+                def localPieces = providers.gradleProperty('captionSentencePieceSource').orNull
+                if (localPieces) arguments "-DSENTENCEPIECE_SOURCE_DIR=${localPieces}"
+            }
+        }
     }
 
     signingConfigs {
@@ -68,6 +80,10 @@ android {
             if (stableSigningReady) signingConfig signingConfigs.stable
         }
     }
+
+    externalNativeBuild { cmake { path file('src/main/cpp/CMakeLists.txt'); version '3.22.1' } }
+
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir("generated/captionNotices"))
 
     buildFeatures {
         compose true
@@ -100,6 +116,7 @@ tasks.configureEach { task ->
 }
 
 dependencies {
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
     implementation "androidx.media3:media3-exoplayer-hls:$media3_version"
     implementation 'androidx.core:core-ktx:1.13.1'
@@ -139,3 +156,38 @@ dependencies {
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1'
 }
+// Preserve upstream native-runtime notices in every distributed APK.
+// This public text is fetched at build time, bounded and pinned, not at player startup.
+def captionNotices = tasks.register('prepareCaptionNotices') {
+    def target = layout.buildDirectory.file('generated/captionNotices/onnxruntime-ThirdPartyNotices.txt')
+    def expected = 'cf7342f7ba482ef715ae58f5f497a8d3564fa255164175aea324cd293c5701a0'
+    inputs.property('noticeSha256', expected)
+    outputs.file(target)
+    doLast {
+        def destination = target.get().asFile
+        destination.parentFile.mkdirs()
+        def temporary = new File(destination.parentFile, 'notice.part')
+        try {
+            def connection = new URL('https://raw.githubusercontent.com/microsoft/onnxruntime/v1.20.0/ThirdPartyNotices.txt').openConnection()
+            connection.connectTimeout = 30000
+            connection.readTimeout = 30000
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+            connection.inputStream.withCloseable { input ->
+                temporary.withOutputStream { output ->
+                    byte[] buffer = new byte[16384]
+                    long total = 0
+                    int count
+                    while ((count = input.read(buffer)) != -1) {
+                        total += count
+                        if (total > 600000) throw new GradleException('Caption notice exceeds its pinned size limit.')
+                        output.write(buffer, 0, count)
+                        digest.update(buffer, 0, count)
+                    }
+                }
+            }
+            if (digest.digest().encodeHex().toString() != expected) throw new GradleException('Caption notice checksum mismatch.')
+            java.nio.file.Files.move(temporary.toPath(), destination.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        } finally { temporary.delete() }
+    }
+}
+tasks.named('preBuild').configure { dependsOn(captionNotices) }
