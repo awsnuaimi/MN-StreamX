@@ -18,6 +18,7 @@ internal fun HomeSidebarIcon(section: HomeSection, color: Color) {
     when (section) {
         HomeSection.FAVORITES -> PlayerDeckIcon(DeckIcon.FAVORITE, color)
         HomeSection.GUIDE -> PlayerDeckIcon(DeckIcon.GUIDE, color)
+        HomeSection.HISTORY -> PlayerDeckIcon(DeckIcon.HISTORY, color)
         else -> Canvas(Modifier.size(26.dp)) {
             scale(size.width / 24f, size.height / 24f, pivot = Offset.Zero) {
                 val stroke = Stroke(1.8f)

@@ -26,7 +26,7 @@ import com.yourapp.iptv.ui.screen.player.deck.*
 import com.yourapp.iptv.ui.state.FavoriteUiState
 import com.yourapp.iptv.ui.theme.NeonBlue
 
-internal enum class PlayerMoreAction { FAVORITE, DETAILS, GUIDE, CHANNELS, CONTROLS, APPEARANCE, PREVIOUS, NEXT }
+internal enum class PlayerMoreAction { FAVORITE, HISTORY, DETAILS, GUIDE, CHANNELS, CONTROLS, APPEARANCE, PREVIOUS, NEXT }
 
 @Composable
 internal fun PlayerMoreDialog(channel: Channel, appearance: PlayerAppearance, favorites: FavoriteUiState,
@@ -83,6 +83,7 @@ private fun MoreActionRow(action: PlayerMoreAction, isFavorite: Boolean, favorit
             else -> R.string.player_favorite_add
         }
         PlayerMoreAction.DETAILS -> R.string.player_details
+        PlayerMoreAction.HISTORY -> R.string.history_title
         PlayerMoreAction.GUIDE -> R.string.player_guide
         PlayerMoreAction.CHANNELS -> R.string.player_channels
         PlayerMoreAction.CONTROLS -> R.string.player_controls
@@ -93,6 +94,7 @@ private fun MoreActionRow(action: PlayerMoreAction, isFavorite: Boolean, favorit
     val icon = when (action) {
         PlayerMoreAction.FAVORITE -> DeckIcon.FAVORITE
         PlayerMoreAction.DETAILS -> DeckIcon.DETAILS
+        PlayerMoreAction.HISTORY -> DeckIcon.HISTORY
         PlayerMoreAction.GUIDE -> DeckIcon.GUIDE
         PlayerMoreAction.CHANNELS -> DeckIcon.CHANNELS
         PlayerMoreAction.CONTROLS -> DeckIcon.CONTROLS

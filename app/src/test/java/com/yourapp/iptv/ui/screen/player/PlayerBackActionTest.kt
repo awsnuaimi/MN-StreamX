@@ -12,6 +12,7 @@ class PlayerBackActionTest {
         assertEquals(PlayerBackAction.CLOSE_DETAILS, playerBackAction(PlayerPanel.DETAILS))
         assertEquals(PlayerBackAction.CLOSE_MORE, playerBackAction(PlayerPanel.MORE))
         assertEquals(PlayerBackAction.CLOSE_CHANNELS, playerBackAction(PlayerPanel.CHANNELS))
+        assertEquals(PlayerBackAction.CLOSE_HISTORY, playerBackAction(PlayerPanel.HISTORY))
     }
     @Test fun nativeControlsCloseBeforeExiting() {
         assertEquals(PlayerBackAction.HIDE_CONTROLS, playerBackAction(PlayerPanel.CONTROLS))

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="history_title">Recently watched</string>
+    <string name="history_hint">The last 20 channels that started showing, in viewing order. Each source has its own history.</string>
+    <string name="history_empty">No available channels in your viewing history yet.</string>
+    <string name="history_missing">%1$d saved channels are missing from the current list. You can refresh channels from Home.</string>
+    <string name="history_source">Add a channel source in settings first.</string>
+    <string name="history_source_changed">The channel source changed. Go back and select the channel again.</string>
+    <string name="history_read_error">Could not read viewing history.</string>
+    <string name="history_channels_error">Could not read current channel data.</string>
+    <string name="history_write_error">Could not save the history change. Try again.</string>
+    <string name="history_retry">Retry</string>
+    <string name="history_remove">Remove</string>
+    <string name="history_clear">Clear history</string>
+    <string name="history_clear_question">Clear viewing history for this source?</string>
+    <string name="history_cancel">Cancel</string>
+    <string name="history_close">Back</string>
+    <string name="history_playing">Playing now</string>
+    <string name="history_saving">Saving…</string>
+</resources>

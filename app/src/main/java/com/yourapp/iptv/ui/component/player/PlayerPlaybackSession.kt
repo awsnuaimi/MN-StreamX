@@ -16,7 +16,8 @@ internal class PlayerPlaybackSession(
     private val controller: PlayerController,
     initialChannel: Channel,
     private val onError: (String, String?) -> Unit,
-    private val onBuffering: (String, Boolean) -> Unit
+    private val onBuffering: (String, Boolean) -> Unit,
+    private val onStarted: (Channel) -> Unit = {}
 ) {
     var player by mutableStateOf<ExoPlayer?>(null)
         private set
@@ -62,6 +63,7 @@ internal class PlayerPlaybackSession(
                 if (!isCurrent() || firstFrameRecorded) return
                 firstFrameRecorded = true
                 LoadTimings.recordSince(LoadTimings.Stage.FIRST_FRAME, startedAt)
+                onStarted(selected)
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {

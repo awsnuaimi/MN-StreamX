@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="history_title">شوهد مؤخرًا</string>
+    <string name="history_hint">آخر 20 قناة بدأ عرضها، بترتيب المشاهدة ولكل مصدر سجل مستقل.</string>
+    <string name="history_empty">لا توجد قنوات متاحة في سجل المشاهدة بعد.</string>
+    <string name="history_missing">%1$d قناة محفوظة غير موجودة في القائمة الحالية. يمكنك تحديث القنوات من الرئيسية.</string>
+    <string name="history_source">أضف مصدر القنوات من الإعدادات أولًا.</string>
+    <string name="history_source_changed">تغير مصدر القنوات. ارجع إلى القائمة واختر القناة مجددًا.</string>
+    <string name="history_read_error">تعذر قراءة سجل المشاهدة.</string>
+    <string name="history_channels_error">تعذر قراءة بيانات القنوات الحالية.</string>
+    <string name="history_write_error">تعذر حفظ تعديل السجل. أعد المحاولة.</string>
+    <string name="history_retry">إعادة المحاولة</string>
+    <string name="history_remove">إزالة من السجل</string>
+    <string name="history_clear">مسح السجل</string>
+    <string name="history_clear_question">هل تريد مسح سجل المشاهدة لهذا المصدر؟</string>
+    <string name="history_cancel">إلغاء</string>
+    <string name="history_close">رجوع</string>
+    <string name="history_playing">تعرض الآن</string>
+    <string name="history_saving">جارٍ الحفظ…</string>
+</resources>

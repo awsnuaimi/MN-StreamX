@@ -33,7 +33,8 @@ fun PlayerSurface(
     modifier: Modifier = Modifier,
     controllerTimeoutMs: Int = 4500,
     technicalInfoEnabled: Boolean = false,
-    onTechnicalInfo: (String, PlaybackTechnicalInfo) -> Unit = { _, _ -> }
+    onTechnicalInfo: (String, PlaybackTechnicalInfo) -> Unit = { _, _ -> },
+    onPlaybackStarted: (Channel) -> Unit = {}
 ) {
     val context = LocalContext.current.applicationContext
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -41,10 +42,12 @@ fun PlayerSurface(
     val reportBuffering by rememberUpdatedState(onBuffering)
     val handleKey by rememberUpdatedState(onRemoteKey)
     val reportControls by rememberUpdatedState(onControllerVisibilityChanged)
+    val reportStarted by rememberUpdatedState(onPlaybackStarted)
     val session = remember(context) {
         PlayerPlaybackSession(PlayerController(context), channel,
             onError = { id, error -> reportError(id, error) },
-            onBuffering = { id, loading -> reportBuffering(id, loading) })
+            onBuffering = { id, loading -> reportBuffering(id, loading) },
+            onStarted = { reportStarted(it) })
     }
 
     PlayerTechnicalInfoObserver(if (technicalInfoEnabled) session.player else null, channel.id, onTechnicalInfo)

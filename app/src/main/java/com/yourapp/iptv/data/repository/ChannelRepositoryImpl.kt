@@ -48,6 +48,16 @@ class ChannelRepositoryImpl(
         snapshotLock.withLock { readChannelsLocked() }
     }
 
+    override suspend fun getPlaybackChannels(source: AppSettings, ids: Set<String>): List<Channel> = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext emptyList()
+        snapshotLock.withLock {
+            if (!source.hasSelectedSource() || snapshot.read() != PlaylistCacheKey.of(source)) return@withLock emptyList()
+            val cached = memory
+            if (cached != null) cached.filter { it.id in ids }
+            else ids.mapNotNull { channelDao.getChannel(it)?.toDomain() }
+        }
+    }
+
     private suspend fun readChannelsLocked(): List<Channel> {
         val favorites = favoriteDao.getAllFavorites().map { it.channelId }.toSet()
         val base = memory ?: channelDao.getAllChannels().map { it.toDomain() }

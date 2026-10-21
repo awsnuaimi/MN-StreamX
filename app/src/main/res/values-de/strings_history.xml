@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="history_title">Zuletzt angesehen</string>
+    <string name="history_hint">Die letzten 20 Sender mit gestarteter Bildwiedergabe, nach Aufruf sortiert. Jede Quelle hat einen eigenen Verlauf.</string>
+    <string name="history_empty">Noch keine verfügbaren Sender im Verlauf.</string>
+    <string name="history_missing">%1$d gespeicherte Sender fehlen in der aktuellen Liste. Die Senderliste kann auf der Startseite aktualisiert werden.</string>
+    <string name="history_source">Zuerst eine Senderquelle in den Einstellungen hinzufügen.</string>
+    <string name="history_source_changed">Die Senderquelle wurde geändert. Zurückgehen und den Sender erneut auswählen.</string>
+    <string name="history_read_error">Der Verlauf konnte nicht gelesen werden.</string>
+    <string name="history_channels_error">Die aktuellen Senderdaten konnten nicht gelesen werden.</string>
+    <string name="history_write_error">Die Änderung konnte nicht gespeichert werden. Erneut versuchen.</string>
+    <string name="history_retry">Erneut versuchen</string>
+    <string name="history_remove">Entfernen</string>
+    <string name="history_clear">Verlauf löschen</string>
+    <string name="history_clear_question">Den Verlauf für diese Quelle löschen?</string>
+    <string name="history_cancel">Abbrechen</string>
+    <string name="history_close">Zurück</string>
+    <string name="history_playing">Läuft gerade</string>
+    <string name="history_saving">Wird gespeichert…</string>
+</resources>

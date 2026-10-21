@@ -3,6 +3,9 @@ package com.yourapp.iptv.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import com.yourapp.iptv.domain.organization.*
 import com.yourapp.iptv.domain.repository.OrganizationRepository
+import com.yourapp.iptv.domain.repository.WatchHistoryRepository
+import com.yourapp.iptv.domain.repository.SettingsRepository
+import kotlinx.coroutines.flow.first
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.di.DefaultDispatcher
@@ -30,7 +33,9 @@ class PlayerViewModel @Inject constructor(
     private val channels: ChannelRepository,
     @DefaultDispatcher private val background: CoroutineDispatcher,
     favorites: FavoriteRepository,
-    organization: OrganizationRepository = OrganizationRepository.Disabled
+    organization: OrganizationRepository = OrganizationRepository.Disabled,
+    history: WatchHistoryRepository = WatchHistoryRepository.Disabled,
+    private val settings: SettingsRepository? = null
 ) : ViewModel() {
     private val state = MutableStateFlow(PlayerUiState(
         selectedGroup = savedStateHandle["group"],
@@ -47,6 +52,7 @@ class PlayerViewModel @Inject constructor(
         rebuildQueue()
     }
     val favoriteState = favoriteController.uiState
+    private val historyRecorder = PlaybackHistoryRecorder(history) { state.value.channel }
     private val organizer = OrganizationController(viewModelScope, organization, background) { result ->
         available = result.channels
         val group = result.resolveFilter(state.value.selectedGroup)
@@ -58,6 +64,15 @@ class PlayerViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             try {
+                val source = try { settings?.observeSettings()?.first() }
+                catch (error: CancellationException) { throw error }
+                catch (_: Exception) { null }
+                historyRecorder.bind(source)
+                val expected = savedStateHandle.get<String>("sourceKey")
+                if (expected != null && expected != historyRecorder.sourceKey) {
+                    state.update { it.copy(isLoading = false, sourceChanged = true) }
+                    return@launch
+                }
                 val id = savedStateHandle.get<String>("channelId")
                 val selected = try {
                     if (id == null) null else LoadTimings.measure(LoadTimings.Stage.CHANNEL_LOOKUP) {
@@ -82,6 +97,26 @@ class PlayerViewModel @Inject constructor(
     fun toggleFavorite() { state.value.channel?.let { favoriteController.toggle(it.id) } }
 
     fun retryFavorites() = favoriteController.retry()
+
+    fun onPlaybackStarted(channel: Channel) = historyRecorder.onFirstFrame(channel)
+
+    /** Reuse the running player and cached full queue when the selected metadata still matches. */
+    fun selectHistoryChannel(selected: Channel, sourceKey: String): Boolean {
+        if (historyRecorder.sourceKey != sourceKey) return false
+        val snapshot = state.value
+        val index = snapshot.queue.indexOf(selected.id)
+        val present = snapshot.queue.channels.getOrNull(index) ?: available?.firstOrNull { it.id == selected.id } ?: return false
+        if (present.streamUrl != selected.streamUrl) return false
+        if (state.value.channel?.id == present.id && state.value.channel?.streamUrl == present.streamUrl) return true
+        if (index >= 0) { selectChannel(present.id); return true }
+        savedStateHandle["channelId"] = present.id
+        savedStateHandle["group"] = null
+        savedStateHandle["query"] = ""
+        savedStateHandle["favoritesOnly"] = false
+        state.update { it.copy(selectedGroup = null, query = "", favoritesOnly = false, errorMessage = null) }
+        rebuildQueue()
+        return true
+    }
 
     fun nextChannel() = moveChannel(1)
 

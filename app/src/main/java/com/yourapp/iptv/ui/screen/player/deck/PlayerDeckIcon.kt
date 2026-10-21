@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class DeckIcon { GUIDE, CHANNELS, FAVORITE, CONTROLS, DETAILS, APPEARANCE, PREVIOUS, NEXT, BACK, MORE }
+enum class DeckIcon { GUIDE, CHANNELS, FAVORITE, CONTROLS, DETAILS, APPEARANCE, PREVIOUS, NEXT, BACK, MORE, HISTORY }
 
 @Composable
 internal fun PlayerDeckIcon(icon: DeckIcon, color: Color, size: Dp = 26.dp, filled: Boolean = false) {
@@ -31,6 +31,11 @@ internal fun PlayerDeckIcon(icon: DeckIcon, color: Color, size: Dp = 26.dp, fill
                 DeckIcon.GUIDE -> {
                     drawRoundRect(color, Offset(3f, 4f), Size(18f, 16f), CornerRadius(1.5f), style = stroke)
                     line(8f, 4f, 8f, 20f); line(3f, 9f, 21f, 9f); line(3f, 14f, 21f, 14f)
+                }
+                DeckIcon.HISTORY -> {
+                    drawArc(color, -80f, 300f, false, Offset(4f, 4f), Size(16f, 16f), style = stroke)
+                    line(12f, 7f, 12f, 12f); line(12f, 12f, 16f, 14f)
+                    line(2f, 6f, 4f, 11f); line(4f, 11f, 8f, 8f)
                 }
                 DeckIcon.CHANNELS -> for (y in listOf(6f, 12f, 18f)) {
                     drawCircle(color, 1f, Offset(4f, y)); line(8f, y, 21f, y)

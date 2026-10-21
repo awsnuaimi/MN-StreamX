@@ -138,6 +138,23 @@ class ChannelSnapshotTest {
         assertEquals(0, database.reads)
     }
 
+    @Test fun historyLookupReadsOnlyRequestedRowsAndChecksSnapshotProvenance() = runBlocking {
+        stamp.value = PlaylistCacheKey.of(source)
+        val rows = repository().getPlaybackChannels(source, setOf("legacy", "deleted"))
+        assertEquals(listOf("legacy"), rows.map { it.id })
+        assertEquals(0, database.reads); assertEquals(2, database.lookups)
+        assertTrue(repository().getPlaybackChannels(source.copy(m3uUrl = "https://unit.test/other"), setOf("legacy")).isEmpty())
+        assertEquals(2, database.lookups)
+    }
+
+    @Test fun aWarmHistoryLookupReusesMemoryWithoutAnotherTableOrPerRowRead() = runBlocking {
+        val repository = repository()
+        stamp.value = PlaylistCacheKey.of(source)
+        repository.getChannels()
+        assertEquals("legacy", repository.getPlaybackChannels(source, setOf("legacy")).single().id)
+        assertEquals(1, database.reads); assertEquals(0, database.lookups)
+    }
+
     private fun repository() = ChannelRepositoryImpl(M3uDataSource(client), XtreamDataSource(client),
         database, favoriteRows, stamp)
 
@@ -160,11 +177,12 @@ class ChannelSnapshotTest {
         var failWrite = false
         var gate: CompletableDeferred<Unit>? = null
         var reads = 0
+        var lookups = 0
         var replacements = 0
         val writeStarted = CompletableDeferred<Unit>()
         override suspend fun insertChannels(channels: List<ChannelEntity>) { values = channels }
         override suspend fun getAllChannels(): List<ChannelEntity> { reads++; return values }
-        override suspend fun getChannel(id: String) = values.firstOrNull { it.id == id }
+        override suspend fun getChannel(id: String): ChannelEntity? { lookups++; return values.firstOrNull { it.id == id } }
         override suspend fun clearAll() { values = emptyList() }
         override suspend fun replaceAll(channels: List<ChannelEntity>) {
             replacements++

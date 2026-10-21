@@ -35,7 +35,8 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
     appearanceViewModel: HomeAppearanceViewModel = hiltViewModel(),
     onHomeAppearance: () -> Unit = {},
-    onOrganization: () -> Unit = {}
+    onOrganization: () -> Unit = {},
+    onHistory: () -> Unit = {}
 ) {
     HomeSessionLifecycle(viewModel)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -84,6 +85,7 @@ fun HomeScreen(
         when (section) {
             HomeSection.LIVE, HomeSection.FAVORITES -> { searching = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
             HomeSection.SEARCH -> searching = true
+            HomeSection.HISTORY -> onHistory()
             HomeSection.GUIDE -> onOpenGuide(state.selectedChannelId, state.selectedGroup, state.query, state.favoritesOnly)
             HomeSection.SETTINGS -> onSettings()
             HomeSection.APPEARANCE -> onHomeAppearance()

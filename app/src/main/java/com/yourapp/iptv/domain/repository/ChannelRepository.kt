@@ -7,6 +7,9 @@ interface ChannelRepository {
     /** Optional fast path: selected channel only, without preparing the full queue. */
     suspend fun getPlaybackChannel(id: String): Channel? = null
     suspend fun getCachedChannels(source: AppSettings): List<Channel>? = null
+    /** Current-source lookup for a small set of IDs, without preparing the full browsing queue. */
+    suspend fun getPlaybackChannels(source: AppSettings, ids: Set<String>): List<Channel> =
+        getCachedChannels(source).orEmpty().filter { it.id in ids }
     suspend fun getChannels(): List<Channel>
     suspend fun getChannel(id: String): Channel?
     suspend fun loadFromM3u(url: String): List<Channel>

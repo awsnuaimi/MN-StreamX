@@ -13,7 +13,8 @@ data class PlayerUiState(
     val query: String = "",
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
-    val organization: OrganizationTree = OrganizationTree()
+    val organization: OrganizationTree = OrganizationTree(),
+    val sourceChanged: Boolean = false
 ) {
     val channel: Channel? get() = queue.channels.getOrNull(currentIndex) ?: detachedChannel
     val canChangeChannel: Boolean get() = channel != null &&

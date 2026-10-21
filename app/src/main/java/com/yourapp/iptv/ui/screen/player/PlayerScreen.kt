@@ -15,6 +15,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.res.stringResource
+import com.yourapp.iptv.R
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -24,6 +26,7 @@ import androidx.media3.common.util.UnstableApi
 import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
 import com.yourapp.iptv.ui.component.player.*
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
+import com.yourapp.iptv.ui.screen.history.WatchHistoryDialog
 import com.yourapp.iptv.viewmodel.*
 import kotlinx.coroutines.delay
 
@@ -37,7 +40,8 @@ fun PlayerScreen(
     onAppearance: () -> Unit = {},
     onGuide: (String?, String?, String, Boolean) -> Unit = { _, _, _, _ -> },
     previewViewModel: PlayerEpgViewModel = hiltViewModel(key = "deck-preview-epg"),
-    homeAppearanceViewModel: HomeAppearanceViewModel = hiltViewModel()
+    homeAppearanceViewModel: HomeAppearanceViewModel = hiltViewModel(),
+    onOpenHistoryChannel: (String, String) -> Unit = { _, _ -> }
 ) {
     val home by homeAppearanceViewModel.appearance.collectAsStateWithLifecycle()
     val language = home?.language
@@ -46,7 +50,8 @@ fun PlayerScreen(
         return
     }
     LocalizedPlayer(language) {
-        PlayerScreenContent(onBack, viewModel, epgViewModel, appearanceViewModel, onAppearance, onGuide, previewViewModel)
+        PlayerScreenContent(onBack, viewModel, epgViewModel, appearanceViewModel, onAppearance, onGuide,
+            previewViewModel, onOpenHistoryChannel)
     }
 }
 
@@ -55,7 +60,7 @@ fun PlayerScreen(
 private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerViewModel,
     epgViewModel: PlayerEpgViewModel, appearanceViewModel: PlayerAppearanceViewModel,
     onAppearance: () -> Unit, onGuide: (String?, String?, String, Boolean) -> Unit,
-    previewViewModel: PlayerEpgViewModel) {
+    previewViewModel: PlayerEpgViewModel, onOpenHistoryChannel: (String, String) -> Unit) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
     val epg by epgViewModel.uiState.collectAsStateWithLifecycle()
@@ -73,7 +78,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     var playbackError by remember(channel?.id, retry) { mutableStateOf<String?>(null) }
     var buffering by remember(channel?.id, retry) { mutableStateOf(true) }
     var technical by remember(channel?.id, retry) { mutableStateOf(PlaybackTechnicalInfo()) }
-    val error = state.errorMessage ?: playbackError
+    val error = if (state.sourceChanged) stringResource(R.string.history_source_changed) else state.errorMessage ?: playbackError
     val surface = remember { PlayerSurfaceHandle() }
     val errorFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
@@ -116,6 +121,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
             else -> {
                 if (panels.panel == PlayerPanel.CONTROLS) surface.hideControls()
                 if (panels.panel == PlayerPanel.DETAILS) moreInitial = PlayerMoreAction.DETAILS
+                if (panels.panel == PlayerPanel.HISTORY) moreInitial = PlayerMoreAction.HISTORY
                 panels = panels.closeTop(); focusedId = null; focusEpoch++
             }
         }
@@ -194,6 +200,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
             },
             modifier = Modifier.fillMaxSize(), controllerTimeoutMs = appearance.timeoutMillis.toInt(),
             technicalInfoEnabled = true,
+            onPlaybackStarted = viewModel::onPlaybackStarted,
             onTechnicalInfo = { id, value -> if (id == activeChannel?.id) technical = value })
         if ((cardsOpen || (bannerVisible && panels.panel == PlayerPanel.WATCHING)) && error == null) {
             PlayerInfoOverlay(channel, state.currentIndex + 1, state.queue.channels, appearance, activeEpg, technical,
@@ -212,6 +219,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
             onAction = { action ->
                 when (action) {
                     PlayerMoreAction.FAVORITE -> viewModel.toggleFavorite()
+                    PlayerMoreAction.HISTORY -> panels = panels.history()
                     PlayerMoreAction.DETAILS -> panels = panels.details()
                     PlayerMoreAction.CHANNELS -> openChannels()
                     PlayerMoreAction.GUIDE -> {
@@ -226,5 +234,9 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
             }, onRetryFavorites = viewModel::retryFavorites)
         if (panels.panel == PlayerPanel.DETAILS && channel != null)
             PlayerProgramDetailsDialog(channel.name, activeEpg, appearance, ::back)
+        if (panels.panel == PlayerPanel.HISTORY) WatchHistoryDialog(channel?.id, ::back, { selected, source ->
+            panels = panels.watching(); focusedId = null; focusEpoch++; showBanner()
+            if (!viewModel.selectHistoryChannel(selected, source)) onOpenHistoryChannel(selected.id, source)
+        })
     }
 }

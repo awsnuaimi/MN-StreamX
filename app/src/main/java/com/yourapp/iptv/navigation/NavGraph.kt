@@ -16,6 +16,7 @@ import com.yourapp.iptv.ui.screen.player.PlayerScreen
 import com.yourapp.iptv.ui.screen.organization.OrganizationScreen
 import com.yourapp.iptv.ui.screen.settings.SettingsScreen
 import com.yourapp.iptv.ui.screen.appearance.PlayerAppearanceScreen
+import com.yourapp.iptv.ui.screen.history.WatchHistoryScreen
 
 @Composable
 fun AppNavGraph() {
@@ -25,6 +26,7 @@ fun AppNavGraph() {
             val returnedChannel by entry.savedStateHandle
                 .getStateFlow<String?>("lastPlayedChannelId", null).collectAsStateWithLifecycle()
             HomeScreen(
+                onHistory = { nav.navigate(Destinations.HISTORY) { launchSingleTop = true } },
                 onOrganization = { nav.navigate("organization") { launchSingleTop = true } },
                 onHomeAppearance = { nav.navigate("home_appearance") { launchSingleTop = true } },
                 returnedChannelId = returnedChannel,
@@ -60,6 +62,11 @@ fun AppNavGraph() {
             )
         }
         composable("organization") { OrganizationScreen(onBack = { nav.popBackStack() }) }
+        composable(Destinations.HISTORY) {
+            WatchHistoryScreen(onBack = { nav.popBackStack() }, onPlay = { id, source ->
+                nav.navigate(historyPlayerRoute(id, source)) { launchSingleTop = true }
+            })
+        }
         composable("home_appearance") { HomeAppearanceScreen(onBack = { nav.popBackStack() }) }
         composable(Destinations.PLAYER_APPEARANCE) {
             PlayerAppearanceScreen(onBack = { nav.popBackStack() })
@@ -77,19 +84,27 @@ fun AppNavGraph() {
                 onBack = { nav.popBackStack() }
             )
         }
-        composable(Destinations.PLAYER, arguments = listOf(
+        for (playerDestination in listOf(Destinations.PLAYER, Destinations.HISTORY_PLAYER)) {
+        composable(playerDestination, arguments = listOf(
             navArgument("channelId") { type = NavType.StringType },
             navArgument("group") { type = NavType.StringType; nullable = true; defaultValue = null },
             navArgument("query") { type = NavType.StringType; defaultValue = "" },
-            navArgument("favoritesOnly") { type = NavType.BoolType; defaultValue = false }
+            navArgument("favoritesOnly") { type = NavType.BoolType; defaultValue = false },
+            navArgument("sourceKey") { type = NavType.StringType; nullable = true; defaultValue = null }
         )) {
             PlayerScreen(onAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
+                onOpenHistoryChannel = { id, source ->
+                    nav.navigate(historyPlayerRoute(id, source)) {
+                        popUpTo(playerDestination) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
                 onGuide = { id, group, query, favoritesOnly ->
                     val previous = nav.previousBackStackEntry
                     if (id != null) previous?.savedStateHandle?.set("lastPlayedChannelId", id)
                     if (previous?.destination?.route == Destinations.EPG) nav.popBackStack()
                     else nav.navigate(playerGuideRoute(id, group, query, favoritesOnly)) {
-                        popUpTo(Destinations.PLAYER) { inclusive = true }
+                        popUpTo(playerDestination) { inclusive = true }
                         launchSingleTop = true
                     }
                 },
@@ -100,6 +115,7 @@ fun AppNavGraph() {
                 nav.popBackStack()
             })
         }
+        }
     }
 }
 
@@ -107,6 +123,9 @@ private fun playerRoute(id: String, group: String?, query: String, favoritesOnly
     append("player/${Uri.encode(id)}?query=${Uri.encode(query)}&favoritesOnly=$favoritesOnly")
     if (group != null) append("&group=${Uri.encode(group)}")
 }
+
+private fun historyPlayerRoute(id: String, sourceKey: String) =
+    "history-player/${Uri.encode(id)}?sourceKey=${Uri.encode(sourceKey)}"
 
 private fun playerGuideRoute(id: String?, group: String?, query: String, favoritesOnly: Boolean): String = buildString {
     append("epg?query=${Uri.encode(query)}&favoritesOnly=$favoritesOnly")
