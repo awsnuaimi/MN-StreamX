@@ -5,6 +5,11 @@ import com.yourapp.iptv.data.datastore.ChannelSnapshotDataStore
 import com.yourapp.iptv.data.local.AppDatabase
 import com.yourapp.iptv.data.repository.ChannelRepositoryImpl
 import com.yourapp.iptv.data.repository.PlaylistRepositoryImpl
+import com.yourapp.iptv.data.repository.FileHomeStartupRepository
+import com.yourapp.iptv.domain.repository.HomeStartupRepository
+import com.yourapp.iptv.domain.repository.SettingsRepository
+import com.yourapp.iptv.domain.repository.OrganizationRepository
+import java.io.File
 import com.yourapp.iptv.data.source.m3u.M3uDataSource
 import com.yourapp.iptv.data.source.xtream.XtreamDataSource
 import com.yourapp.iptv.domain.repository.ChannelRepository
@@ -33,4 +38,9 @@ object RepositoryModule {
     @Singleton
     fun providePlaylists(channels: ChannelRepository): PlaylistRepository =
         PlaylistRepositoryImpl(channels)
+
+    @Provides @Singleton
+    fun provideHomeStartup(@ApplicationContext context: Context, settings: SettingsRepository,
+        organization: OrganizationRepository): HomeStartupRepository = FileHomeStartupRepository(
+        File(context.noBackupFilesDir, "home_catalog_v24.bin"), settings, organization)
 }

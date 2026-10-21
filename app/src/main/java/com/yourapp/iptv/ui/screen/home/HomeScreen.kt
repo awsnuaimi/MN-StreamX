@@ -4,6 +4,7 @@ import androidx.compose.ui.res.stringResource
 import com.yourapp.iptv.R
 import com.yourapp.iptv.ui.component.organization.FolderBrowser
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -44,6 +45,13 @@ fun HomeScreen(
         return
     }
     val labels = remember(appearance.language) { HomeLabels(appearance.language) }
+    ReportDrawnWhen { !state.isLoading && (state.needsSource || state.channels.isNotEmpty() || state.errorMessage != null) }
+    LaunchedEffect(state.isLoading, state.channels.isNotEmpty()) {
+        if (!state.isLoading && state.channels.isNotEmpty()) {
+            withFrameNanos { }; withFrameNanos { }
+            viewModel.onHomeReady()
+        }
+    }
     var searching by rememberSaveable { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
     val sidebarFocus = remember { FocusRequester() }
@@ -101,7 +109,7 @@ fun HomeScreen(
                     when {
                         state.needsSource -> HomeMessage(labels.text("أدخل مصدر القنوات من الإعدادات.", "Add a source in settings.", "Quelle in Einstellungen hinzufügen."),
                             labels.section(HomeSection.SETTINGS), onSettings)
-                        state.isLoading && state.channels.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                        state.isLoading && state.visibleChannels.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                         state.channels.isEmpty() -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
                             labels.section(HomeSection.REFRESH), viewModel::refresh)
                         else -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {

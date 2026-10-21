@@ -36,4 +36,26 @@ class OrganizationControllerTest {
         assertEquals(2, received.size); assertFalse(received.last().tree.readFailed)
         assertTrue(received.last().tree.enabled); assertEquals(0, repository.writes)
     }
+
+    @Test fun preparedCatalogIsAdoptedDirectlyAndNewRulesStillRebuildIt() = runTest {
+        val repository = OrganizationMemory()
+        val received = mutableListOf<OrganizedChannels>()
+        val controller = OrganizationController(backgroundScope, repository, StandardTestDispatcher(testScheduler), received::add)
+        runCurrent()
+        val prepared = ChannelOrganizer.project(OrganizationChannelsFixture().rows, repository.value.value)
+        assertTrue(controller.restore(repository.value.value, prepared))
+        assertSame(prepared, received.single())
+        repository.value.value = repository.value.value.copy(channelOverrides = mapOf("s1" to "german"), revision = 1)
+        runCurrent()
+        assertEquals("german", received.last().assignments.getValue("s1").folderId)
+        assertEquals(0, repository.writes)
+    }
+
+    @Test fun stalePreparedRulesCannotReplaceTheCurrentRules() = runTest {
+        val repository = OrganizationMemory()
+        val controller = OrganizationController(backgroundScope, repository, StandardTestDispatcher(testScheduler)) {}
+        runCurrent()
+        val old = repository.value.value.copy(revision = 99)
+        assertFalse(controller.restore(old, ChannelOrganizer.project(OrganizationChannelsFixture().rows, old)))
+    }
 }

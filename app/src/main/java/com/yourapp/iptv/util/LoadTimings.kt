@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 /** Bounded, process-local diagnostics. No URLs, account details, or channel names. */
 internal object LoadTimings {
     enum class Stage { CACHE_READ, REFRESH, STORE_WRITE, XTREAM_ACCOUNT, XTREAM_LISTS, ORGANIZE,
-        CHANNEL_LOOKUP, FIRST_FRAME }
+        CHANNEL_LOOKUP, FIRST_FRAME, CATALOG_READ, HOME_READY }
     private val elapsed = ConcurrentHashMap<Stage, Long>()
 
     fun snapshotMillis(): Map<Stage, Long> = elapsed.toMap()

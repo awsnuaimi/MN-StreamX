@@ -9,8 +9,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
-class XtreamDataSource(client: OkHttpClient = HttpClient.create()) {
-    private val http = XtreamHttpClient(client)
+class XtreamDataSource(client: OkHttpClient? = null) {
+    private val http by lazy { XtreamHttpClient(client ?: HttpClient.create()) }
 
     suspend fun fetchChannels(serverUrl: String, username: String, password: String): List<XtreamChannelDto> {
         val urls = XtreamUrls(serverUrl, username, password)

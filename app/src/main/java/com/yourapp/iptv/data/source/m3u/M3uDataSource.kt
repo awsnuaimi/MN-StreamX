@@ -13,7 +13,8 @@ import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class M3uDataSource(private val client: OkHttpClient = HttpClient.create()) {
+class M3uDataSource(client: OkHttpClient? = null) {
+    private val http by lazy { client ?: HttpClient.create() }
     suspend fun fetchChannels(url: String): List<ChannelDto> = suspendCancellableCoroutine { pending ->
         val request = try {
             Request.Builder().url(url).build()
@@ -21,7 +22,7 @@ class M3uDataSource(private val client: OkHttpClient = HttpClient.create()) {
             pending.resumeWithException(PlaylistLoadException("رابط قائمة القنوات غير صالح."))
             return@suspendCancellableCoroutine
         }
-        val call = client.newCall(request)
+        val call = http.newCall(request)
         pending.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {

@@ -13,6 +13,20 @@ import java.io.IOException
 
 class OrganizationDataStoreTest {
     @get:Rule val temporary = TemporaryFolder()
+    @Test fun unchangedConfigurationIsSharedBetweenStartupAndScreenObservers() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val repo = OrganizationDataStore(PreferenceDataStoreFactory.create(scope = scope) {
+                temporary.root.resolve("shared.preferences_pb")
+            }, OrganizationSettingsFixture())
+            val first = repo.observe().first()
+            assertSame(first, repo.observe().first())
+            repo.save(first.copy(enabled = true))
+            val changed = repo.observe().first()
+            assertNotSame(first, changed)
+            assertTrue(changed.enabled)
+        } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
+    }
     @Test fun manualRulesAndHierarchySurviveReopeningWithoutTouchingOtherKeys() = runBlocking {
         val file = temporary.root.resolve("organization.preferences_pb")
         val settings = OrganizationSettingsFixture()

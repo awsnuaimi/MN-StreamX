@@ -51,6 +51,22 @@ internal class OrganizationController(
         rebuild(force = true)
     }
 
+    fun currentConfig(): OrganizationConfig? = config
+
+    /** Adopt a validated disk projection without classifying or sorting it again. */
+    fun restore(expected: OrganizationConfig, result: OrganizedChannels): Boolean {
+        val current = config
+        if (current != null && current.sourceKey == expected.sourceKey && current != expected) return false
+        job?.cancel()
+        config = expected
+        channels = result.channels
+        cachedSource = result.channels
+        cachedConfig = expected
+        cachedResult = result
+        publish(result)
+        return true
+    }
+
     private fun publish(result: OrganizedChannels) {
         signaledFailure = readFailed
 
