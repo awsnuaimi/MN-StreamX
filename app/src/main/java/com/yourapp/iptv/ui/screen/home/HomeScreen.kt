@@ -36,7 +36,8 @@ fun HomeScreen(
     appearanceViewModel: HomeAppearanceViewModel = hiltViewModel(),
     onHomeAppearance: () -> Unit = {},
     onOrganization: () -> Unit = {},
-    onHistory: () -> Unit = {}
+    onHistory: () -> Unit = {},
+    onStartupReady: (String) -> Unit = {}
 ) {
     HomeSessionLifecycle(viewModel)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -52,9 +53,10 @@ fun HomeScreen(
         viewModel.configureHomeSession(appearance.restoreBrowseSession)
     }
     ReportDrawnWhen { !state.isLoading && (state.needsSource || state.channels.isNotEmpty() || state.errorMessage != null) }
-    LaunchedEffect(state.isLoading, state.channels.isNotEmpty()) {
+    LaunchedEffect(state.isLoading, state.channels.isNotEmpty(), state.browseScope) {
         if (!state.isLoading && state.channels.isNotEmpty()) {
             withFrameNanos { }; withFrameNanos { }
+            onStartupReady(state.browseScope)
             viewModel.onHomeReady()
         }
     }

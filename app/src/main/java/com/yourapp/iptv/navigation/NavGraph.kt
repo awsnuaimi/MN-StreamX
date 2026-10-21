@@ -1,6 +1,9 @@
 package com.yourapp.iptv.navigation
 
 import android.net.Uri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.yourapp.iptv.viewmodel.StartupPlaybackViewModel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -19,13 +22,21 @@ import com.yourapp.iptv.ui.screen.appearance.PlayerAppearanceScreen
 import com.yourapp.iptv.ui.screen.history.WatchHistoryScreen
 
 @Composable
-fun AppNavGraph() {
+fun AppNavGraph(startup: StartupPlaybackViewModel) {
     val nav = rememberNavController()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    StartupPlaybackGuard(nav, startup)
     NavHost(navController = nav, startDestination = Destinations.HOME) {
         composable(Destinations.HOME) { entry ->
             val returnedChannel by entry.savedStateHandle
                 .getStateFlow<String?>("lastPlayedChannelId", null).collectAsStateWithLifecycle()
             HomeScreen(
+                onStartupReady = { sourceKey -> startup.onHomeReady(sourceKey) { id, source ->
+                    if (nav.currentDestination?.route == Destinations.HOME &&
+                        lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                        nav.navigate(historyPlayerRoute(id, source)) { launchSingleTop = true }
+                    }
+                } },
                 onHistory = { nav.navigate(Destinations.HISTORY) { launchSingleTop = true } },
                 onOrganization = { nav.navigate("organization") { launchSingleTop = true } },
                 onHomeAppearance = { nav.navigate("home_appearance") { launchSingleTop = true } },

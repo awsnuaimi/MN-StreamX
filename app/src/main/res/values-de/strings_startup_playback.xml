@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="startup_title">Letzten Sender beim Start fortsetzen</string>
+    <string name="startup_description">Beim App-Start den zuletzt angesehenen Sender der aktuellen Quelle abspielen. Änderungen werden sofort gespeichert und gelten beim nächsten Start.</string>
+    <string name="startup_enabled">Aktiviert</string>
+    <string name="startup_disabled">Deaktiviert</string>
+    <string name="startup_loading">Einstellung wird gelesen…</string>
+    <string name="startup_saving">Wird gespeichert…</string>
+    <string name="startup_turn_on">Status: aus — zum Aktivieren drücken</string>
+    <string name="startup_turn_off">Status: an — zum Deaktivieren drücken</string>
+    <string name="startup_read_error">Einstellung konnte nicht gelesen werden. Vor dem Ändern erneut versuchen.</string>
+    <string name="startup_save_error">Änderung wurde nicht gespeichert. Zum Wiederholen erneut drücken.</string>
+    <string name="startup_retry">Erneut versuchen</string>
+</resources>

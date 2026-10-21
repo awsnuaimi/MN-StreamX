@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="startup_title">Resume last channel on launch</string>
+    <string name="startup_description">Play the last channel you watched from the current source when starting the app. Changes save immediately and apply on the next launch.</string>
+    <string name="startup_enabled">Enabled</string>
+    <string name="startup_disabled">Disabled</string>
+    <string name="startup_loading">Reading preference…</string>
+    <string name="startup_saving">Saving…</string>
+    <string name="startup_turn_on">Status: off — press to enable</string>
+    <string name="startup_turn_off">Status: on — press to disable</string>
+    <string name="startup_read_error">Could not read this preference. Retry before changing it.</string>
+    <string name="startup_save_error">The change was not saved. Press again to retry.</string>
+    <string name="startup_retry">Retry</string>
+</resources>

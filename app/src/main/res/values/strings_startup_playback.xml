@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="startup_title">استئناف آخر قناة عند الفتح</string>
+    <string name="startup_description">يشغّل آخر قناة شاهدتها من المصدر الحالي عند بدء التطبيق. يُحفظ هذا الخيار فورًا، ويُطبّق عند الفتح التالي.</string>
+    <string name="startup_enabled">مفعّل</string>
+    <string name="startup_disabled">معطّل</string>
+    <string name="startup_loading">جارٍ قراءة الخيار…</string>
+    <string name="startup_saving">جارٍ الحفظ…</string>
+    <string name="startup_turn_on">الحالة: معطّل — اضغط للتفعيل</string>
+    <string name="startup_turn_off">الحالة: مفعّل — اضغط للتعطيل</string>
+    <string name="startup_read_error">تعذّر قراءة الخيار. أعد المحاولة قبل تغييره.</string>
+    <string name="startup_save_error">لم يُحفظ التغيير. اضغط مجددًا للمحاولة.</string>
+    <string name="startup_retry">إعادة المحاولة</string>
+</resources>
