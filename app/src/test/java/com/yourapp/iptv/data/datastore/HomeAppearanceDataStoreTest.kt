@@ -51,4 +51,12 @@ class HomeAppearanceDataStoreTest {
             assertArrayEquals(sourceBefore, source.readBytes()); assertArrayEquals(playerBefore, player.readBytes())
         } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
     }
+    @Test fun sessionPreferenceDefaultsOnAndPersistsWithoutChangingExistingChoices() {
+        val values = mutablePreferencesOf(stringPreferencesKey("future") to "keep")
+        assertTrue(HomeAppearanceCodec.decode(values).restoreBrowseSession)
+        val expected = HomeAppearance(HomeLanguage.GERMAN, SidebarSide.LEFT, true, 4, restoreBrowseSession = false)
+        HomeAppearanceCodec.encode(values, expected)
+        assertEquals(expected, HomeAppearanceCodec.decode(values))
+        assertEquals("keep", values[stringPreferencesKey("future")])
+    }
 }

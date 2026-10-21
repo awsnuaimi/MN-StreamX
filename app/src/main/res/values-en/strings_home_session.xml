@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_session_restore">Remember and restore channel browsing</string>
+    <string name="home_session_hint">Remembers the group, focused channel and list position for each source. Playback starts only when you select a channel.</string>
+</resources>

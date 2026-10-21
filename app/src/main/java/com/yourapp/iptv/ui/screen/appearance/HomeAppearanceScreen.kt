@@ -50,6 +50,10 @@ fun HomeAppearanceScreen(onBack: () -> Unit, viewModel: HomeAppearanceSettingsVi
                     viewModel.update(value.copy(expandedSidebar = it))
                 }
                 Text(if (value.sidebarOnRight) stringResource(R.string.ui_preview_right) else stringResource(R.string.ui_preview_left))
+                AppearanceToggle(stringResource(R.string.home_session_restore), value.restoreBrowseSession, enabled) {
+                    viewModel.update(value.copy(restoreBrowseSession = it))
+                }
+                Text(stringResource(R.string.home_session_hint), style = MaterialTheme.typography.bodySmall)
             }
             if (state.error != null) Text(stringResource(if (state.failed) R.string.ui_home_read_error
                 else R.string.ui_home_save_error), color = MaterialTheme.colorScheme.error)

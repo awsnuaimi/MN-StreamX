@@ -9,6 +9,11 @@ import com.yourapp.iptv.domain.model.PlaylistSource
 import com.yourapp.iptv.domain.model.AppSettings
 import com.yourapp.iptv.domain.model.PlaylistCacheKey
 import com.yourapp.iptv.domain.model.HomeStartupPolicy
+import com.yourapp.iptv.domain.model.HomeBrowseSession
+import com.yourapp.iptv.domain.model.HomeGridPosition
+import com.yourapp.iptv.domain.model.HomeGridRestore
+import com.yourapp.iptv.domain.model.HomeSessionResolver
+import com.yourapp.iptv.domain.repository.HomeSessionRepository
 import com.yourapp.iptv.domain.repository.HomeStartupRepository
 import com.yourapp.iptv.domain.model.ChannelFavorites
 import com.yourapp.iptv.domain.model.PlaybackQueue
@@ -40,7 +45,8 @@ class HomeViewModel @Inject constructor(
     @DefaultDispatcher private val background: CoroutineDispatcher,
     favorites: FavoriteRepository,
     organization: OrganizationRepository = OrganizationRepository.Disabled,
-    private val startup: HomeStartupRepository = HomeStartupRepository.Disabled
+    private val startup: HomeStartupRepository = HomeStartupRepository.Disabled,
+    browseSessions: HomeSessionRepository = HomeSessionRepository.Disabled
 ) : ViewModel() {
     private val state = MutableStateFlow(HomeUiState())
     val uiState = state.asStateFlow()
@@ -58,6 +64,10 @@ class HomeViewModel @Inject constructor(
     private var generation = 0L
     private var refreshing = false
     private var favoriteIds: Set<String>? = null
+    private var pendingBrowse: HomeBrowseSession? = null
+    private var browseDraft: HomeBrowseSession? = null
+    private var restoreSequence = 0L
+    private val session = HomeSessionController(viewModelScope, browseSessions, ::onSessionLoaded)
     private val favoriteController = FavoriteController(viewModelScope, favorites) {
         favoriteIds = it
         filterChannels()
@@ -88,7 +98,61 @@ class HomeViewModel @Inject constructor(
 
     fun retryFavorites() = favoriteController.retry()
 
-    init { observeSource() }
+    fun configureHomeSession(enabled: Boolean) = session.configure(enabled)
+    fun flushBrowseSession() = session.flush()
+    fun onBrowseInteraction() = touchSession()
+
+    fun onGridRestoreHandled(token: Long) {
+        state.update { if (it.gridRestore?.token == token) it.copy(gridRestore = null) else it }
+    }
+
+    fun onBrowsePosition(scope: String, group: String?, favoritesOnly: Boolean,
+        focusedId: String, position: HomeGridPosition) {
+        val current = state.value
+        if (scope != current.browseScope || group != current.selectedGroup ||
+            favoritesOnly != current.favoritesOnly || current.query.isNotBlank() || current.channels.isEmpty()) return
+        touchSession()
+        browseDraft = browseContext().copy(focusedChannelId = focusedId, position = position)
+        session.remember(browseDraft!!)
+    }
+
+    private fun onSessionLoaded(value: HomeBrowseSession?) {
+        val discarded = pendingBrowse != null && value == null
+        pendingBrowse = value
+        state.update { it.copy(sessionReady = value == null) }
+        if ((value != null || discarded) && state.value.channels.isNotEmpty()) filterChannels()
+    }
+
+    private fun touchSession() {
+        session.interact()
+        val wasPending = pendingBrowse != null
+        pendingBrowse = null
+        if (!state.value.sessionReady || state.value.gridRestore != null)
+            state.update { it.copy(sessionReady = true, gridRestore = null,
+                selectedChannelId = if (it.gridRestore != null) null else it.selectedChannelId) }
+        if (wasPending) { filterJob?.cancel(); filterChannels() }
+    }
+
+    private fun browseContext(): HomeBrowseSession {
+        val current = state.value
+        val root = FolderFilter.id(current.selectedGroup)?.let { catalogTree.path(it).firstOrNull()?.id }
+        return HomeBrowseSession(current.selectedGroup, root, current.favoritesOnly)
+    }
+
+    private fun rememberContext() {
+        browseDraft = browseContext()
+        if (state.value.query.isBlank()) session.remember(browseDraft!!)
+    }
+
+    init {
+        observeSource()
+        viewModelScope.launch {
+            favoriteState.collect {
+                if (it.errorMessage != null && favoriteIds == null && pendingBrowse?.favoritesOnly == true)
+                    filterChannels()
+            }
+        }
+    }
 
     fun refresh() {
         if (loadJob?.isActive == true) return
@@ -128,11 +192,14 @@ class HomeViewModel @Inject constructor(
                     pendingRefresh = null
                     refreshedAtMillis = 0L
                     catalogTree = OrganizationTree()
+                    pendingBrowse = null
+                    browseDraft = null
                     organizer.clearChannels()
                     activeSource = source
                     refreshing = false
                     state.value = HomeUiState(isLoading = source.hasSelectedSource(),
-                        needsSource = !source.hasSelectedSource())
+                        needsSource = !source.hasSelectedSource(), browseScope = PlaylistCacheKey.of(source))
+                    session.open(state.value.browseScope.takeIf { source.hasSelectedSource() })
                     if (source.hasSelectedSource()) load(source)
                 }
             } catch (error: CancellationException) {
@@ -142,6 +209,8 @@ class HomeViewModel @Inject constructor(
                 loadJob?.cancel()
                 organizer.clearChannels()
                 activeSource = null
+                pendingBrowse = null
+                session.open(null)
                 refreshing = false
                 state.update { it.copy(isLoading = false, isRefreshing = false,
                     errorMessage = "تعذر قراءة إعدادات مصدر القنوات. أعد المحاولة.") }
@@ -219,42 +288,61 @@ class HomeViewModel @Inject constructor(
     }
 
     fun updateQuery(query: String) {
+        touchSession()
         state.update { it.copy(query = query.take(200), selectedChannelId = null) }
         filterChannels()
     }
 
     fun selectGroup(group: String?) {
+        touchSession()
         state.update { it.copy(selectedGroup = group, selectedChannelId = null,
             favoritesOnly = if (group == null) false else it.favoritesOnly) }
+        rememberContext()
         filterChannels()
     }
 
     fun toggleFavoritesFilter() {
+        touchSession()
         state.update { it.copy(favoritesOnly = !it.favoritesOnly, selectedChannelId = null) }
+        rememberContext()
         filterChannels()
     }
 
     fun selectAllGroups() {
+        touchSession()
         state.update { it.copy(selectedGroup = null, selectedChannelId = null) }
+        rememberContext()
         filterChannels()
     }
 
     fun selectSection(favoritesOnly: Boolean) {
+        touchSession()
         state.update { it.copy(favoritesOnly = favoritesOnly, selectedGroup = null, query = "", selectedChannelId = null) }
+        rememberContext()
         filterChannels()
     }
 
     fun clearFilters() {
+        touchSession()
         state.update { it.copy(query = "", selectedGroup = null, favoritesOnly = false, selectedChannelId = null) }
+        rememberContext()
         filterChannels()
     }
 
     fun selectChannel(id: String) {
+        touchSession()
         state.update { current ->
             val selected = current.visibleChannels.firstOrNull { it.id == id }?.id
                 ?: current.visibleChannels.firstOrNull()?.id
             current.copy(selectedChannelId = selected)
         }
+        if (state.value.query.isBlank()) {
+            val current = state.value
+            browseDraft = (browseDraft?.takeIf { it.group == current.selectedGroup &&
+                it.favoritesOnly == current.favoritesOnly } ?: browseContext()).copy(focusedChannelId = current.selectedChannelId)
+            session.remember(browseDraft!!)
+        }
+        session.flush()
     }
 
     private fun filterChannels() {
@@ -262,24 +350,38 @@ class HomeViewModel @Inject constructor(
         val snapshot = state.value
         val ids = favoriteIds
         val topology = catalogTree
+        val saved = pendingBrowse?.takeIf { snapshot.channels.isNotEmpty() &&
+            (!it.favoritesOnly || ids != null || favoriteState.value.errorMessage != null) }
         filterJob = viewModelScope.launch {
             val result = withContext(background) {
                 val marked = ChannelFavorites.apply(snapshot.channels, ids)
-                val all = snapshot.query.isBlank() && !snapshot.favoritesOnly
+                val restored = saved?.let { HomeSessionResolver.resolve(it, marked, topology) }
+                val favorites = restored?.session?.favoritesOnly ?: snapshot.favoritesOnly
+                val group = if (restored != null) restored.session.group else snapshot.selectedGroup
+                val all = snapshot.query.isBlank() && !favorites
                 val matching = if (all) marked else PlaybackQueue.filterChannels(marked,
-                    query = snapshot.query, favoritesOnly = snapshot.favoritesOnly)
-                Triple(marked, if (snapshot.selectedGroup == null) matching else
-                    PlaybackQueue.filterChannels(matching, snapshot.selectedGroup),
-                    if (all) topology else topology.withCounts(matching))
+                    query = snapshot.query, favoritesOnly = favorites)
+                FilteredHome(marked, restored?.visible ?: if (group == null) matching else
+                    PlaybackQueue.filterChannels(matching, group),
+                    if (all) topology else topology.withCounts(matching), restored?.session)
             }
-            val (marked, visible, tree) = result
+            val (marked, visible, tree, restored) = result
+            if (restored != null) { pendingBrowse = null; browseDraft = restored }
             state.update { current ->
                 current.copy(channels = marked, visibleChannels = visible, organization = tree,
                     isLoading = if (marked.isNotEmpty()) false else current.isLoading,
-                    selectedChannelId = current.selectedChannelId?.let { id ->
+                    selectedGroup = if (restored != null) restored.group else current.selectedGroup,
+                    favoritesOnly = restored?.favoritesOnly ?: current.favoritesOnly,
+                    sessionReady = current.sessionReady || restored != null,
+                    gridRestore = if (restored != null) HomeGridRestore(++restoreSequence, restored.position) else current.gridRestore,
+                    selectedChannelId = restored?.focusedChannelId ?: current.selectedChannelId?.let { id ->
                         visible.firstOrNull { it.id == id }?.id ?: visible.firstOrNull()?.id
                     })
             }
         }
     }
 }
+
+private data class FilteredHome(val channels: List<com.yourapp.iptv.domain.model.Channel>,
+    val visible: List<com.yourapp.iptv.domain.model.Channel>, val tree: OrganizationTree,
+    val restored: HomeBrowseSession?)

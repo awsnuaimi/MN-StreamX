@@ -2,6 +2,7 @@ package com.yourapp.iptv.ui.state
 
 import com.yourapp.iptv.domain.organization.OrganizationTree
 import com.yourapp.iptv.domain.model.Channel
+import com.yourapp.iptv.domain.model.HomeGridRestore
 
 data class HomeUiState(
     val channels: List<Channel> = emptyList(),
@@ -15,5 +16,8 @@ data class HomeUiState(
     val needsSource: Boolean = false,
     val errorMessage: String? = null,
     val organization: OrganizationTree = OrganizationTree(),
-    val isRefreshing: Boolean = false
+    val isRefreshing: Boolean = false,
+    val browseScope: String = "",
+    val sessionReady: Boolean = false,
+    val gridRestore: HomeGridRestore? = null
 )

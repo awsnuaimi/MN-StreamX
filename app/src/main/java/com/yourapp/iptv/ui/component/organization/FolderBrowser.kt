@@ -20,6 +20,7 @@ import java.util.Locale
 
 @Composable
 fun FolderBrowser(tree: OrganizationTree, selected: String?, modifier: Modifier = Modifier,
+    restoreFocusOnNavigation: Boolean = true,
     onSelect: (String?) -> Unit) {
     val folder = tree.folder(FolderFilter.id(selected))
     val parent = if (folder != null && tree.children(folder.id).isNotEmpty()) folder.id else folder?.parentId
@@ -41,7 +42,7 @@ fun FolderBrowser(tree: OrganizationTree, selected: String?, modifier: Modifier 
     val entryFocus = remember { FocusRequester() }
     var visited by remember { mutableStateOf(false) }
     LaunchedEffect(parent) {
-        if (visited) {
+        if (visited && restoreFocusOnNavigation) {
             list.scrollToItem(0); withFrameNanos { }; runCatching { entryFocus.requestFocus() }
         }
         visited = true

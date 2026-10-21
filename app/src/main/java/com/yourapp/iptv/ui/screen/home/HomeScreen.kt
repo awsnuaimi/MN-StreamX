@@ -13,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.*
@@ -36,6 +37,7 @@ fun HomeScreen(
     onHomeAppearance: () -> Unit = {},
     onOrganization: () -> Unit = {}
 ) {
+    HomeSessionLifecycle(viewModel)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
     val savedAppearance by appearanceViewModel.appearance.collectAsStateWithLifecycle()
@@ -45,6 +47,9 @@ fun HomeScreen(
         return
     }
     val labels = remember(appearance.language) { HomeLabels(appearance.language) }
+    LaunchedEffect(appearance.restoreBrowseSession, state.browseScope) {
+        viewModel.configureHomeSession(appearance.restoreBrowseSession)
+    }
     ReportDrawnWhen { !state.isLoading && (state.needsSource || state.channels.isNotEmpty() || state.errorMessage != null) }
     LaunchedEffect(state.isLoading, state.channels.isNotEmpty()) {
         if (!state.isLoading && state.channels.isNotEmpty()) {
@@ -55,11 +60,16 @@ fun HomeScreen(
     var searching by rememberSaveable { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
     val sidebarFocus = remember { FocusRequester() }
-    LaunchedEffect(returnedChannelId) {
-        returnedChannelId?.let { viewModel.selectChannel(it); onReturnHandled() }
+    var initialFocusDone by remember(state.browseScope) { mutableStateOf(false) }
+    LaunchedEffect(returnedChannelId, state.visibleChannels.isNotEmpty()) {
+        if (state.visibleChannels.isNotEmpty()) returnedChannelId?.let {
+            initialFocusDone = true; viewModel.selectChannel(it); onReturnHandled()
+        }
     }
-    LaunchedEffect(Unit) {
-        if (returnedChannelId == null && state.selectedChannelId == null) {
+    LaunchedEffect(state.sessionReady, state.isLoading, state.browseScope) {
+        if (state.sessionReady && !state.isLoading && !initialFocusDone) {
+            initialFocusDone = true
+            if (returnedChannelId != null || state.selectedChannelId != null) return@LaunchedEffect
             withFrameNanos { }; runCatching { sidebarFocus.requestFocus() }
         }
     }
@@ -69,6 +79,8 @@ fun HomeScreen(
     }
     val selected = when { searching -> HomeSection.SEARCH; state.favoritesOnly -> HomeSection.FAVORITES; else -> HomeSection.LIVE }
     fun select(section: HomeSection) {
+        initialFocusDone = true
+        viewModel.onBrowseInteraction()
         when (section) {
             HomeSection.LIVE, HomeSection.FAVORITES -> { searching = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
             HomeSection.SEARCH -> searching = true
@@ -82,7 +94,13 @@ fun HomeScreen(
     val languageDirection = if (appearance.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
     // Physical sidebar placement is independent of the direction of text and channel names.
     CompositionLocalProvider(LocalLayoutDirection provides if (appearance.sidebarOnRight) LayoutDirection.Rtl else LayoutDirection.Ltr) {
-        Row(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxSize().onPreviewKeyEvent {
+            if (it.type == KeyEventType.KeyDown) {
+                initialFocusDone = true
+                viewModel.onBrowseInteraction()
+            }
+            false
+        }) {
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 HomeSidebar(appearance, labels, selected, state.isLoading || state.isRefreshing, sidebarFocus, ::select,
                     organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
@@ -117,19 +135,30 @@ fun HomeScreen(
                         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             val categoryModifier = Modifier.width(categoryWidth).fillMaxHeight()
                             val chooseGroup: (String?) -> Unit = { group ->
+                                initialFocusDone = true
                                 if (group == null) viewModel.selectAllGroups() else viewModel.selectGroup(group)
                             }
-                            if (state.organization.enabled) FolderBrowser(state.organization, state.selectedGroup, categoryModifier, chooseGroup)
+                            if (state.organization.enabled) FolderBrowser(state.organization, state.selectedGroup,
+                                categoryModifier, restoreFocusOnNavigation = state.gridRestore == null, onSelect = chooseGroup)
                             else HomeCategories(state.groups, state.selectedGroup, labels, categoryModifier, chooseGroup)
                             if (state.visibleChannels.isEmpty()) Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Text(labels.text("لا توجد قنوات تطابق الاختيار.", "No matching channels.", "Keine passenden Sender."))
                                     AppButton(labels.text("مسح التصفية", "Clear filters", "Filter löschen"), viewModel::clearFilters)
                                 }
-                            } else TvChannelGrid(state.visibleChannels, state.selectedChannelId, { channel ->
-                                viewModel.selectChannel(channel.id)
-                                onPlayChannel(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
-                            }, Modifier.weight(1f).fillMaxHeight(), columns = appearance.columns, showGroup = state.selectedGroup == null)
+                            } else key(state.browseScope, state.selectedGroup, state.favoritesOnly, state.query) {
+                                TvChannelGrid(state.visibleChannels, state.selectedChannelId, { channel ->
+                                    initialFocusDone = true
+                                    viewModel.selectChannel(channel.id)
+                                    onPlayChannel(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
+                                }, Modifier.weight(1f).fillMaxHeight(), columns = appearance.columns,
+                                    showGroup = state.selectedGroup == null, restore = state.gridRestore,
+                                    onBrowsePosition = { id, position ->
+                                        initialFocusDone = true
+                                        viewModel.onBrowsePosition(state.browseScope, state.selectedGroup,
+                                            state.favoritesOnly, id, position)
+                                    }, onRestoreHandled = viewModel::onGridRestoreHandled)
+                            }
                         }
                         }
                     }
