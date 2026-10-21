@@ -19,12 +19,13 @@ class CaptionPipelineTest {
         suspend fun speech(pts: Long = 0) { audio.send(AudioWindow(FloatArray(80000) { 0.2f }, pts)) }
     }
     private class Engines {
+        var downloads = 0; var prepares = 0; val stages = mutableListOf<String>()
         var modelReads = 0; var opened = 0; var closed = 0; var cancelled = 0; var translationsClosed = 0
         var gate: CompletableDeferred<Unit>? = null
         var uncooperative = false; var available = true; var failPrepare = false
         var time = 0L; var cost = 100L
         val models = object : CaptionModels {
-            override suspend fun prepare(progress: (Int) -> Unit): File { modelReads++; progress(100); return File("verified-model") }
+            override suspend fun prepare(progress: (Int) -> Unit): File { modelReads++; stages += "speech-files"; progress(100); return File("verified-model") }
         }
         val factory = SpeechEngineFactory {
             opened++
@@ -40,14 +41,15 @@ class CaptionPipelineTest {
         }
         val text = CaptionTranslatorFactory {
             object : CaptionTranslator {
-                override suspend fun prepare(target: String, progress: (Int) -> Unit) { if (failPrepare) error("download failed") }
+                override suspend fun download(target: String, progress: (Int) -> Unit) { downloads++; stages += "translation-files" }
+                override suspend fun prepare(target: String, progress: (Int) -> Unit) { prepares++; if (failPrepare) error("load failed") }
                 override suspend fun translate(text: String) = "translated:$text"
                 override fun cancel() = Unit
                 override fun close() { translationsClosed++ }
             }
         }
-        fun TestScope.pipeline() = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler), models,
-            factory, text, CaptionDevice { available }) { time }
+        fun TestScope.pipeline(device: CaptionDevice = CaptionDevice { available }) = CaptionPipeline(backgroundScope,
+            StandardTestDispatcher(testScheduler), models, factory, text, device) { time }
     }
     private val enabled = CaptionSettings(mode = CaptionMode.GENERATED)
     @Test fun optionalPipelineDoesNothingBeforeExplicitActivation() = runTest {
@@ -80,11 +82,12 @@ class CaptionPipelineTest {
         assertNull(p.uiState.value.cue); assertEquals(0L, e.time)
         p.stop(); runCurrent()
     }
-    @Test fun insufficientMemoryDoesNotDownloadOrOpenAnyModel() = runTest {
+    @Test fun insufficientRamStillDownloadsFilesWithoutOpeningAnyNativeEngine() = runTest {
         val e = Engines().apply { available = false }; val p = with(e) { pipeline() }
         p.start(Input(), enabled); runCurrent()
         assertEquals(CaptionStatus.LOW_MEMORY, p.uiState.value.progress.status)
-        assertEquals(0, e.modelReads); assertEquals(0, e.opened)
+        assertEquals(1, e.modelReads); assertEquals(1, e.downloads)
+        assertEquals(0, e.prepares); assertEquals(0, e.opened); assertEquals(1, e.translationsClosed)
     }
     @Test fun losingAvailableMemoryStopsInferenceAndReleasesResources() = runTest {
         val e = Engines(); val p = with(e) { pipeline() }; val input = Input()
@@ -116,6 +119,28 @@ class CaptionPipelineTest {
         repeat(4) { advanceTimeBy(5000); input.audio.send(AudioWindow(FloatArray(0), it * 5000000L)); runCurrent() }
         assertEquals(CaptionStatus.LISTENING, p.uiState.value.progress.status)
         assertEquals(0L, e.time); p.stop(); runCurrent()
+    }
+    @Test fun ramIsCheckedAfterBothDownloadsAndTheExactDeficitReachesTheUi() = runTest {
+        val e = Engines()
+        val device = object : CaptionDevice {
+            override fun canRun(target: String) = false
+            override fun assess(target: String): CaptionResourceCheck {
+                assertEquals(listOf("speech-files", "translation-files"), e.stages)
+                return CaptionResourcePolicy.memory(target, 200 * CaptionResourcePolicy.MIB, 64 * CaptionResourcePolicy.MIB, false)
+            }
+        }
+        val p = with(e) { pipeline(device) }; p.start(Input(), enabled); runCurrent()
+        assertEquals(CaptionStatus.LOW_MEMORY, p.uiState.value.progress.status)
+        assertEquals(200L, p.uiState.value.progress.availableMb); assertEquals(576L, p.uiState.value.progress.requiredMb)
+        assertEquals(0, e.opened); assertEquals(0, e.prepares)
+    }
+    @Test fun unsupportedArchitectureDoesNotMasqueradeAsLowRamOrDownloadModels() = runTest {
+        val e = Engines(); val device = object : CaptionDevice {
+            override fun canRun(target: String) = false
+            override fun supported() = false
+        }
+        val p = with(e) { pipeline(device) }; p.start(Input(), enabled); runCurrent()
+        assertEquals(CaptionStatus.UNAVAILABLE, p.uiState.value.progress.status); assertEquals(0, e.modelReads)
     }
     @Test fun pendingInferenceIsCancelledWhenThePlayerStops() = runTest {
         val e = Engines().apply { gate = CompletableDeferred() }; val p = with(e) { pipeline() }; val input = Input()

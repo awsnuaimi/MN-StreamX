@@ -4,6 +4,7 @@ import ai.onnxruntime.*
 import com.yourapp.iptv.domain.repository.CaptionTranslator
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -11,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles) : CaptionTranslator {
     private var target = "en"
+    private var verifiedFolder: File? = null
     private var environment: OrtEnvironment? = null
     private var encoder: OrtSession? = null
     private var decoder: OrtSession? = null
@@ -19,10 +21,14 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles) : Ca
     private var active: OrtSession.RunOptions? = null
     @Volatile private var cancelled = false
 
-    override suspend fun prepare(target: String, progress: (Int) -> Unit) {
+    override suspend fun download(target: String, progress: (Int) -> Unit) {
         this.target = target
+        verifiedFolder = if (target == "en") null else files.prepare(CaptionModelCatalog.translation, progress)
+    }
+    override suspend fun prepare(target: String, progress: (Int) -> Unit) {
+        if (this.target != target || (target != "en" && verifiedFolder == null)) download(target, progress)
         if (target == "en") return
-        val folder = files.prepare(CaptionModelCatalog.translation, progress)
+        val folder = checkNotNull(verifiedFolder)
         currentCoroutineContext().ensureActive()
         val env = OrtEnvironment.getEnvironment()
         environment = env
@@ -62,7 +68,7 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles) : Ca
     }
     override fun cancel() { synchronized(lock) { cancelled = true; active?.setTerminate(true) } }
     override fun close() {
-        cancel(); tokenizer?.close(); tokenizer = null
+        cancel(); verifiedFolder = null; tokenizer?.close(); tokenizer = null
         decoder?.close(); decoder = null; encoder?.close(); encoder = null
     }
     private companion object {

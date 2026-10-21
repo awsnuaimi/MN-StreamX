@@ -13,9 +13,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.yourapp.iptv.R
 import com.yourapp.iptv.data.caption.CaptionModelCatalog
 import com.yourapp.iptv.domain.model.*
+import com.yourapp.iptv.domain.repository.CaptionDeviceStats
 import com.yourapp.iptv.player.caption.EmbeddedCaptions
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.viewmodel.CaptionViewModel
@@ -27,7 +31,9 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
     val tracks by embedded?.tracks?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList()) }
     val loading by embedded?.loading?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(true) }
     val settings = state.settings
-    val device = remember { model.deviceStats() }
+    val device by produceState<CaptionDeviceStats?>(null, model) {
+        while (true) { value = withContext(Dispatchers.IO) { model.deviceStats() }; delay(2000) }
+    }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { withFrameNanos { }; runCatching { focus.requestFocus() } }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -39,9 +45,12 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                 LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(3.dp)) {
                     item { Text(stringResource(R.string.caption_local_description), style = MaterialTheme.typography.bodySmall) }
-                    if (device != null) item {
-                        Text(stringResource(R.string.caption_device, device.abi, device.cores, device.totalMemoryMb,
-                            device.availableMemoryMb), style = MaterialTheme.typography.bodySmall)
+                    device?.let { snapshot ->
+                        item { Text(stringResource(R.string.caption_device, snapshot.abi, snapshot.cores, snapshot.totalMemoryMb,
+                            snapshot.availableMemoryMb), style = MaterialTheme.typography.bodySmall) }
+                        snapshot.availableStorageMb?.let { free ->
+                            item { Text(stringResource(R.string.caption_storage_available, free), style = MaterialTheme.typography.bodySmall) }
+                        }
                     }
                     item {
                         val mb = CaptionModelCatalog.totalBytes(settings.target.tag) / (1024 * 1024)

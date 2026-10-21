@@ -7,6 +7,17 @@ import com.yourapp.iptv.domain.model.*
 
 @Composable
 internal fun captionStatusText(value: CaptionProgress): String {
+    val available = value.availableMb
+    val required = value.requiredMb
+    if (available != null && required != null) {
+        val detail = when (value.status) {
+            CaptionStatus.LOW_MEMORY -> R.string.caption_low_ram_details
+            CaptionStatus.LOW_STORAGE -> R.string.caption_low_storage_details
+            CaptionStatus.MEMORY_PRESSURE -> R.string.caption_memory_pressure_details
+            else -> null
+        }
+        if (detail != null) return stringResource(detail, available, required)
+    }
     val text = stringResource(when (value.status) {
         CaptionStatus.OFF -> R.string.caption_off
         CaptionStatus.EMBEDDED -> R.string.caption_embedded
@@ -17,6 +28,8 @@ internal fun captionStatusText(value: CaptionProgress): String {
         CaptionStatus.TRANSLATING -> R.string.caption_translation_model
         CaptionStatus.SLOW_DEVICE -> R.string.caption_slow
         CaptionStatus.LOW_MEMORY -> R.string.caption_low_memory
+        CaptionStatus.LOW_STORAGE -> R.string.caption_low_storage
+        CaptionStatus.MEMORY_PRESSURE -> R.string.caption_memory_pressure
         CaptionStatus.UNAVAILABLE -> R.string.caption_unavailable
         CaptionStatus.UNSUPPORTED_LANGUAGE -> R.string.caption_unsupported
         CaptionStatus.FAILED -> R.string.caption_failed

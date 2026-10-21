@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.caption
 
+import com.yourapp.iptv.domain.caption.CaptionStorageException
+import com.yourapp.iptv.domain.caption.CaptionResourcePolicy
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -58,4 +60,47 @@ class VerifiedModelFilesTest {
             assertFalse(temporary.root.resolve("unit/model.bin").exists())
         }
     }
+    @Test fun insufficientDiskSpaceFailsBeforeOpeningTheDownloadSocket() = runTest {
+        MockWebServer().use { server ->
+            val bundle = spec(server, "model".toByteArray())
+            val files = VerifiedModelFiles(temporary.root, OkHttpClient()) { 1L }
+            try { files.prepare(bundle) { }; fail("Insufficient disk space accepted") }
+            catch (error: CaptionStorageException) {
+                assertEquals(1L, error.availableBytes)
+                assertEquals(5L + CaptionResourcePolicy.STORAGE_RESERVE, error.requiredBytes)
+            }
+            assertEquals(0, server.requestCount)
+        }
+    }
+    @Test fun twoGigabytesOfStorageAllowDownloadingWithoutAnyRamAssumption() = runTest {
+        MockWebServer().use { server ->
+            val body = "model".toByteArray(); server.enqueue(MockResponse().setBody(Buffer().write(body)))
+            val files = VerifiedModelFiles(temporary.root, OkHttpClient()) { 2048 * CaptionResourcePolicy.MIB }
+            assertArrayEquals(body, files.prepare(spec(server, body)) { }.resolve("model.bin").readBytes())
+        }
+    }
+    @Test fun alreadyVerifiedFilesNeedNoAdditionalDownloadSpace() = runTest {
+        MockWebServer().use { server ->
+            val body = "model".toByteArray(); val bundle = spec(server, body)
+            val model = temporary.root.resolve("unit/model.bin"); requireNotNull(model.parentFile).mkdirs(); model.writeBytes(body)
+            val files = VerifiedModelFiles(temporary.root, OkHttpClient()) { 0L }
+            assertEquals(model, files.prepare(bundle) { }.resolve("model.bin")); assertEquals(0, server.requestCount)
+        }
+    }
+
+    @Test fun storageLostDuringTransferRemovesThePartialFileAndReportsStorage() = runTest {
+        MockWebServer().use { server ->
+            val body = ByteArray(200000) { 7 }; val bundle = spec(server, body)
+            server.enqueue(MockResponse().setBody(Buffer().write(body)))
+            var reads = 0
+            val files = VerifiedModelFiles(temporary.root, OkHttpClient()) {
+                reads++; if (reads <= 2) 2048 * CaptionResourcePolicy.MIB else 0L
+            }
+            try { files.prepare(bundle) { }; fail("Storage exhaustion ignored") }
+            catch (error: CaptionStorageException) { assertEquals(0L, error.availableBytes) }
+            assertFalse(temporary.root.resolve("unit/model.bin").exists())
+            assertFalse(temporary.root.walk().any { it.name.endsWith(".part") })
+        }
+    }
+
 }

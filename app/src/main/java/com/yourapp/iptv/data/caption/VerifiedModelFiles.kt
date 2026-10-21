@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.caption
 
+import com.yourapp.iptv.domain.caption.CaptionResourcePolicy
+import com.yourapp.iptv.domain.caption.CaptionStorageException
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -15,20 +17,28 @@ internal data class ModelBundle(val id: String, val baseUrl: String, val assets:
 }
 
 /** Pinned model bytes, bounded reads, atomic publication and cleanup on cancellation. */
-internal class VerifiedModelFiles(private val directory: File, private val client: OkHttpClient) {
+internal class VerifiedModelFiles(private val directory: File, private val client: OkHttpClient,
+    private val usableBytes: (File) -> Long = { it.usableSpace }) {
     private val mutex = Mutex()
     suspend fun prepare(bundle: ModelBundle, progress: (Int) -> Unit): File = mutex.withLock {
         withContext(Dispatchers.IO) {
             val folder = File(directory, bundle.id)
             if (!folder.exists() && !folder.mkdirs()) throw IOException("Model directory unavailable")
             folder.walkTopDown().filter { it.isFile && it.name.endsWith(".part") }.forEach { it.delete() }
+            val cached = bundle.assets.associateWith { valid(File(folder, it.path), it) }
+            val missing = bundle.assets.filter { cached[it] != true }
+            if (missing.isNotEmpty()) {
+                missing.forEach { File(folder, it.path).delete() }
+                requireStorage(folder, missing.sumOf { it.size } + CaptionResourcePolicy.STORAGE_RESERVE)
+            }
             var completed = 0L
             for (asset in bundle.assets) {
                 currentCoroutineContext().ensureActive()
                 val file = File(folder, asset.path)
-                if (!valid(file, asset)) {
+                if (cached[asset] != true) {
                     file.delete()
                     file.parentFile?.mkdirs()
+                    requireStorage(folder, asset.size + CaptionResourcePolicy.STORAGE_RESERVE)
                     fetch(bundle.baseUrl + "/" + asset.path, file, asset) { downloaded ->
                         progress(((completed + downloaded) * 100 / bundle.bytes).toInt().coerceIn(0, 100))
                     }
@@ -38,6 +48,10 @@ internal class VerifiedModelFiles(private val directory: File, private val clien
             }
             folder
         }
+    }
+    private fun requireStorage(folder: File, required: Long) {
+        val available = usableBytes(folder).coerceAtLeast(0)
+        if (available < required) throw CaptionStorageException(available, required)
     }
     private suspend fun valid(file: File, asset: ModelAsset): Boolean {
         if (!file.isFile || file.length() != asset.size) return false
@@ -77,7 +91,10 @@ internal class VerifiedModelFiles(private val directory: File, private val clien
                         count += read
                         if (count > asset.size) throw IOException("Model exceeds its pinned size")
                         output.write(buffer, 0, read); digest.update(buffer, 0, read)
-                        if (count - lastProgress >= 1048576) { progress(count); lastProgress = count }
+                        if (count - lastProgress >= 1048576) {
+                            requireStorage(target.parentFile!!, asset.size - count + CaptionResourcePolicy.STORAGE_RESERVE)
+                            progress(count); lastProgress = count
+                        }
                     }
                 } }
                 if (count != asset.size || hex(digest.digest()) != asset.sha256) throw IOException("Model checksum mismatch")

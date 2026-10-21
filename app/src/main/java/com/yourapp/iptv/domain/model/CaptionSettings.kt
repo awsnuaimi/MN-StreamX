@@ -15,5 +15,6 @@ data class CaptionSettings(val mode: CaptionMode = CaptionMode.OFF,
 data class SpeechText(val language: String, val text: String, val startMillis: Long = 0, val endMillis: Long = 0)
 data class CaptionCue(val text: String, val startUs: Long, val endUs: Long, val producedAtMillis: Long)
 enum class CaptionStatus { OFF, EMBEDDED, PREPARING, DOWNLOADING, LOADING, LISTENING, TRANSLATING,
-    SLOW_DEVICE, LOW_MEMORY, UNAVAILABLE, UNSUPPORTED_LANGUAGE, FAILED }
-data class CaptionProgress(val status: CaptionStatus = CaptionStatus.OFF, val percent: Int? = null)
+    SLOW_DEVICE, LOW_MEMORY, LOW_STORAGE, MEMORY_PRESSURE, UNAVAILABLE, UNSUPPORTED_LANGUAGE, FAILED }
+data class CaptionProgress(val status: CaptionStatus = CaptionStatus.OFF, val percent: Int? = null,
+    val availableMb: Long? = null, val requiredMb: Long? = null)

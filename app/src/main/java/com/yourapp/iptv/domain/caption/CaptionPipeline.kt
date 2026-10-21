@@ -5,7 +5,6 @@ import com.yourapp.iptv.domain.repository.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import java.util.concurrent.TimeoutException
 
 class CaptionPipelineState(val progress: CaptionProgress = CaptionProgress(), val cue: CaptionCue? = null,
@@ -29,20 +28,30 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
         fun status(value: CaptionStatus, percent: Int? = null) {
             if (generation == token) state.value = CaptionPipelineState(CaptionProgress(value, percent))
         }
+        fun ramAllowed(target: String): Boolean {
+            val check = device.assess(target)
+            if (!check.allowed && generation == token) state.value = CaptionPipelineState(CaptionProgress(
+                check.failure, availableMb = check.availableMb, requiredMb = check.requiredMb))
+            return check.allowed
+        }
         status(CaptionStatus.PREPARING)
         job = scope.launch {
             try {
                 withContext(worker) {
-                    if (!device.canRun(settings.target.tag)) { status(CaptionStatus.LOW_MEMORY); return@withContext }
+                    if (!device.supported()) { status(CaptionStatus.UNAVAILABLE); return@withContext }
                     status(CaptionStatus.DOWNLOADING, 0)
                     val model = models.prepare { status(CaptionStatus.DOWNLOADING, it) }
                     currentCoroutineContext().ensureActive()
                     val text = translators.create()
                     translator = text
                     try {
+                        text.download(settings.target.tag) { status(CaptionStatus.TRANSLATING, it) }
+                        currentCoroutineContext().ensureActive()
+                        if (!ramAllowed(settings.target.tag)) return@withContext
+                        status(CaptionStatus.LOADING)
                         text.prepare(settings.target.tag) { status(CaptionStatus.TRANSLATING, it) }
                         currentCoroutineContext().ensureActive()
-                        if (!device.canRun("en")) { status(CaptionStatus.LOW_MEMORY); return@withContext }
+                        if (!ramAllowed("en")) return@withContext
                         status(CaptionStatus.LOADING)
                         val voice = speech.open(model)
                         engine = voice
@@ -58,7 +67,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     currentCoroutineContext().ensureActive()
                                     if (window.samples.size < 16000) continue
                                     if (CaptionPresentation.tooOld(window, input.positionUs)) continue
-                                    if (!device.canRun("running")) { status(CaptionStatus.LOW_MEMORY); break }
+                                    if (!ramAllowed("running")) break
                                     val started = now()
                                     val result = voice.transcribe(window.samples, settings.source)
                                     currentCoroutineContext().ensureActive()
@@ -85,6 +94,11 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                     }
                 }
             } catch (error: CancellationException) { throw error }
+            catch (error: CaptionStorageException) {
+                if (generation == token) state.value = CaptionPipelineState(CaptionProgress(CaptionStatus.LOW_STORAGE,
+                    availableMb = error.availableBytes.coerceAtLeast(0) / CaptionResourcePolicy.MIB,
+                    requiredMb = CaptionResourcePolicy.ceilingMb(error.requiredBytes)))
+            }
             catch (_: TimeoutException) { status(CaptionStatus.SLOW_DEVICE) }
             catch (_: OutOfMemoryError) { status(CaptionStatus.LOW_MEMORY) }
             catch (_: UnsatisfiedLinkError) { status(CaptionStatus.UNAVAILABLE) }
