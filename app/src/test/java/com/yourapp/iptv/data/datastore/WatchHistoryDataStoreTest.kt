@@ -90,19 +90,25 @@ class WatchHistoryDataStoreTest {
         assertEquals("preserve", disk.data.first()[stringPreferencesKey("future")])
     }
 
-    @Test fun recordsSurviveActualFileReopeningWithoutSavingStreamMetadata() = runBlocking {
+    @Test fun recordsSurviveActualFileReopeningWithoutSavingStreamMetadata() = runTest {
         val file = temporary.root.resolve("history.preferences_pb")
-        var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val expected = listOf(WatchHistoryEntry("stable-id", 100))
+        var scope = CoroutineScope(SupervisorJob() + dispatcher)
         try {
             val disk = PreferenceDataStoreFactory.create(scope = scope) { file }
             val repository = WatchHistoryDataStore(disk, settings, scope)
-            repository.recordStarted(key, WatchHistoryEntry("stable-id", 100))
-            withTimeout(5000) { repository.observe(key).first { it.isNotEmpty() } }
+            repository.recordStarted(key, expected.single())
+            runCurrent()
+            val encoded = disk.data.first()[stringPreferencesKey("history_$key")]
+            assertNotNull("The accepted history record must be persisted", encoded)
+            assertEquals(expected, WatchHistoryCodec.decode(encoded))
+            assertTrue("Preferences must be written to a real file", file.isFile && file.length() > 0)
         } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        scope = CoroutineScope(SupervisorJob() + dispatcher)
         try {
             val repository = WatchHistoryDataStore(PreferenceDataStoreFactory.create(scope = scope) { file }, settings, scope)
-            assertEquals(listOf(WatchHistoryEntry("stable-id", 100)), repository.observe(key).first())
+            assertEquals(expected, repository.observe(key).first())
             assertFalse(file.readBytes().toString(Charsets.ISO_8859_1).contains("https://"))
         } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
     }

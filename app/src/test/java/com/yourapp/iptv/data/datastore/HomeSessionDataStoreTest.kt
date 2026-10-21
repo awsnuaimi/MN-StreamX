@@ -82,23 +82,35 @@ class HomeSessionDataStoreTest {
         assertEquals(session(49), HomeSessionDataStore(disk, backgroundScope).read(49.toString(16).padStart(64, '0')))
     }
 
-    @Test fun actualPreferencesSurviveClosingAndReopeningTheWriter() = runBlocking {
+    @Test fun actualPreferencesSurviveClosingAndReopeningTheWriter() = runTest {
+        // Use the same scheduler for the writer and DataStore, while keeping real file IO.
+        // flush() must finish its immediate work without relying on IO thread scheduling or sleeps.
+        val dispatcher = StandardTestDispatcher(testScheduler)
         repeat(5) { iteration ->
-        val file = temporary.root.resolve("home_session_$iteration.preferences_pb")
-        var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val expected = session(40)
-        try {
-            val disk = PreferenceDataStoreFactory.create(scope = scope) { file }
-            val repository = HomeSessionDataStore(disk, scope)
-            repository.remember(a, expected); repository.flush()
-            withTimeout(5000) { disk.data.first { it[stringPreferencesKey("session_$a")] != null } }
-        } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        try {
-            val repository = HomeSessionDataStore(PreferenceDataStoreFactory.create(scope = scope) { file }, scope)
-            assertEquals(expected, repository.read(a))
-            assertNull(repository.read(b))
-        } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
+            val file = temporary.root.resolve("home_session_$iteration.preferences_pb")
+            val expected = session(40 + iteration)
+            var scope = CoroutineScope(SupervisorJob() + dispatcher)
+            try {
+                val disk = PreferenceDataStoreFactory.create(scope = scope) { file }
+                val repository = HomeSessionDataStore(disk, scope)
+                repository.remember(a, session(iteration))
+                repository.remember(a, expected)
+                val beforeFlush = testScheduler.currentTime
+                repository.flush()
+                runCurrent()
+                val encoded = disk.data.first()[stringPreferencesKey("session_$a")]
+                assertEquals("flush must not wait for the debounce", beforeFlush, testScheduler.currentTime)
+                assertNotNull("flush must persist the latest session (iteration $iteration)", encoded)
+                assertEquals(expected, HomeSessionCodec.decode(encoded!!))
+                assertTrue("Preferences must be written to a real file", file.isFile && file.length() > 0)
+            } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
+            scope = CoroutineScope(SupervisorJob() + dispatcher)
+            try {
+                val reopened = PreferenceDataStoreFactory.create(scope = scope) { file }
+                val repository = HomeSessionDataStore(reopened, scope)
+                assertEquals(expected, repository.read(a))
+                assertNull(repository.read(b))
+            } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
         }
     }
 
