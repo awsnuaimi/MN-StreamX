@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="last_channel_title">Letzter Sender</string>
+    <string name="last_channel_loading">Letzter Sender wird gelesen…</string>
+    <string name="last_channel_switching">Senderwechsel…</string>
+    <string name="last_channel_hint">Letzter Sender wechselt zwischen diesem Sender und dem zuletzt angesehenen.</string>
+    <string name="last_channel_empty">Einen anderen Sender bis zur Bildwiedergabe ansehen, um Letzter Sender zu aktivieren.</string>
+    <string name="last_channel_lookup_error">Die Daten des letzten Senders konnten nicht gelesen werden. Erneut versuchen.</string>
+    <string name="last_channel_unavailable">Vorherige Sender sind in der aktuellen Liste nicht verfügbar.</string>
+</resources>

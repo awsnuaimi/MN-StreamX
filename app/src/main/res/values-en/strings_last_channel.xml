@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="last_channel_title">Last channel</string>
+    <string name="last_channel_loading">Reading last channel…</string>
+    <string name="last_channel_switching">Switching…</string>
+    <string name="last_channel_hint">Last channel switches between this channel and the last one you watched.</string>
+    <string name="last_channel_empty">Watch another channel until its picture appears to enable Last channel.</string>
+    <string name="last_channel_lookup_error">Could not read the last channel data. Try again.</string>
+    <string name="last_channel_unavailable">Previous channels are unavailable in the current list.</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="last_channel_title">آخر قناة</string>
+    <string name="last_channel_loading">جارٍ قراءة آخر قناة…</string>
+    <string name="last_channel_switching">جارٍ الانتقال…</string>
+    <string name="last_channel_hint">«آخر قناة» يبدّل بين القناة الحالية وآخر قناة شاهدتها فعلًا.</string>
+    <string name="last_channel_empty">شاهد قناة أخرى حتى تظهر صورتها لتفعيل «آخر قناة».</string>
+    <string name="last_channel_lookup_error">تعذّر قراءة بيانات آخر قناة. حاول مجددًا.</string>
+    <string name="last_channel_unavailable">القنوات السابقة غير متاحة في القائمة الحالية.</string>
+</resources>

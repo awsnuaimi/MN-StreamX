@@ -53,6 +53,8 @@ class PlayerViewModel @Inject constructor(
     }
     val favoriteState = favoriteController.uiState
     private val historyRecorder = PlaybackHistoryRecorder(history) { state.value.channel }
+    private val lastChannel = LastChannelController(viewModelScope, history, channels, settings) { state.value.channel }
+    val lastChannelState = lastChannel.uiState
     private val organizer = OrganizationController(viewModelScope, organization, background) { result ->
         available = result.channels
         val group = result.resolveFilter(state.value.selectedGroup)
@@ -68,6 +70,7 @@ class PlayerViewModel @Inject constructor(
                 catch (error: CancellationException) { throw error }
                 catch (_: Exception) { null }
                 historyRecorder.bind(source)
+                lastChannel.bind(historyRecorder.sourceKey)
                 val expected = savedStateHandle.get<String>("sourceKey")
                 if (expected != null && expected != historyRecorder.sourceKey) {
                     state.update { it.copy(isLoading = false, sourceChanged = true) }
@@ -100,6 +103,11 @@ class PlayerViewModel @Inject constructor(
 
     fun onPlaybackStarted(channel: Channel) = historyRecorder.onFirstFrame(channel)
 
+    fun showLastChannelMenu() = lastChannel.start()
+    fun hideLastChannelMenu() = lastChannel.stop()
+    fun retryLastChannel() = lastChannel.retry()
+    suspend fun recallLastChannel() = lastChannel.recall()
+
     /** Reuse the running player and cached full queue when the selected metadata still matches. */
     fun selectHistoryChannel(selected: Channel, sourceKey: String): Boolean {
         if (historyRecorder.sourceKey != sourceKey) return false
@@ -128,6 +136,7 @@ class PlayerViewModel @Inject constructor(
         if (index < 0 || (index == snapshot.currentIndex && snapshot.detachedChannel == null)) return
         savedStateHandle["channelId"] = id
         state.value = snapshot.copy(currentIndex = index, detachedChannel = null, errorMessage = null)
+        lastChannel.onSelectionChanged()
     }
 
     private fun moveChannel(direction: Int) {
@@ -158,6 +167,7 @@ class PlayerViewModel @Inject constructor(
                 isLoading = false,
                 errorMessage = if (index < 0 && detached == null)
                     "القناة غير متاحة. اختر قناة من القائمة أو حدّث القنوات." else null)
+            lastChannel.onSelectionChanged()
         }
     }
 }

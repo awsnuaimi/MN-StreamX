@@ -29,6 +29,7 @@ import com.yourapp.iptv.ui.state.PlayerEpgUiState
 import com.yourapp.iptv.ui.screen.history.WatchHistoryDialog
 import com.yourapp.iptv.viewmodel.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -214,11 +215,31 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         if (panels.panel == PlayerPanel.CHANNELS) PlayerChannelPanel(state.queue.channels, state.currentIndex,
             organizationFilterName(state.selectedGroup, state.organization), state.query, state.favoritesOnly, onSelect = ::selectChannel,
             onDismiss = ::back, onRemoteKey = ::handleRemote)
-        if (panels.panel == PlayerPanel.MORE && channel != null) PlayerMoreDialog(channel, appearance, favorites,
+        if (panels.panel == PlayerPanel.MORE && channel != null) {
+        val lastChannel by viewModel.lastChannelState.collectAsStateWithLifecycle()
+        val recallScope = rememberCoroutineScope()
+        DisposableEffect(viewModel, lifecycle) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_START) viewModel.showLastChannelMenu()
+                if (event == Lifecycle.Event.ON_STOP) viewModel.hideLastChannelMenu()
+            }
+            lifecycle.addObserver(observer)
+            if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) viewModel.showLastChannelMenu()
+            onDispose { lifecycle.removeObserver(observer); viewModel.hideLastChannelMenu() }
+        }
+        PlayerMoreDialog(channel, appearance, favorites,
             state.canChangeChannel, moreInitial, onRemoteKey = ::handleRemote, onDismiss = ::back,
+            lastChannel = lastChannel, onRetryLastChannel = viewModel::retryLastChannel,
             onAction = { action ->
                 when (action) {
                     PlayerMoreAction.FAVORITE -> viewModel.toggleFavorite()
+                    PlayerMoreAction.LAST_CHANNEL -> recallScope.launch {
+                        val target = viewModel.recallLastChannel() ?: return@launch
+                        surface.hideControls(); panels = panels.watching()
+                        focusedId = null; focusEpoch++; showBanner()
+                        if (!viewModel.selectHistoryChannel(target.channel, target.sourceKey))
+                            onOpenHistoryChannel(target.channel.id, target.sourceKey)
+                    }
                     PlayerMoreAction.HISTORY -> panels = panels.history()
                     PlayerMoreAction.DETAILS -> panels = panels.details()
                     PlayerMoreAction.CHANNELS -> openChannels()
@@ -232,6 +253,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                     PlayerMoreAction.NEXT -> changeChannel(true)
                 }
             }, onRetryFavorites = viewModel::retryFavorites)
+        }
         if (panels.panel == PlayerPanel.DETAILS && channel != null)
             PlayerProgramDetailsDialog(channel.name, activeEpg, appearance, ::back)
         if (panels.panel == PlayerPanel.HISTORY) WatchHistoryDialog(channel?.id, ::back, { selected, source ->
