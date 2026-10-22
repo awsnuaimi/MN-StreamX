@@ -10,6 +10,9 @@
 #include <malloc.h>
 #endif
 
+// Supplied by the checked patch of the pinned upstream source.
+extern "C" whisper_state * mnx_whisper_init_live_state(whisper_context *, int);
+
 struct Session {
     whisper_context *context = nullptr;
     whisper_state *state = nullptr;
@@ -75,10 +78,13 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jl
     auto *s = reinterpret_cast<Session *>(handle);
     const jsize count = env->GetArrayLength(samples);
     if (!s || count < 16000 || count > 96000) { error(env, "Invalid speech window"); return nullptr; }
+    s->deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     try { if (!loadModel(s)) { error(env, "Could not reload the local speech model"); return nullptr; } }
     catch (...) { error(env, "Could not reload the local speech model"); return nullptr; }
     if (!s->state) {
-        try { s->state = whisper_init_state(s->context); }
+        // Capacity covers the entire maximum six-second input (300 steps, rounded to 320).
+        // The upstream default allocates encoder/decoder buffers for a 30-second file.
+        try { s->state = mnx_whisper_init_live_state(s->context, 320); }
         catch (...) { error(env, "Could not allocate speech state"); return nullptr; }
         if (!s->state) { error(env, "Could not allocate speech state"); return nullptr; }
     }
@@ -91,6 +97,7 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jl
     env->GetFloatArrayRegion(samples, 0, count, input.data());
     if (env->ExceptionCheck()) return nullptr;
     auto p = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
+    p.greedy.best_of = 1; // Temperature/fallback are disabled; only one greedy path is used.
     p.n_threads = s->threads;
     p.language = selected == "auto" ? "auto" : selected.c_str();
     p.translate = translateToEnglish == JNI_TRUE; p.no_context = true; p.single_segment = true;
@@ -99,8 +106,11 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jl
     p.print_realtime = false; p.print_progress = false; p.print_timestamps = false; p.print_special = false;
     p.suppress_nst = true; p.temperature = 0.0f; p.temperature_inc = 0.0f;
     p.abort_callback = abortWork; p.abort_callback_user_data = s;
-    // A hard native deadline also covers an engine that is too slow for live captions.
-    s->deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    if (abortWork(s)) {
+        if (s->cancelled.load(std::memory_order_relaxed)) error(env, "Local speech inference interrupted");
+        else env->ThrowNew(env->FindClass("java/util/concurrent/TimeoutException"), "Local speech exceeded its time budget");
+        return nullptr;
+    }
     int result;
     try { result = whisper_full_with_state(s->context, s->state, p, input.data(), count); }
     catch (...) { error(env, "Local speech inference failed"); return nullptr; }

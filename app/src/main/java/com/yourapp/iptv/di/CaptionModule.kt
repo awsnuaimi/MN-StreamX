@@ -34,8 +34,13 @@ object CaptionModule {
     @Provides @Singleton fun speech(): SpeechEngineFactory = SpeechEngineFactory { WhisperSpeechEngine(it) }
     @Provides @Singleton internal fun translators(files: VerifiedModelFiles, device: CaptionDevice): CaptionTranslatorFactory =
         CaptionTranslatorFactory { OnnxCaptionTranslator(files, device) }
-    // One application-owned low-priority worker bounds native concurrency across navigation destinations.
+    // Keep live captions outside Android's background scheduling group. Nice +4 still
+    // gives playback/UI precedence; the serial worker and two native threads stay bounded.
     @Provides @Singleton @CaptionWorker fun worker(): CoroutineDispatcher = Executors.newSingleThreadExecutor { action ->
-        Thread({ Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND); action.run() }, "caption-worker")
+        Thread({
+            try { Process.setThreadPriority(Process.THREAD_PRIORITY_DEFAULT + 4) }
+            catch (_: SecurityException) { /* Keep the inherited priority if an OEM denies this adjustment. */ }
+            action.run()
+        }, "caption-worker")
     }.asCoroutineDispatcher()
 }
