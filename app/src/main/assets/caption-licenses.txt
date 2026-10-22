@@ -1,5 +1,11 @@
 MN StreamX local caption components
 
+MN StreamX v29.5 modifications: Marian's uint8 vocabulary projection is transposed
+into read-only external-data blocks once during local cache preparation. The
+original float projection and vocabulary are retained; greedy token selection
+runs inside ONNX. CPU graph optimizations are enabled for the prepared decoder.
+No downloaded model weights are changed.
+
 MN StreamX v29.4 modifications: A checked private whisper.cpp derivative bounds
 live-state audio and prompt allocations, reuses the first language-detection
 encoder, and installs cancellation/deadline callbacks in the CPU backend.

@@ -57,4 +57,22 @@ class OnnxMappedModelCacheTest {
         try { cache.prepare(source(), sha); fail("Storage shortage ignored") }
         catch (error: CaptionStorageException) { assertEquals(0L, error.availableBytes); assertTrue(error.requiredBytes > 128) }
     }
+    @Test fun preparedProjectionCannotReuseTheOldGraphEvenWhenThePinnedSourceIsTheSame() = runTest {
+        var calls = 0
+        val export: suspend (File, File, File) -> Unit = { _, graph, weights -> calls++; write(graph, weights) }
+        val input = source()
+        val original = OnnxMappedModelCache(export).prepare(input, sha)
+        val prepared = OnnxMappedModelCache(export, variant = "live-v2").prepare(input, sha)
+        assertNotEquals(original.parentFile, prepared.parentFile)
+        assertEquals(2, calls)
+        assertEquals(prepared, OnnxMappedModelCache(export, variant = "live-v2").prepare(input, sha))
+        assertEquals(2, calls)
+    }
+    @Test fun addedProjectionBytesAreIncludedInTheStorageDecision() = runTest {
+        val mib = 1048576L
+        val cache = OnnxMappedModelCache({ _, _, _ -> error("Storage check must run first") },
+            freeBytes = { 32 * mib }, variant = "live-v2", addedWeightBytes = 32 * mib)
+        try { cache.prepare(source(), sha); fail("Additional weights were not budgeted") }
+        catch (error: CaptionStorageException) { assertTrue(error.requiredBytes > 56 * mib) }
+    }
 }

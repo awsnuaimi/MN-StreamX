@@ -12,11 +12,17 @@ import java.security.MessageDigest
 /** Bounded preparation, atomic directory publication, and checksums for graph and external weights. */
 internal class OnnxMappedModelCache(
     private val export: suspend (File, File, File) -> Unit = OnnxExternalWeights::export,
-    private val freeBytes: (File) -> Long = { it.usableSpace }
+    private val freeBytes: (File) -> Long = { it.usableSpace },
+    private val variant: String = "v1",
+    private val addedWeightBytes: Long = 0
 ) {
+    init {
+        require(variant.matches(Regex("[a-z0-9-]{1,40}")))
+        require(addedWeightBytes in 0..(64 * CaptionResourcePolicy.MIB))
+    }
     suspend fun prepare(source: File, sourceSha: String): File = lock.withLock {
         require(sourceSha.matches(Regex("[a-f0-9]{64}")))
-        val folder = File(source.parentFile, source.nameWithoutExtension + "-mnx-mapped-v1-" + sourceSha.take(12))
+        val folder = File(source.parentFile, source.nameWithoutExtension + "-mnx-mapped-$variant-" + sourceSha.take(12))
         val model = File(folder, "model.onnx"); val weights = File(folder, "weights.bin")
         val manifest = File(folder, "checksum.txt")
         val text = manifest.takeIf { it.isFile && it.length() < 1024 }?.readText()
@@ -30,7 +36,8 @@ internal class OnnxMappedModelCache(
                 return@withLock model
             }
         }
-        val required = source.length() + 8 * CaptionResourcePolicy.MIB + CaptionResourcePolicy.STORAGE_RESERVE
+        val maximumBytes = source.length() + 8 * CaptionResourcePolicy.MIB + addedWeightBytes
+        val required = maximumBytes + CaptionResourcePolicy.STORAGE_RESERVE
         val available = freeBytes(source.parentFile!!).coerceAtLeast(0)
         if (available < required) throw CaptionStorageException(available, required)
         val temporary = File.createTempFile("caption-mapped-", ".part", source.parentFile)
@@ -40,7 +47,7 @@ internal class OnnxMappedModelCache(
             export(source, graph, data)
             currentCoroutineContext().ensureActive()
             check(graph.isFile && data.isFile && graph.length() > 0 && data.length() > 0)
-            check(graph.length() + data.length() <= source.length() + 8 * CaptionResourcePolicy.MIB)
+            check(graph.length() + data.length() <= maximumBytes)
             File(temporary, "checksum.txt").writeText(listOf("mnx-external-v1", sourceSha,
                 graph.length().toString(), digest(graph), data.length().toString(), digest(data)).joinToString("\n"))
             currentCoroutineContext().ensureActive()

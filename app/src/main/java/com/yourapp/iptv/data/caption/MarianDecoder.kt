@@ -32,16 +32,9 @@ internal class MarianDecoder(private val environment: OrtEnvironment, private va
                     if (first == null) first = output
                     if (previous != null && previous !== first) previous!!.close()
                     previous = output
-                    val logits = (output.get("logits").get() as OnnxTensor).floatBuffer
-                    val size = 64110
-                    val base = logits.remaining() - size
-                    var best = eos.toInt(); var score = Float.NEGATIVE_INFINITY
-                    for (index in 0 until size) {
-                        if (index == startId.toInt()) continue
-                        val value = logits.get(base + index)
-                        if (value > score) { score = value; best = index }
-                    }
-                    token = best.toLong()
+                    token = (output.get(MarianPreparedProjection.TOKEN_OUTPUT).orElseThrow {
+                        IllegalStateException("Missing prepared decoder token") } as OnnxTensor).longBuffer.get(0)
+                    check(token in 0 until startId) { "Invalid decoder token" }
                 } }
                 if (token == eos) break
                 generated += token

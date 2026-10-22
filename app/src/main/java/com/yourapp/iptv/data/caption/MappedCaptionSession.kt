@@ -14,12 +14,13 @@ internal class MappedCaptionSession private constructor(val session: OrtSession,
         try { session.close() } finally { options.close() }
     }
     companion object {
-        fun open(environment: OrtEnvironment, file: File): MappedCaptionSession {
+        fun open(environment: OrtEnvironment, file: File, optimize: Boolean = false): MappedCaptionSession {
             val options = OrtSession.SessionOptions()
             try {
                 options.setIntraOpNumThreads(1); options.setInterOpNumThreads(1)
                 options.setCPUArenaAllocator(false); options.setMemoryPatternOptimization(false)
-                options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
+                options.setOptimizationLevel(if (optimize) OrtSession.SessionOptions.OptLevel.EXTENDED_OPT
+                    else OrtSession.SessionOptions.OptLevel.NO_OPT)
                 options.addConfigEntry("session.disable_prepacking", "1")
                 options.addConfigEntry("session.intra_op.allow_spinning", "0")
                 options.addConfigEntry("session.inter_op.allow_spinning", "0")
