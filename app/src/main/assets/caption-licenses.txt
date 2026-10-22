@@ -1,5 +1,12 @@
 MN StreamX local caption components
 
+MN StreamX v29.8 modifications: The Marian decoder is optimized once on the
+device before listening. A checked, runtime- and architecture-specific local
+cache stores the optimized graph with read-only external weights. Live windows
+reload it without repeating graph optimization. The original float vocabulary
+projection, model weights and vocabulary are retained. The v29.7 CSE alignment
+workaround remains enabled during preparation.
+
 MN StreamX v29.5 modifications: Marian's uint8 vocabulary projection is transposed
 into read-only external-data blocks once during local cache preparation. The
 original float projection and vocabulary are retained; greedy token selection

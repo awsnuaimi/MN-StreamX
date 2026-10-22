@@ -42,9 +42,12 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
         val encoderAsset = CaptionModelCatalog.translation.assets.first { it.path.contains("encoder_model") }
         encoderFile = cache.prepare(folder.resolve(encoderAsset.path), encoderAsset.sha256)
         requireMemory(CaptionResourcePolicy.DECODER)
-        decoderFile = OnnxMappedModelCache(export = MarianPreparedProjection::export,
+        val preparedDecoder = OnnxMappedModelCache(export = MarianPreparedProjection::export,
             variant = "live-v2", addedWeightBytes = 32 * CaptionResourcePolicy.MIB)
             .prepare(source, MarianLowMemoryModel.OUTPUT_SHA256)
+        nativeMemory.trimMemory()
+        requireMemory(CaptionResourcePolicy.DECODER)
+        decoderFile = OnnxOptimizedModelCache().prepare(preparedDecoder, MarianLowMemoryModel.OUTPUT_SHA256)
         currentCoroutineContext().ensureActive()
         tokenizer = MarianTokenizer(folder)
         nativeMemory.trimMemory()
@@ -72,7 +75,7 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
                     currentCoroutineContext().ensureActive()
                     check(!cancelled)
                     requireMemory(if (decoder == null) CaptionResourcePolicy.MAPPED_DECODER else CaptionResourcePolicy.DECODER_WARM)
-                    val session = decoder ?: MappedCaptionSession.open(env, checkNotNull(decoderFile), optimize = true)
+                    val session = decoder ?: MappedCaptionSession.open(env, checkNotNull(decoderFile))
                         .also { decoder = it }
                     val generated = MarianDecoder(env, session.session, ::run).decode(mask, result[0] as OnnxTensor)
                     currentCoroutineContext().ensureActive()

@@ -14,7 +14,9 @@ internal class MappedCaptionSession private constructor(val session: OrtSession,
         try { session.close() } finally { options.close() }
     }
     companion object {
-        fun open(environment: OrtEnvironment, file: File, optimize: Boolean = false): MappedCaptionSession {
+        fun open(environment: OrtEnvironment, file: File, optimize: Boolean = false,
+            optimizedOutput: File? = null): MappedCaptionSession {
+            require(optimizedOutput == null || optimize)
             val options = OrtSession.SessionOptions()
             try {
                 options.setIntraOpNumThreads(1); options.setInterOpNumThreads(1)
@@ -28,6 +30,11 @@ internal class MappedCaptionSession private constructor(val session: OrtSession,
                 options.addConfigEntry("session.disable_prepacking", "1")
                 options.addConfigEntry("session.intra_op.allow_spinning", "0")
                 options.addConfigEntry("session.inter_op.allow_spinning", "0")
+                if (optimizedOutput != null) {
+                    options.setOptimizedModelFilePath(optimizedOutput.absolutePath)
+                    options.addConfigEntry("session.optimized_model_external_initializers_file_name", "weights.bin")
+                    options.addConfigEntry("session.optimized_model_external_initializers_min_size_in_bytes", "65536")
+                }
                 return MappedCaptionSession(environment.createSession(file.absolutePath, options), options)
             } catch (error: Throwable) { options.close(); throw error }
         }
