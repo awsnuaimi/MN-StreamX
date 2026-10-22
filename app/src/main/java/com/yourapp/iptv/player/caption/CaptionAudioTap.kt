@@ -15,10 +15,12 @@ class CaptionAudioTap : CaptionAudioInput {
         var assembler: PcmWindowAssembler? = null
     }
     @Volatile private var active: Receiver? = null
+    @Volatile private var windowMillis = 5000
     @Volatile override var positionUs: Long = Long.MIN_VALUE
         private set
     private val changes = MutableStateFlow(0L)
     val epoch = changes.asStateFlow()
+    override fun limitWindow(millis: Int) { windowMillis = millis.coerceIn(2000, 5000) }
     override fun open(): CaptionFeed {
         val receiver = Receiver()
         active?.queue?.close()
@@ -41,6 +43,9 @@ class CaptionAudioTap : CaptionAudioInput {
             receiver.format = format
             receiver.assembler = PcmWindowAssembler(format) { receiver.queue.trySend(it) }
         }
-        receiver.assembler?.accept(data, ptsUs)
+        receiver.assembler?.let { assembler ->
+            assembler.limitWindow(windowMillis)
+            assembler.accept(data, ptsUs)
+        }
     }
 }

@@ -6,6 +6,31 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class PcmWindowAssemblerTest {
+    @Test fun shorteningAPartialWindowPreservesPcmAndContinuousTimestamps() {
+        val windows = mutableListOf<AudioWindow>()
+        val assembler = PcmWindowAssembler(PcmFormat(16000, 1, 2), windows::add)
+        fun audio(seconds: Int) = ByteBuffer.allocate(seconds * 32000).order(ByteOrder.LITTLE_ENDIAN).apply {
+            repeat(seconds * 16000) { putShort(16384) }; flip()
+        }
+        assembler.accept(audio(2), 0)
+        assembler.limitWindow(3500)
+        val rest = audio(5); assembler.accept(rest, 2000000)
+        assertEquals(0, rest.position())
+        assertEquals(listOf(56000, 56000), windows.map { it.samples.size })
+        assertEquals(listOf(0L, 3500000L), windows.map { it.startUs })
+        assertTrue(windows.flatMap { it.samples.asList() }.all { kotlin.math.abs(it - 0.5f) < 0.001f })
+    }
+    @Test fun requestedWindowSizesStayWithinTheFixedSampleBuffer() {
+        for ((requested, expected) in listOf(0 to 2000L, Int.MAX_VALUE to 5000L)) {
+            val windows = mutableListOf<AudioWindow>()
+            val assembler = PcmWindowAssembler(PcmFormat(16000, 1, 2), windows::add)
+            assembler.limitWindow(requested)
+            val audio = ByteBuffer.allocate(16000 * 10 * 2).order(ByteOrder.LITTLE_ENDIAN)
+            repeat(16000 * 10) { audio.putShort(16384) }; audio.flip()
+            assembler.accept(audio, 0)
+            assertTrue(windows.isNotEmpty()); assertTrue(windows.all { it.durationMillis == expected })
+        }
+    }
     @Test fun stereo48kIsDownmixedResampledAndDoesNotMutateThePlaybackBuffer() {
         val windows = mutableListOf<AudioWindow>()
         val input = ByteBuffer.allocate(48000 * 5 * 4).order(ByteOrder.LITTLE_ENDIAN)

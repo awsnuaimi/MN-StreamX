@@ -11,6 +11,8 @@ class CaptionFeed(val windows: ReceiveChannel<AudioWindow>, private val finish: 
 interface CaptionAudioInput {
     val positionUs: Long
     fun open(): CaptionFeed
+    /** Future audio windows only; the renderer owns its sample buffer. */
+    fun limitWindow(millis: Int) = Unit
 }
 data class PcmFormat(val rate: Int, val channels: Int, val bytes: Int, val floating: Boolean = false) {
     val supported: Boolean get() = rate in 8000..192000 && channels in 1..8 &&

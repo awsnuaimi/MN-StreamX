@@ -59,14 +59,17 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                         engine = voice
                         try {
                             currentCoroutineContext().ensureActive()
+                            val recovery = CaptionWindowRecovery()
+                            input.limitWindow(recovery.windowMillis)
                             input.open().use { feed ->
-                                val throughput = CaptionThroughput()
+                                var throughput = CaptionThroughput()
                                 status(CaptionStatus.LISTENING)
                                 while (true) {
                                     val window = withTimeoutOrNull(12000) { feed.windows.receiveCatching() }?.getOrNull()
                                     if (window == null) { status(CaptionStatus.UNAVAILABLE); break }
                                     currentCoroutineContext().ensureActive()
-                                    if (window.samples.size < 16000 || CaptionPresentation.tooOld(window, input.positionUs)) continue
+                                    if (window.samples.size < 16000 || !recovery.accepts(window) ||
+                                        CaptionPresentation.tooOld(window, input.positionUs)) continue
                                     // A parked speech engine needs a fresh compute state. Do not let a
                                     // retained Marian decoder overlap that allocation on low-memory TVs.
                                     if (textTarget != "en") text.releaseWorkingMemory()
@@ -80,7 +83,17 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     val translated = when {
                                         result.text.isBlank() -> ""
                                         direct -> result.text
-                                        else -> text.translate(result.text)
+                                        else -> try { text.translate(result.text) }
+                                        catch (error: CaptionDeadlineException) {
+                                            currentCoroutineContext().ensureActive()
+                                            if (token != generation) break
+                                            if (error.stage != CaptionStage.TRANSLATION || !recovery.retry()) throw error
+                                            text.releaseWorkingMemory()
+                                            input.limitWindow(recovery.windowMillis)
+                                            throughput = CaptionThroughput()
+                                            status(CaptionStatus.ADAPTING)
+                                            continue
+                                        }
                                     }
                                     currentCoroutineContext().ensureActive()
                                     val finished = now()
@@ -91,6 +104,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     val stopped = throughput.assess(window, timing.totalMillis, input.positionUs)
                                     if (stopped != null) { state.value = CaptionPipelineState(stopped, timing = timing); break }
                                     if (translated.isBlank()) continue
+                                    recovery.succeeded()
                                     val begin = window.startUs + result.startMillis.coerceIn(0, window.durationMillis) * 1000
                                     val end = window.startUs + result.endMillis.coerceIn(0, window.durationMillis) * 1000
                                     state.value = CaptionPipelineState(CaptionProgress(CaptionStatus.LISTENING),

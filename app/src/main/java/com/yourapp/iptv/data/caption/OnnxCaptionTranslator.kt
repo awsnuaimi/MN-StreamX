@@ -11,11 +11,11 @@ import java.io.File
 import java.nio.LongBuffer
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 /** Read-only mapped weights, a reusable decoder, and a short-lived encoder session. */
 internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
-    private val device: CaptionDevice = CaptionDevice { true }) : CaptionTranslator {
+    private val device: CaptionDevice = CaptionDevice { true },
+    private val budgetMillis: () -> Long = { 8000L }) : CaptionTranslator {
     private var target = "en"
     private var verifiedFolder: File? = null
     private var encoderFile: File? = null
@@ -23,9 +23,7 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
     private var decoder: MappedCaptionSession? = null
     private var tokenizer: MarianTokenizer? = null
     private val nativeMemory by lazy { NativeWhisper() }
-    private val lock = Any()
-    private var active: OrtSession.RunOptions? = null
-    @Volatile private var cancelled = false
+    private val calls = CaptionCallControl()
 
     override suspend fun download(target: String, progress: (Int) -> Unit) {
         this.target = target
@@ -55,56 +53,68 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
     override suspend fun translate(text: String): String {
         currentCoroutineContext().ensureActive()
         if (target == "en") return text
-        check(!cancelled)
         val codec = checkNotNull(tokenizer)
         val env = OrtEnvironment.getEnvironment()
         val ids = codec.encode(text, target)
-        val started = System.nanoTime()
-        val expired = AtomicBoolean(false)
-        val timeout = deadlines.schedule({ expired.set(true); cancel() }, 8, TimeUnit.SECONDS)
         try {
-            OnnxTensor.createTensor(env, LongBuffer.wrap(ids), longArrayOf(1, ids.size.toLong())).use { input ->
-            OnnxTensor.createTensor(env, LongBuffer.wrap(LongArray(ids.size) { 1 }), longArrayOf(1, ids.size.toLong())).use { mask ->
-                if (!device.assess(CaptionResourcePolicy.ENCODER).allowed) releaseWorkingMemory()
-                requireMemory(CaptionResourcePolicy.ENCODER)
-                val encoded = MappedCaptionSession.open(env, checkNotNull(encoderFile)).use { encoder ->
-                    run(encoder.session, mapOf("input_ids" to input, "attention_mask" to mask))
-                }
-                encoded.use { result ->
-                    nativeMemory.trimMemory()
-                    currentCoroutineContext().ensureActive()
-                    check(!cancelled)
-                    requireMemory(if (decoder == null) CaptionResourcePolicy.MAPPED_DECODER else CaptionResourcePolicy.DECODER_WARM)
-                    val session = decoder ?: MappedCaptionSession.open(env, checkNotNull(decoderFile))
-                        .also { decoder = it }
-                    val generated = MarianDecoder(env, session.session, ::run).decode(mask, result[0] as OnnxTensor)
-                    currentCoroutineContext().ensureActive()
-                    check(!cancelled)
-                    return codec.decode(generated)
-                }
-            } }
-        } catch (error: Exception) {
-            currentCoroutineContext().ensureActive()
-            if (expired.get()) throw CaptionDeadlineException(CaptionStage.TRANSLATION,
-                (System.nanoTime() - started) / 1000000, 8000)
-            throw error
-        } finally { timeout.cancel(false); nativeMemory.trimMemory() }
+            OrtSession.RunOptions().use { options ->
+                val call = calls.begin { options.setTerminate(true) }
+                try {
+                    val started = System.nanoTime()
+                    val budget = budgetMillis().coerceIn(1L, 8000L)
+                    fun elapsed() = (System.nanoTime() - started) / 1000000
+                    fun checkCall() {
+                        calls.checkRunning(call)
+                        if (call.expired || elapsed() >= budget)
+                            throw CaptionDeadlineException(CaptionStage.TRANSLATION, elapsed(), budget)
+                    }
+                    fun run(owner: OrtSession, feed: Map<String, OnnxTensorLike>): OrtSession.Result {
+                        checkCall()
+                        return owner.run(feed, options)
+                    }
+                    val timeout = deadlines.schedule({ calls.expire(call) }, budget, TimeUnit.MILLISECONDS)
+                    try {
+                        val shape = longArrayOf(1, ids.size.toLong())
+                        OnnxTensor.createTensor(env, LongBuffer.wrap(ids), shape).use { input ->
+                        OnnxTensor.createTensor(env, LongBuffer.wrap(LongArray(ids.size) { 1 }), shape).use { mask ->
+                            if (!device.assess(CaptionResourcePolicy.ENCODER).allowed) releaseWorkingMemory()
+                            requireMemory(CaptionResourcePolicy.ENCODER)
+                            val encoded = MappedCaptionSession.open(env, checkNotNull(encoderFile)).use { encoder ->
+                                run(encoder.session, mapOf("input_ids" to input, "attention_mask" to mask))
+                            }
+                            encoded.use { result ->
+                                nativeMemory.trimMemory()
+                                currentCoroutineContext().ensureActive()
+                                checkCall()
+                                requireMemory(if (decoder == null) CaptionResourcePolicy.MAPPED_DECODER else CaptionResourcePolicy.DECODER_WARM)
+                                val session = decoder ?: MappedCaptionSession.open(env, checkNotNull(decoderFile))
+                                    .also { decoder = it }
+                                val generated = MarianDecoder(env, session.session, ::run).decode(mask, result[0] as OnnxTensor)
+                                currentCoroutineContext().ensureActive()
+                                val decoded = codec.decode(generated)
+                                checkCall()
+                                return decoded
+                            }
+                        } }
+                    } catch (error: Exception) {
+                        currentCoroutineContext().ensureActive()
+                        calls.checkRunning(call)
+                        if (call.expired) throw CaptionDeadlineException(CaptionStage.TRANSLATION, elapsed(), budget)
+                        throw error
+                    } finally { timeout.cancel(false) }
+                } finally { calls.finish(call) }
+            }
+        } finally { nativeMemory.trimMemory() }
     }
     private fun requireMemory(stage: String) {
         val check = device.assess(stage)
         if (!check.allowed) throw CaptionMemoryException(check)
     }
-    private fun run(session: OrtSession, input: Map<String, OnnxTensorLike>): OrtSession.Result {
-        val options = OrtSession.RunOptions()
-        synchronized(lock) { if (cancelled) options.setTerminate(true); active = options }
-        return try { session.run(input, options) }
-        finally { synchronized(lock) { active = null; options.close() } }
-    }
     override fun releaseWorkingMemory() {
         decoder?.close(); decoder = null
         if (tokenizer != null) nativeMemory.trimMemory()
     }
-    override fun cancel() { synchronized(lock) { cancelled = true; active?.setTerminate(true) } }
+    override fun cancel() { calls.cancel() }
     override fun close() {
         cancel(); releaseWorkingMemory(); tokenizer?.close(); tokenizer = null
         verifiedFolder = null; encoderFile = null; decoderFile = null

@@ -16,6 +16,9 @@ class PcmWindowAssembler(private val format: PcmFormat, private val offer: (Audi
     private var energy = 0.0
     private var quiet = 0
     private val step = format.rate / 16000.0
+    private var limitSamples = samples.size
+
+    fun limitWindow(millis: Int) { limitSamples = millis.coerceIn(2000, 5000) * 16 }
 
     fun reset() {
         count = 0; frame = 0; next = 0.0; previous = 0f
@@ -54,7 +57,7 @@ class PcmWindowAssembler(private val format: PcmFormat, private val offer: (Audi
                 energy += value * value
                 quiet = if (abs(value) < 0.008f) quiet + 1 else 0
                 next += step
-                if (count == samples.size || (count >= 32000 && quiet >= 9600)) emit()
+                if (count >= limitSamples || (count >= 32000 && quiet >= 9600)) emit()
             }
             previous = mono; frame++
         }

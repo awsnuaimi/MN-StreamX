@@ -8,6 +8,17 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class CaptionAudioTapTest {
+    @Test fun aWorkerLimitChangesFutureRendererWindowsAndKeepsTheLatestOnly() = runTest {
+        val tap = CaptionAudioTap(); val feed = tap.open()
+        tap.limitWindow(2500)
+        val pcm = ByteBuffer.allocate(16000 * 5 * 2).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(16000 * 5) { pcm.putShort(16000) }; pcm.flip()
+        tap.accept(pcm, 0, PcmFormat(16000, 1, 2))
+        val window = feed.windows.receive()
+        assertEquals(2500L, window.durationMillis); assertEquals(2500000L, window.startUs)
+        assertEquals(0, pcm.position()); assertTrue(feed.windows.tryReceive().isFailure)
+        feed.close()
+    }
     @Test fun disabledCaptureHasNoQueueAndTheEnabledQueueKeepsOnlyTheLatestWindow() = runTest {
         val tap = CaptionAudioTap()
         fun push(pts: Long) {
