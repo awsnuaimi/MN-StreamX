@@ -1,6 +1,7 @@
 package com.yourapp.iptv.domain.repository
 
 import com.yourapp.iptv.domain.model.SpeechText
+import com.yourapp.iptv.domain.model.CaptionExitReport
 import com.yourapp.iptv.domain.caption.CaptionResourceCheck
 import com.yourapp.iptv.domain.caption.CaptionResourcePolicy
 import java.io.File
@@ -29,7 +30,7 @@ interface CaptionTranslator : AutoCloseable {
 }
 fun interface CaptionTranslatorFactory { fun create(): CaptionTranslator }
 data class CaptionDeviceStats(val abi: String, val cores: Int, val totalMemoryMb: Long, val availableMemoryMb: Long,
-    val availableStorageMb: Long? = null)
+    val availableStorageMb: Long? = null, val lastExit: CaptionExitReport? = null)
 fun interface CaptionDevice {
     fun canRun(target: String): Boolean
     fun supported(): Boolean = true

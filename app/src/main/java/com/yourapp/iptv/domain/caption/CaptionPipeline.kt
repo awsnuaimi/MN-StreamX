@@ -67,6 +67,9 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     if (window == null) { status(CaptionStatus.UNAVAILABLE); break }
                                     currentCoroutineContext().ensureActive()
                                     if (window.samples.size < 16000 || CaptionPresentation.tooOld(window, input.positionUs)) continue
+                                    // A parked speech engine needs a fresh compute state. Do not let a
+                                    // retained Marian decoder overlap that allocation on low-memory TVs.
+                                    if (textTarget != "en") text.releaseWorkingMemory()
                                     if (!ramAllowed(voice.memoryStage, text::releaseWorkingMemory)) break
                                     val started = now()
                                     val result = voice.transcribe(window.samples, settings.source, !direct)

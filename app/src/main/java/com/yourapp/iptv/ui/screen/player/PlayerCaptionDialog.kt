@@ -23,6 +23,8 @@ import com.yourapp.iptv.domain.repository.CaptionDeviceStats
 import com.yourapp.iptv.player.caption.EmbeddedCaptions
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.viewmodel.CaptionViewModel
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCaptions?, onDismiss: () -> Unit) {
@@ -50,6 +52,26 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             snapshot.availableMemoryMb), style = MaterialTheme.typography.bodySmall) }
                         snapshot.availableStorageMb?.let { free ->
                             item { Text(stringResource(R.string.caption_storage_available, free), style = MaterialTheme.typography.bodySmall) }
+                        }
+                        snapshot.lastExit?.let { report ->
+                            item {
+                                val reason = stringResource(when (report.kind) {
+                                    CaptionExitKind.LOW_MEMORY -> R.string.caption_exit_memory
+                                    CaptionExitKind.NATIVE_CRASH -> R.string.caption_exit_native
+                                    CaptionExitKind.JAVA_CRASH -> R.string.caption_exit_java
+                                    CaptionExitKind.ANR -> R.string.caption_exit_anr
+                                    CaptionExitKind.SIGNAL -> R.string.caption_exit_signal
+                                    CaptionExitKind.RESOURCE_LIMIT -> R.string.caption_exit_resource
+                                    CaptionExitKind.OTHER -> R.string.caption_exit_other
+                                })
+                                val time = remember(report.timestampMillis) {
+                                    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
+                                        .format(Date(report.timestampMillis))
+                                }
+                                Text(stringResource(R.string.caption_last_exit, reason, time, report.statusCode,
+                                    report.rssMb.takeIf { it > 0 }?.toString() ?: "—"),
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                     item {

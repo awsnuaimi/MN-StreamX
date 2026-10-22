@@ -45,4 +45,12 @@
     <string name="caption_stage_lag">Verzögerung gegenüber der Wiedergabe</string>
     <string name="caption_timing">Audio %1$d ms · Erkennung %2$d ms · Übersetzung %3$d ms · Speicherfreigabe %4$d ms</string>
     <string name="caption_direct">Audio- und Untertitelsprache stimmen überein: Die direkte Transkription benötigt kein zusätzliches Übersetzungsmodell.</string>
+    <string name="caption_last_exit">Letzte vom System gemeldete Beendigung: %1$s\n%2$s · Status %3$d · RSS %4$s MB</string>
+    <string name="caption_exit_memory">Wegen Speicherdruck beendet</string>
+    <string name="caption_exit_native">Absturz im nativen Code</string>
+    <string name="caption_exit_java">Unbehandelte Ausnahme in der App</string>
+    <string name="caption_exit_anr">App reagiert nicht (ANR)</string>
+    <string name="caption_exit_signal">Systemsignal; Ursache unbestätigt</string>
+    <string name="caption_exit_resource">Geräteressourcenlimit überschritten</string>
+    <string name="caption_exit_other">Anderer vom System gemeldeter Grund</string>
 </resources>

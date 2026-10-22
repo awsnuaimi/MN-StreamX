@@ -45,4 +45,12 @@
     <string name="caption_stage_lag">التأخر عن البث</string>
     <string name="caption_timing">المقطع %1$d ms · الصوت %2$d ms · الترجمة %3$d ms · تحرير الذاكرة %4$d ms</string>
     <string name="caption_direct">لغة الصوت تطابق لغة النص: يعمل التفريغ المباشر دون نموذج ترجمة إضافي.</string>
+    <string name="caption_last_exit">آخر خروج سجّله النظام: %1$s\n%2$s · الحالة %3$d · RSS %4$s MB</string>
+    <string name="caption_exit_memory">إغلاق بسبب ضغط الذاكرة</string>
+    <string name="caption_exit_native">انهيار في الكود الأصلي (Native)</string>
+    <string name="caption_exit_java">استثناء غير معالج في التطبيق</string>
+    <string name="caption_exit_anr">التطبيق لم يستجب (ANR)</string>
+    <string name="caption_exit_signal">إغلاق بإشارة نظام؛ السبب غير محسوم</string>
+    <string name="caption_exit_resource">تجاوز حد موارد الجهاز</string>
+    <string name="caption_exit_other">سبب آخر مسجّل لدى النظام</string>
 </resources>

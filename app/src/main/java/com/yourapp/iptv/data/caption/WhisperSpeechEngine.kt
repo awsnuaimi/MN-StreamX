@@ -15,9 +15,10 @@ import java.io.IOException
 internal class WhisperSpeechEngine(model: File) : SpeechEngine {
     private val native = NativeWhisper()
     private val lock = Any()
+    private var stateResident = false
     private var handle = native.create(model.absolutePath, (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 2))
     init { if (handle == 0L) throw IOException("Speech model could not be loaded") }
-    override val memoryStage get() = CaptionResourcePolicy.SPEECH_WARM
+    override val memoryStage get() = if (stateResident) CaptionResourcePolicy.SPEECH_WARM else CaptionResourcePolicy.SPEECH
     override suspend fun transcribe(samples: FloatArray, language: String): SpeechText = transcribe(samples, language, true)
     override suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText {
         currentCoroutineContext().ensureActive()
@@ -31,16 +32,19 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
         }
         currentCoroutineContext().ensureActive()
         if (rows.size != 4) throw IOException("Invalid local speech result")
+        stateResident = true
         return SpeechText(rows[0], rows[3].trim().take(2000), rows[1].toLongOrNull() ?: 0,
             rows[2].toLongOrNull() ?: samples.size * 1000L / 16000)
     }
     override fun cancel() { synchronized(lock) { if (handle != 0L) native.cancel(handle) } }
     override fun releaseWorkingMemory() {
         val pointer = synchronized(lock) { handle }
-        if (pointer != 0L) native.park(pointer)
+        try { if (pointer != 0L) native.park(pointer) }
+        finally { stateResident = false }
     }
     override fun close() {
         val pointer = synchronized(lock) { handle.also { handle = 0L } }
+        stateResident = false
         if (pointer != 0L) native.release(pointer)
     }
 }
