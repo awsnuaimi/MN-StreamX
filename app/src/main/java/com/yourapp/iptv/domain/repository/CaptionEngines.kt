@@ -6,6 +6,8 @@ import java.io.File
 
 interface SpeechEngine : AutoCloseable {
     suspend fun transcribe(samples: FloatArray, language: String): SpeechText
+    /** Serial worker only: release native weights/buffers before text inference. */
+    fun releaseWorkingMemory() = Unit
     fun cancel()
     override fun close()
 }

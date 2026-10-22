@@ -47,11 +47,11 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                     try {
                         text.download(settings.target.tag) { status(CaptionStatus.TRANSLATING, it) }
                         currentCoroutineContext().ensureActive()
-                        if (!ramAllowed(settings.target.tag)) return@withContext
+                        if (!ramAllowed(CaptionResourcePolicy.SPEECH)) return@withContext
                         status(CaptionStatus.LOADING)
                         text.prepare(settings.target.tag) { status(CaptionStatus.TRANSLATING, it) }
                         currentCoroutineContext().ensureActive()
-                        if (!ramAllowed("en")) return@withContext
+                        if (!ramAllowed(CaptionResourcePolicy.SPEECH)) return@withContext
                         status(CaptionStatus.LOADING)
                         val voice = speech.open(model)
                         engine = voice
@@ -67,10 +67,11 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     currentCoroutineContext().ensureActive()
                                     if (window.samples.size < 16000) continue
                                     if (CaptionPresentation.tooOld(window, input.positionUs)) continue
-                                    if (!ramAllowed("running")) break
+                                    if (!ramAllowed(if (settings.target.tag == "en") CaptionResourcePolicy.RUNNING else CaptionResourcePolicy.SPEECH)) break
                                     val started = now()
                                     val result = voice.transcribe(window.samples, settings.source)
                                     currentCoroutineContext().ensureActive()
+                                    if (settings.target.tag != "en") voice.releaseWorkingMemory()
                                     val translated = if (result.text.isBlank()) "" else text.translate(result.text)
                                     currentCoroutineContext().ensureActive()
                                     val elapsed = (now() - started).coerceAtLeast(0)
@@ -100,6 +101,10 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                     requiredMb = CaptionResourcePolicy.ceilingMb(error.requiredBytes)))
             }
             catch (_: TimeoutException) { status(CaptionStatus.SLOW_DEVICE) }
+            catch (error: CaptionMemoryException) {
+                if (generation == token) state.value = CaptionPipelineState(CaptionProgress(error.check.failure,
+                    availableMb = error.check.availableMb, requiredMb = error.check.requiredMb))
+            }
             catch (_: OutOfMemoryError) { status(CaptionStatus.LOW_MEMORY) }
             catch (_: UnsatisfiedLinkError) { status(CaptionStatus.UNAVAILABLE) }
             catch (_: Exception) { status(CaptionStatus.FAILED) }

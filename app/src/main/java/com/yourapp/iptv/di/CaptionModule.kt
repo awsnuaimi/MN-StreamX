@@ -32,8 +32,8 @@ object CaptionModule {
     }
     @Provides @Singleton fun device(@ApplicationContext context: Context): CaptionDevice = CaptionDeviceInfo(context)
     @Provides @Singleton fun speech(): SpeechEngineFactory = SpeechEngineFactory { WhisperSpeechEngine(it) }
-    @Provides @Singleton internal fun translators(files: VerifiedModelFiles): CaptionTranslatorFactory =
-        CaptionTranslatorFactory { OnnxCaptionTranslator(files) }
+    @Provides @Singleton internal fun translators(files: VerifiedModelFiles, device: CaptionDevice): CaptionTranslatorFactory =
+        CaptionTranslatorFactory { OnnxCaptionTranslator(files, device) }
     // One application-owned low-priority worker bounds native concurrency across navigation destinations.
     @Provides @Singleton @CaptionWorker fun worker(): CoroutineDispatcher = Executors.newSingleThreadExecutor { action ->
         Thread({ Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND); action.run() }, "caption-worker")

@@ -10,11 +10,23 @@ data class CaptionResourceCheck(val allowed: Boolean, val failure: CaptionStatus
 object CaptionResourcePolicy {
     const val MIB = 1048576L
     const val STORAGE_RESERVE = 16 * MIB
+    const val SPEECH = "speech-window"
+    const val ENCODER = "text-encoder"
+    const val DECODER = "text-decoder"
+    const val RUNNING = "running"
     fun memory(target: String, availableBytes: Long, systemThresholdBytes: Long,
         systemLowMemory: Boolean): CaptionResourceCheck {
-        val budget = when (target) { "running" -> 96L; "en" -> 320L; else -> 576L } * MIB
-        val threshold = systemThresholdBytes.coerceIn(0, Long.MAX_VALUE - 64 * MIB) + 64 * MIB
-        val required = maxOf(budget, threshold)
+        // Incremental estimates for staged engines, above Android's own low-memory floor.
+        // The compact decoder head is evaluated in 8 MiB blocks, with no concurrent ASR.
+        val allocationMb = when (target) {
+            RUNNING -> 32L
+            SPEECH, ENCODER, "en" -> 128L
+            DECODER -> 192L
+            else -> 256L
+        }
+        val floor = maxOf(96 * MIB, systemThresholdBytes.coerceAtLeast(0))
+        val allocation = allocationMb * MIB
+        val required = floor.coerceAtMost(Long.MAX_VALUE - allocation) + allocation
         val available = availableBytes.coerceAtLeast(0)
         return CaptionResourceCheck(!systemLowMemory && available > required,
             if (systemLowMemory) CaptionStatus.MEMORY_PRESSURE else CaptionStatus.LOW_MEMORY,
@@ -24,3 +36,4 @@ object CaptionResourcePolicy {
 }
 
 class CaptionStorageException(val availableBytes: Long, val requiredBytes: Long) : IOException("Insufficient model storage")
+class CaptionMemoryException(val check: CaptionResourceCheck) : IOException("Insufficient caption working memory")

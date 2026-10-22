@@ -5,12 +5,16 @@
 #include <string>
 #include <vector>
 #include <new>
+#if defined(__ANDROID__) || defined(__GLIBC__)
+#include <malloc.h>
+#endif
 
 struct Session {
     whisper_context *context = nullptr;
     int threads = 1;
     std::atomic<bool> cancelled{false};
     int detectedLanguage = -1;
+    std::string modelPath;
     std::chrono::steady_clock::time_point deadline;
 };
 static bool abortWork(void *data) {
@@ -19,6 +23,21 @@ static bool abortWork(void *data) {
 }
 static void error(JNIEnv *env, const char *message) {
     env->ThrowNew(env->FindClass("java/io/IOException"), message);
+}
+static bool loadModel(Session *s) {
+    if (s->cancelled.load(std::memory_order_relaxed)) return false;
+    if (s->context) return true;
+    auto options = whisper_context_default_params(); options.use_gpu = false;
+    s->context = whisper_init_from_file_with_params(s->modelPath.c_str(), options);
+    return s->context != nullptr;
+}
+static void purgeUnusedMemory() {
+    // Return already-freed pages at phase boundaries; never change the global allocator policy.
+#if defined(__ANDROID__)
+    mallopt(M_PURGE, 0); // Available since API 28; application minSdk is 29.
+#elif defined(__GLIBC__)
+    malloc_trim(0);
+#endif
 }
 // Whisper returns UTF-8, whereas JNI NewStringUTF expects modified UTF-8.
 static jstring javaString(JNIEnv *env, const std::string &text) {
@@ -39,10 +58,10 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_create(JNIEnv *env, jobject, js
     Session *s = nullptr;
     try {
         s = new Session();
+        s->modelPath = name;
         s->threads = threads < 1 ? 1 : (threads > 2 ? 2 : threads);
         whisper_log_set([](ggml_log_level, const char *, void *) {}, nullptr);
-        auto options = whisper_context_default_params(); options.use_gpu = false;
-        s->context = whisper_init_from_file_with_params(name, options);
+        loadModel(s);
     } catch (...) { }
     env->ReleaseStringUTFChars(path, name);
     if (!s || !s->context) { delete s; error(env, "Could not load the local speech model"); return 0; }
@@ -54,6 +73,8 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jl
     auto *s = reinterpret_cast<Session *>(handle);
     const jsize count = env->GetArrayLength(samples);
     if (!s || count < 16000 || count > 96000) { error(env, "Invalid speech window"); return nullptr; }
+    try { if (!loadModel(s)) { error(env, "Could not reload the local speech model"); return nullptr; } }
+    catch (...) { error(env, "Could not reload the local speech model"); return nullptr; }
     const char *lang = env->GetStringUTFChars(language, nullptr);
     if (!lang) return nullptr;
     std::string selected(lang); env->ReleaseStringUTFChars(language, lang);
@@ -104,6 +125,15 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jl
 extern "C" JNIEXPORT void JNICALL
 Java_com_yourapp_iptv_data_caption_NativeWhisper_cancel(JNIEnv *, jobject, jlong handle) {
     if (handle) reinterpret_cast<Session *>(handle)->cancelled.store(true, std::memory_order_relaxed);
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_yourapp_iptv_data_caption_NativeWhisper_park(JNIEnv *, jobject, jlong handle) {
+    auto *s = reinterpret_cast<Session *>(handle);
+    if (s) { whisper_free(s->context); s->context = nullptr; purgeUnusedMemory(); }
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_yourapp_iptv_data_caption_NativeWhisper_trimMemory(JNIEnv *, jobject) {
+    purgeUnusedMemory();
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_yourapp_iptv_data_caption_NativeWhisper_release(JNIEnv *, jobject, jlong handle) {

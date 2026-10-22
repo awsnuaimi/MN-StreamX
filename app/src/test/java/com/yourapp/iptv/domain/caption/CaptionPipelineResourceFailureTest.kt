@@ -44,7 +44,7 @@ class CaptionPipelineResourceFailureTest {
         pipeline.start(input, enabled); runCurrent()
         assertEquals(CaptionStatus.LOW_STORAGE, pipeline.uiState.value.progress.status); assertTrue(closed)
     }
-    @Test fun remainingRamIsCheckedAfterOpeningTranslationAndBeforeOpeningSpeech() = runTest {
+    @Test fun remainingRamIsCheckedAfterPreparingTokenizerAndBeforeOpeningSpeech() = runTest {
         var prepared = false; var closed = false
         val models = object : CaptionModels {
             override suspend fun prepare(progress: (Int) -> Unit) = File("cached-speech")
@@ -64,6 +64,6 @@ class CaptionPipelineResourceFailureTest {
         pipeline.start(input, enabled); runCurrent()
         assertTrue(prepared); assertTrue(closed)
         val result = pipeline.uiState.value.progress
-        assertEquals(CaptionStatus.LOW_MEMORY, result.status); assertEquals(200L, result.availableMb); assertEquals(320L, result.requiredMb)
+        assertEquals(CaptionStatus.LOW_MEMORY, result.status); assertEquals(200L, result.availableMb); assertEquals(224L, result.requiredMb)
     }
 }

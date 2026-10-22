@@ -131,7 +131,7 @@ class CaptionPipelineTest {
         }
         val p = with(e) { pipeline(device) }; p.start(Input(), enabled); runCurrent()
         assertEquals(CaptionStatus.LOW_MEMORY, p.uiState.value.progress.status)
-        assertEquals(200L, p.uiState.value.progress.availableMb); assertEquals(576L, p.uiState.value.progress.requiredMb)
+        assertEquals(200L, p.uiState.value.progress.availableMb); assertEquals(224L, p.uiState.value.progress.requiredMb)
         assertEquals(0, e.opened); assertEquals(0, e.prepares)
     }
     @Test fun unsupportedArchitectureDoesNotMasqueradeAsLowRamOrDownloadModels() = runTest {

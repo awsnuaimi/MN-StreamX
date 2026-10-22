@@ -1,5 +1,9 @@
 MN StreamX local caption components
 
+MN StreamX v29.2 modifications: Whisper language detection uses the live audio context.
+The on-device Marian derivative evaluates the existing float vocabulary projection
+in blocks of 4096 columns. Original weights, vocabulary and upstream notices are retained.
+
 Whisper.cpp / GGML v1.9.5: MIT.
 https://github.com/ggml-org/whisper.cpp/tree/v1.9.5
 
