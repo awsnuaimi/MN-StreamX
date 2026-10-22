@@ -38,4 +38,11 @@
     <string name="caption_memory_pressure_details">Android reports RAM pressure. Available: %1$d MB; stage threshold: %2$d MB. Generation stopped to protect playback.</string>
     <string name="caption_low_storage">Insufficient storage space to download caption models.</string>
     <string name="caption_memory_pressure">Android reports RAM pressure. Generation stopped to protect playback.</string>
+    <string name="caption_slow_details">%1$s: %2$d ms, budget %3$d ms. Generation stopped to protect playback.</string>
+    <string name="caption_stage_speech">Speech recognition</string>
+    <string name="caption_stage_translation">Text translation</string>
+    <string name="caption_stage_throughput">Audio processing cadence</string>
+    <string name="caption_stage_lag">Delay behind playback</string>
+    <string name="caption_timing">Audio %1$d ms · Recognition %2$d ms · Translation %3$d ms · Memory release %4$d ms</string>
+    <string name="caption_direct">Audio and caption languages match: direct transcription needs no additional translation model.</string>
 </resources>

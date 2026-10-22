@@ -38,4 +38,11 @@
     <string name="caption_memory_pressure_details">أندرويد يبلغ عن ضغط على RAM. المتاح %1$d MB، وحد هذه المرحلة %2$d MB. أُوقف التوليد لحماية التشغيل.</string>
     <string name="caption_low_storage">مساحة التخزين غير كافية لتنزيل حزم الترجمة.</string>
     <string name="caption_memory_pressure">أندرويد يبلغ عن ضغط على ذاكرة RAM. أُوقف التوليد لحماية التشغيل.</string>
+    <string name="caption_slow_details">%1$s: %2$d ms، والحد %3$d ms. أُوقف التوليد لحماية البث.</string>
+    <string name="caption_stage_speech">التعرّف على الصوت</string>
+    <string name="caption_stage_translation">الترجمة إلى اللغة المطلوبة</string>
+    <string name="caption_stage_throughput">مجاراة المقاطع الصوتية</string>
+    <string name="caption_stage_lag">التأخر عن البث</string>
+    <string name="caption_timing">المقطع %1$d ms · الصوت %2$d ms · الترجمة %3$d ms · تحرير الذاكرة %4$d ms</string>
+    <string name="caption_direct">لغة الصوت تطابق لغة النص: يعمل التفريغ المباشر دون نموذج ترجمة إضافي.</string>
 </resources>

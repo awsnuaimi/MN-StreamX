@@ -53,7 +53,7 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                         }
                     }
                     item {
-                        val mb = CaptionModelCatalog.totalBytes(settings.target.tag) / (1024 * 1024)
+                        val mb = CaptionModelCatalog.totalBytes(settings.target.tag, settings.source) / (1024 * 1024)
                         Text(stringResource(R.string.caption_download_size, mb), style = MaterialTheme.typography.bodySmall)
                     }
                     item {
@@ -104,6 +104,13 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                     }
                     if (settings.mode == CaptionMode.GENERATED) {
                         item { Text(captionStatusText(generated.progress), style = MaterialTheme.typography.bodyMedium) }
+                        generated.timing?.let { timing ->
+                            item { Text(stringResource(R.string.caption_timing, timing.audioMillis, timing.speechMillis,
+                                timing.translationMillis, timing.memoryMillis), style = MaterialTheme.typography.bodySmall) }
+                        }
+                        if (settings.source == settings.target.tag) {
+                            item { Text(stringResource(R.string.caption_direct), style = MaterialTheme.typography.bodySmall) }
+                        }
                         item { AppButton(stringResource(R.string.caption_retry), model::retry) }
                     }
                     if (state.readFailed) item { Text(stringResource(R.string.caption_read_error)); AppButton(stringResource(R.string.caption_retry), model::reload) }

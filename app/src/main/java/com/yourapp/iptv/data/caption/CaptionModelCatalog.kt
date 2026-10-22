@@ -12,5 +12,6 @@ internal object CaptionModelCatalog {
             ModelAsset("vocab.json", 1548192L, "6ded021d39a6bd63339a045a0868f69d29aa8f3b6e53f43af2037246a5aeaca0"),
             ModelAsset("config.json", 1390L, "fc12f9f431b4fb8dae1f7776c7ad3f9a5cf0fd6321231e11b45e35a2b11730f3")
         ))
-    fun totalBytes(target: String) = speech.bytes + if (target == "en") 0L else translation.bytes
+    fun totalBytes(target: String, source: String? = null) = speech.bytes +
+        if (target == "en" || source == target) 0L else translation.bytes
 }

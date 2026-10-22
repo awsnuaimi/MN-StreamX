@@ -7,6 +7,16 @@ import com.yourapp.iptv.domain.model.*
 
 @Composable
 internal fun captionStatusText(value: CaptionProgress): String {
+    if (value.status == CaptionStatus.SLOW_DEVICE && value.stage != null &&
+        value.elapsedMillis != null && value.budgetMillis != null) {
+        val stage = stringResource(when (value.stage) {
+            CaptionStage.SPEECH -> R.string.caption_stage_speech
+            CaptionStage.TRANSLATION -> R.string.caption_stage_translation
+            CaptionStage.THROUGHPUT -> R.string.caption_stage_throughput
+            CaptionStage.LAG -> R.string.caption_stage_lag
+        })
+        return stringResource(R.string.caption_slow_details, stage, value.elapsedMillis, value.budgetMillis)
+    }
     val available = value.availableMb
     val required = value.requiredMb
     if (available != null && required != null) {

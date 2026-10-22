@@ -1,6 +1,10 @@
 package com.yourapp.iptv.data.caption
 
 import com.yourapp.iptv.domain.model.SpeechText
+import com.yourapp.iptv.domain.model.CaptionStage
+import com.yourapp.iptv.domain.caption.CaptionDeadlineException
+import com.yourapp.iptv.domain.caption.CaptionResourcePolicy
+import java.util.concurrent.TimeoutException
 import com.yourapp.iptv.domain.repository.SpeechEngine
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -13,11 +17,18 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
     private val lock = Any()
     private var handle = native.create(model.absolutePath, (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 2))
     init { if (handle == 0L) throw IOException("Speech model could not be loaded") }
-    override suspend fun transcribe(samples: FloatArray, language: String): SpeechText {
+    override val memoryStage get() = CaptionResourcePolicy.SPEECH_WARM
+    override suspend fun transcribe(samples: FloatArray, language: String): SpeechText = transcribe(samples, language, true)
+    override suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText {
         currentCoroutineContext().ensureActive()
         val pointer = synchronized(lock) { handle }
         check(pointer != 0L)
-        val rows = native.decode(pointer, samples, language)
+        val started = System.nanoTime()
+        val rows = try { native.decode(pointer, samples, language, translateToEnglish) }
+        catch (_: TimeoutException) {
+            currentCoroutineContext().ensureActive()
+            throw CaptionDeadlineException(CaptionStage.SPEECH, (System.nanoTime() - started) / 1000000, 10000)
+        }
         currentCoroutineContext().ensureActive()
         if (rows.size != 4) throw IOException("Invalid local speech result")
         return SpeechText(rows[0], rows[3].trim().take(2000), rows[1].toLongOrNull() ?: 0,
@@ -28,5 +39,8 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
         val pointer = synchronized(lock) { handle }
         if (pointer != 0L) native.park(pointer)
     }
-    override fun close() { synchronized(lock) { if (handle != 0L) { native.release(handle); handle = 0L } } }
+    override fun close() {
+        val pointer = synchronized(lock) { handle.also { handle = 0L } }
+        if (pointer != 0L) native.release(pointer)
+    }
 }

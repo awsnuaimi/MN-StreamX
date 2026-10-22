@@ -34,4 +34,11 @@ class CaptionResourcePolicyTest {
     @Test fun excessivelyLargeThresholdDoesNotOverflowIntoAnAdmission() {
         assertFalse(CaptionResourcePolicy.memory(CaptionResourcePolicy.SPEECH, 2048 * mb, Long.MAX_VALUE, false).allowed)
     }
+    @Test fun mappedAndWarmStagesKeepAndroidsHeadroomWithoutChargingForResidentWeightsTwice() {
+        assertFalse(CaptionResourcePolicy.memory(CaptionResourcePolicy.SPEECH_WARM, 192 * mb, 128 * mb, false).allowed)
+        assertTrue(CaptionResourcePolicy.memory(CaptionResourcePolicy.SPEECH_WARM, 193 * mb, 128 * mb, false).allowed)
+        assertFalse(CaptionResourcePolicy.memory(CaptionResourcePolicy.MAPPED_DECODER, 256 * mb, 128 * mb, false).allowed)
+        assertTrue(CaptionResourcePolicy.memory(CaptionResourcePolicy.MAPPED_DECODER, 257 * mb, 128 * mb, false).allowed)
+        assertFalse(CaptionResourcePolicy.memory(CaptionResourcePolicy.DECODER_WARM, 224 * mb, 128 * mb, false).allowed)
+    }
 }

@@ -97,7 +97,7 @@ class CaptionPipelineTest {
     }
     @Test fun sustainedSlowInferenceStopsInsteadOfAccumulatingDelay() = runTest {
         val e = Engines().apply { cost = 7000 }; val p = with(e) { pipeline() }; val input = Input()
-        p.start(input, enabled); runCurrent(); input.speech(); runCurrent(); input.speech(5000000); runCurrent()
+        p.start(input, enabled); runCurrent(); input.speech(); runCurrent(); input.speech(5000000); runCurrent(); input.speech(10000000); runCurrent()
         assertEquals(CaptionStatus.SLOW_DEVICE, p.uiState.value.progress.status)
         assertEquals(1, e.closed); assertTrue(input.closed)
     }

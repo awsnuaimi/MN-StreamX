@@ -2,11 +2,14 @@ package com.yourapp.iptv.domain.repository
 
 import com.yourapp.iptv.domain.model.SpeechText
 import com.yourapp.iptv.domain.caption.CaptionResourceCheck
+import com.yourapp.iptv.domain.caption.CaptionResourcePolicy
 import java.io.File
 
 interface SpeechEngine : AutoCloseable {
     suspend fun transcribe(samples: FloatArray, language: String): SpeechText
-    /** Serial worker only: release native weights/buffers before text inference. */
+    suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText = transcribe(samples, language)
+    val memoryStage: String get() = CaptionResourcePolicy.SPEECH
+    /** Serial worker only: release temporary computation buffers before text inference. */
     fun releaseWorkingMemory() = Unit
     fun cancel()
     override fun close()
@@ -20,6 +23,7 @@ interface CaptionTranslator : AutoCloseable {
     suspend fun download(target: String, progress: (Int) -> Unit) = Unit
     suspend fun prepare(target: String, progress: (Int) -> Unit)
     suspend fun translate(text: String): String
+    fun releaseWorkingMemory() = Unit
     fun cancel()
     override fun close()
 }

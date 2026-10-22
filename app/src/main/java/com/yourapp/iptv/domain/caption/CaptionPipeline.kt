@@ -8,9 +8,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.TimeoutException
 
 class CaptionPipelineState(val progress: CaptionProgress = CaptionProgress(), val cue: CaptionCue? = null,
-    val processingMillis: Long? = null)
+    val processingMillis: Long? = null, val timing: CaptionTiming? = null)
 
-/** Serial inference, one waiting audio window, cancellable native calls and generation-checked output. */
+/** Serial inference, one waiting window, bounded latency, and generation-checked publication. */
 class CaptionPipeline(private val scope: CoroutineScope, private val worker: CoroutineDispatcher,
     private val models: CaptionModels, private val speech: SpeechEngineFactory,
     private val translators: CaptionTranslatorFactory, private val device: CaptionDevice,
@@ -28,12 +28,15 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
         fun status(value: CaptionStatus, percent: Int? = null) {
             if (generation == token) state.value = CaptionPipelineState(CaptionProgress(value, percent))
         }
-        fun ramAllowed(target: String): Boolean {
-            val check = device.assess(target)
+        fun ramAllowed(stage: String, release: (() -> Unit)? = null): Boolean {
+            var check = device.assess(stage)
+            if (!check.allowed && release != null) { release(); check = device.assess(stage) }
             if (!check.allowed && generation == token) state.value = CaptionPipelineState(CaptionProgress(
                 check.failure, availableMb = check.availableMb, requiredMb = check.requiredMb))
             return check.allowed
         }
+        val direct = settings.source != "auto" && settings.source == settings.target.tag
+        val textTarget = if (direct) "en" else settings.target.tag
         status(CaptionStatus.PREPARING)
         job = scope.launch {
             try {
@@ -45,44 +48,50 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                     val text = translators.create()
                     translator = text
                     try {
-                        text.download(settings.target.tag) { status(CaptionStatus.TRANSLATING, it) }
+                        text.download(textTarget) { status(CaptionStatus.TRANSLATING, it) }
                         currentCoroutineContext().ensureActive()
                         if (!ramAllowed(CaptionResourcePolicy.SPEECH)) return@withContext
                         status(CaptionStatus.LOADING)
-                        text.prepare(settings.target.tag) { status(CaptionStatus.TRANSLATING, it) }
+                        text.prepare(textTarget) { status(CaptionStatus.TRANSLATING, it) }
                         currentCoroutineContext().ensureActive()
-                        if (!ramAllowed(CaptionResourcePolicy.SPEECH)) return@withContext
-                        status(CaptionStatus.LOADING)
+                        if (!ramAllowed(CaptionResourcePolicy.SPEECH, text::releaseWorkingMemory)) return@withContext
                         val voice = speech.open(model)
                         engine = voice
                         try {
                             currentCoroutineContext().ensureActive()
                             input.open().use { feed ->
-                                var slow = 0
+                                val throughput = CaptionThroughput()
                                 status(CaptionStatus.LISTENING)
                                 while (true) {
-                                    val received = withTimeoutOrNull(12000) { feed.windows.receiveCatching() }
-                                    val window = received?.getOrNull()
+                                    val window = withTimeoutOrNull(12000) { feed.windows.receiveCatching() }?.getOrNull()
                                     if (window == null) { status(CaptionStatus.UNAVAILABLE); break }
                                     currentCoroutineContext().ensureActive()
-                                    if (window.samples.size < 16000) continue
-                                    if (CaptionPresentation.tooOld(window, input.positionUs)) continue
-                                    if (!ramAllowed(if (settings.target.tag == "en") CaptionResourcePolicy.RUNNING else CaptionResourcePolicy.SPEECH)) break
+                                    if (window.samples.size < 16000 || CaptionPresentation.tooOld(window, input.positionUs)) continue
+                                    if (!ramAllowed(voice.memoryStage, text::releaseWorkingMemory)) break
                                     val started = now()
-                                    val result = voice.transcribe(window.samples, settings.source)
+                                    val result = voice.transcribe(window.samples, settings.source, !direct)
                                     currentCoroutineContext().ensureActive()
-                                    if (settings.target.tag != "en") voice.releaseWorkingMemory()
-                                    val translated = if (result.text.isBlank()) "" else text.translate(result.text)
+                                    val speechEnded = now()
+                                    if (textTarget != "en") voice.releaseWorkingMemory()
+                                    val translationStarted = now()
+                                    val translated = when {
+                                        result.text.isBlank() -> ""
+                                        direct -> result.text
+                                        else -> text.translate(result.text)
+                                    }
                                     currentCoroutineContext().ensureActive()
-                                    val elapsed = (now() - started).coerceAtLeast(0)
-                                    slow = if (elapsed > window.durationMillis * 1.2) slow + 1 else 0
-                                    if (slow >= 2 || elapsed > 10000) { status(CaptionStatus.SLOW_DEVICE); break }
+                                    val finished = now()
+                                    val timing = CaptionTiming(window.durationMillis, (speechEnded - started).coerceAtLeast(0),
+                                        (finished - translationStarted).coerceAtLeast(0),
+                                        (translationStarted - speechEnded).coerceAtLeast(0), (finished - started).coerceAtLeast(0))
                                     if (token != generation) break
+                                    val stopped = throughput.assess(window, timing.totalMillis, input.positionUs)
+                                    if (stopped != null) { state.value = CaptionPipelineState(stopped, timing = timing); break }
                                     if (translated.isBlank()) continue
                                     val begin = window.startUs + result.startMillis.coerceIn(0, window.durationMillis) * 1000
                                     val end = window.startUs + result.endMillis.coerceIn(0, window.durationMillis) * 1000
                                     state.value = CaptionPipelineState(CaptionProgress(CaptionStatus.LISTENING),
-                                        CaptionCue(translated.trim().take(2000), begin, maxOf(begin, end), now()), elapsed)
+                                        CaptionCue(translated.trim().take(2000), begin, maxOf(begin, end), now()), timing.totalMillis, timing)
                                 }
                             }
                         } finally {
@@ -100,6 +109,10 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                     availableMb = error.availableBytes.coerceAtLeast(0) / CaptionResourcePolicy.MIB,
                     requiredMb = CaptionResourcePolicy.ceilingMb(error.requiredBytes)))
             }
+            catch (error: CaptionDeadlineException) {
+                if (generation == token) state.value = CaptionPipelineState(CaptionProgress(CaptionStatus.SLOW_DEVICE,
+                    stage = error.stage, elapsedMillis = error.elapsedMillis, budgetMillis = error.budgetMillis))
+            }
             catch (_: TimeoutException) { status(CaptionStatus.SLOW_DEVICE) }
             catch (error: CaptionMemoryException) {
                 if (generation == token) state.value = CaptionPipelineState(CaptionProgress(error.check.failure,
@@ -110,8 +123,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
             catch (_: Exception) { status(CaptionStatus.FAILED) }
         }
     }
-
-    /** Never joins native work on the UI/audio thread. The serial worker releases it before opening another engine. */
+    /** Cancellation never waits for native work on the player thread. */
     fun stop() {
         generation++
         engine?.cancel(); translator?.cancel()

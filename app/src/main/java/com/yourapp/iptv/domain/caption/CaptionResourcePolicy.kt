@@ -14,12 +14,19 @@ object CaptionResourcePolicy {
     const val ENCODER = "text-encoder"
     const val DECODER = "text-decoder"
     const val RUNNING = "running"
+    const val SPEECH_WARM = "speech-warm"
+    const val MAPPED_DECODER = "mapped-decoder"
+    const val DECODER_WARM = "decoder-warm"
     fun memory(target: String, availableBytes: Long, systemThresholdBytes: Long,
         systemLowMemory: Boolean): CaptionResourceCheck {
         // Incremental estimates for staged engines, above Android's own low-memory floor.
         // The compact decoder head is evaluated in 8 MiB blocks, with no concurrent ASR.
         val allocationMb = when (target) {
             RUNNING -> 32L
+            SPEECH_WARM -> 64L
+            // External weights avoid the extra protobuf-to-tensor copy of the original model.
+            MAPPED_DECODER -> 128L
+            DECODER_WARM -> 96L
             SPEECH, ENCODER, "en" -> 128L
             DECODER -> 192L
             else -> 256L
