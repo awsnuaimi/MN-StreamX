@@ -21,6 +21,10 @@ internal class MappedCaptionSession private constructor(val session: OrtSession,
                 options.setCPUArenaAllocator(false); options.setMemoryPatternOptimization(false)
                 options.setOptimizationLevel(if (optimize) OrtSession.SessionOptions.OptLevel.EXTENDED_OPT
                     else OrtSession.SessionOptions.OptLevel.NO_OPT)
+                // ORT 1.20 CSE dereferences raw INT64 scalar attributes without alignment
+                // checks. This can raise SIGBUS on ARMv7 (upstream issue #26323).
+                // Keep the other optimizers and our prepared vocabulary projection.
+                options.addConfigEntry("optimization.disable_specified_optimizers", "CommonSubexpressionElimination")
                 options.addConfigEntry("session.disable_prepacking", "1")
                 options.addConfigEntry("session.intra_op.allow_spinning", "0")
                 options.addConfigEntry("session.inter_op.allow_spinning", "0")
