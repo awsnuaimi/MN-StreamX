@@ -28,6 +28,18 @@ internal fun HomeSidebarIcon(section: HomeSection, color: Color) {
                         drawLine(color, Offset(8f, 22f), Offset(16f, 22f), 1.8f)
                         drawLine(color, Offset(12f, 18f), Offset(12f, 22f), 1.8f)
                     }
+                    HomeSection.MOVIES -> {
+                        drawRoundRect(color, Offset(2f, 6f), Size(20f, 16f), CornerRadius(2f), style = stroke)
+                        drawLine(color, Offset(2f, 11f), Offset(22f, 11f), 1.8f)
+                        drawLine(color, Offset(8f, 6f), Offset(12f, 11f), 1.8f)
+                        drawLine(color, Offset(15f, 6f), Offset(19f, 11f), 1.8f)
+                    }
+                    HomeSection.SERIES -> {
+                        drawRoundRect(color, Offset(3f, 3f), Size(18f, 18f), CornerRadius(3f), style = stroke)
+                        drawLine(color, Offset(8f, 9f), Offset(16f, 9f), 1.8f)
+                        drawLine(color, Offset(8f, 13f), Offset(16f, 13f), 1.8f)
+                        drawLine(color, Offset(8f, 17f), Offset(13f, 17f), 1.8f)
+                    }
                     HomeSection.SETTINGS -> {
                         drawCircle(color, 6.5f, Offset(12f, 12f), style = stroke)
                         drawCircle(color, 2.5f, Offset(12f, 12f), style = stroke)

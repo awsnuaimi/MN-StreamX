@@ -20,6 +20,9 @@ import com.yourapp.iptv.ui.screen.organization.OrganizationScreen
 import com.yourapp.iptv.ui.screen.settings.SettingsScreen
 import com.yourapp.iptv.ui.screen.appearance.PlayerAppearanceScreen
 import com.yourapp.iptv.ui.screen.history.WatchHistoryScreen
+import com.yourapp.iptv.ui.screen.vod.VodScreen
+import com.yourapp.iptv.ui.screen.vod.VodPlaybackScreen
+import com.yourapp.iptv.domain.model.VodKind
 
 @Composable
 fun AppNavGraph(startup: StartupPlaybackViewModel) {
@@ -38,6 +41,8 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
                     }
                 } },
                 onHistory = { nav.navigate(Destinations.HISTORY) { launchSingleTop = true } },
+                onMovies = { nav.navigate("vod/movie") { launchSingleTop = true } },
+                onSeries = { nav.navigate("vod/series") { launchSingleTop = true } },
                 onOrganization = { nav.navigate("organization") { launchSingleTop = true } },
                 onHomeAppearance = { nav.navigate("home_appearance") { launchSingleTop = true } },
                 returnedChannelId = returnedChannel,
@@ -72,6 +77,21 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
                 }
             )
         }
+        composable("vod/{kind}", arguments = listOf(navArgument("kind") { type = NavType.StringType })) { entry ->
+            val kind = if (entry.arguments?.getString("kind") == "series") VodKind.SERIES else VodKind.MOVIE
+            VodScreen(kind, onBack = { nav.popBackStack() }, onPlay = { mediaKind, id, ext, title ->
+                val segment = if (mediaKind == VodKind.MOVIE) "movie" else "series"
+                nav.navigate("vod-play/$segment/${Uri.encode(id)}/${Uri.encode(ext)}?title=${Uri.encode(title)}") {
+                    launchSingleTop = true
+                }
+            })
+        }
+        composable("vod-play/{kind}/{id}/{ext}?title={title}", arguments = listOf(
+            navArgument("kind") { type = NavType.StringType },
+            navArgument("id") { type = NavType.StringType },
+            navArgument("ext") { type = NavType.StringType },
+            navArgument("title") { type = NavType.StringType; defaultValue = "" }
+        )) { VodPlaybackScreen(onBack = { nav.popBackStack() }) }
         composable("organization") { OrganizationScreen(onBack = { nav.popBackStack() }) }
         composable(Destinations.HISTORY) {
             WatchHistoryScreen(onBack = { nav.popBackStack() }, onPlay = { id, source ->

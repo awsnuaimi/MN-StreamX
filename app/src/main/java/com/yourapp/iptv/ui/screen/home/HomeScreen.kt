@@ -37,6 +37,8 @@ fun HomeScreen(
     onHomeAppearance: () -> Unit = {},
     onOrganization: () -> Unit = {},
     onHistory: () -> Unit = {},
+    onMovies: () -> Unit = {},
+    onSeries: () -> Unit = {},
     onStartupReady: (String) -> Unit = {}
 ) {
     HomeSessionLifecycle(viewModel)
@@ -86,6 +88,8 @@ fun HomeScreen(
         viewModel.onBrowseInteraction()
         when (section) {
             HomeSection.LIVE, HomeSection.FAVORITES -> { searching = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
+            HomeSection.MOVIES -> onMovies()
+            HomeSection.SERIES -> onSeries()
             HomeSection.SEARCH -> searching = true
             HomeSection.HISTORY -> onHistory()
             HomeSection.GUIDE -> onOpenGuide(state.selectedChannelId, state.selectedGroup, state.query, state.favoritesOnly)

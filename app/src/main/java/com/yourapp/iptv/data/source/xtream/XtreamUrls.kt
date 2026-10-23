@@ -25,6 +25,27 @@ internal class XtreamUrls(
         .apply { if (action != null) addQueryParameter("action", action) }
         .build()
 
+    fun vodApi(action: String, id: String): HttpUrl {
+        require(id.length in 1..18 && id.all { it in '0'..'9' })
+        val key = when (action) {
+            "get_vod_info" -> "vod_id"
+            "get_series_info" -> "series_id"
+            else -> throw IllegalArgumentException("Unsupported media detail operation")
+        }
+        return api(action).newBuilder().addQueryParameter(key, id).build()
+    }
+
+    fun vodStream(kind: com.yourapp.iptv.domain.model.VodKind, id: String, extension: String): String {
+        require(id.length in 1..18 && id.all { it in '0'..'9' })
+        val safe = XtreamVodFormat.safeExtension(extension)
+        return base.newBuilder()
+            .addPathSegment(if (kind == com.yourapp.iptv.domain.model.VodKind.MOVIE) "movie" else "series")
+            .addPathSegment(username)
+            .addPathSegment(password)
+            .addPathSegment("$id.$safe")
+            .build().toString()
+    }
+
     fun stream(id: String, extension: String): String = base.newBuilder()
         .addPathSegment("live")
         .addPathSegment(username)
