@@ -42,6 +42,11 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
             rows[2].toLongOrNull() ?: samples.size * 1000L / 16000)
     }
     override fun cancel() { synchronized(lock) { if (handle != 0L) native.cancel(handle) } }
+    override fun recoverAfterDeadline() {
+        val pointer = synchronized(lock) { handle }
+        if (pointer != 0L) native.resetState(pointer)
+        stateResident = false
+    }
     override fun releaseWorkingMemory() {
         val pointer = synchronized(lock) { handle }
         try { if (pointer != 0L) native.park(pointer) }

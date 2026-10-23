@@ -35,6 +35,18 @@ class CaptionThroughputTest {
         assertNull(policy.assess(window(10000), 1000, Long.MIN_VALUE))
         assertNull(policy.assess(window(15000), 7000, Long.MIN_VALUE))
     }
+    @Test fun throughputBackoffCannotRetryForeverAfterSuccessfulWindows() {
+        val recovery = CaptionWindowRecovery()
+        assertEquals(5000, recovery.windowMillis)
+        assertTrue(recovery.adaptThroughput())
+        assertEquals(3500, recovery.windowMillis)
+        recovery.succeeded()
+        assertTrue(recovery.adaptThroughput())
+        assertEquals(2500, recovery.windowMillis)
+        recovery.succeeded()
+        assertFalse(recovery.adaptThroughput())
+        assertEquals(2500, recovery.windowMillis)
+    }
     @Test fun duplicateTimestampsDoNotGrantAnArtificiallyLongBudget() {
         val policy = CaptionThroughput()
         assertNull(policy.assess(window(0, 2000), 4000, Long.MIN_VALUE))

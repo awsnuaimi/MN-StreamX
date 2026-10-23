@@ -79,7 +79,20 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     if (textTarget != "en") text.releaseWorkingMemory()
                                     if (!ramAllowed(voice.memoryStage, text::releaseWorkingMemory)) break
                                     val started = now()
-                                    val result = voice.transcribe(window.samples, settings.source, settings.target.tag)
+                                    val result = try {
+                                        voice.transcribe(window.samples, settings.source, settings.target.tag)
+                                    } catch (error: CaptionDeadlineException) {
+                                        currentCoroutineContext().ensureActive()
+                                        if (token != generation) break
+                                        if (error.stage != CaptionStage.SPEECH || !recovery.retry()) throw error
+                                        // The aborted decoder state may be incomplete. Keep only its model
+                                        // weights and request shorter *future* windows, never retry old audio.
+                                        voice.recoverAfterDeadline()
+                                        input.limitWindow(recovery.windowMillis)
+                                        throughput = CaptionThroughput()
+                                        status(CaptionStatus.ADAPTING)
+                                        continue
+                                    }
                                     currentCoroutineContext().ensureActive()
                                     val speechEnded = now()
                                     val needsText = textTarget != "en" && !direct &&
@@ -108,7 +121,18 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                         (translationStarted - speechEnded).coerceAtLeast(0), (finished - started).coerceAtLeast(0))
                                     if (token != generation) break
                                     val stopped = throughput.assess(window, timing.totalMillis, input.positionUs)
-                                    if (stopped != null) { state.value = CaptionPipelineState(stopped, timing = timing); break }
+                                    if (stopped != null) {
+                                        // A transient warm-up or delayed window must not permanently
+                                        // disable captions; back off twice, then report a sustained deficit.
+                                        if (recovery.adaptThroughput()) {
+                                            input.limitWindow(recovery.windowMillis)
+                                            throughput = CaptionThroughput()
+                                            status(CaptionStatus.ADAPTING)
+                                            continue
+                                        }
+                                        state.value = CaptionPipelineState(stopped, timing = timing)
+                                        break
+                                    }
                                     if (translated.isBlank()) continue
                                     recovery.succeeded()
                                     val begin = window.startUs + result.startMillis.coerceIn(0, window.durationMillis) * 1000

@@ -43,7 +43,7 @@ class CaptionDirectAndDiagnosticsTest {
         assertEquals(0L, pipeline.uiState.value.timing?.translationMillis)
         pipeline.stop(); runCurrent()
     }
-    @Test fun aSpeechDeadlineReportsItsOwnStageAndBudget() = runTest {
+    @Test fun aSpeechDeadlineAdaptsBeforeReportingSlowDevice() = runTest {
         val audio = Channel<AudioWindow>(1)
         val input = object : CaptionAudioInput {
             override val positionUs = 0L
@@ -65,8 +65,8 @@ class CaptionDirectAndDiagnosticsTest {
         val pipeline = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler), models, voice, text, CaptionDevice { true })
         pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED)); runCurrent()
         audio.send(AudioWindow(FloatArray(80000), 0)); runCurrent()
-        val progress = pipeline.uiState.value.progress
-        assertEquals(CaptionStatus.SLOW_DEVICE, progress.status); assertEquals(CaptionStage.SPEECH, progress.stage)
-        assertEquals(10025L, progress.elapsedMillis); assertEquals(10000L, progress.budgetMillis)
+        assertEquals(CaptionStatus.ADAPTING, pipeline.uiState.value.progress.status)
+        assertNull(pipeline.uiState.value.cue)
+        pipeline.stop(); runCurrent()
     }
 }

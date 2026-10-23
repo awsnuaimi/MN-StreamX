@@ -16,7 +16,9 @@ class CaptionPipelineTest {
         var closed = false
         val audio = Channel<AudioWindow>(1)
         override fun open() = CaptionFeed(audio) { closed = true }
-        suspend fun speech(pts: Long = 0) { audio.send(AudioWindow(FloatArray(80000) { 0.2f }, pts)) }
+        suspend fun speech(pts: Long = 0, millis: Int = 5000) {
+            audio.send(AudioWindow(FloatArray(millis * 16) { 0.2f }, pts))
+        }
     }
     private class Engines {
         var downloads = 0; var prepares = 0; val stages = mutableListOf<String>()
@@ -97,7 +99,12 @@ class CaptionPipelineTest {
     }
     @Test fun sustainedSlowInferenceStopsInsteadOfAccumulatingDelay() = runTest {
         val e = Engines().apply { cost = 7000 }; val p = with(e) { pipeline() }; val input = Input()
-        p.start(input, enabled); runCurrent(); input.speech(); runCurrent(); input.speech(5000000); runCurrent(); input.speech(10000000); runCurrent()
+        p.start(input, enabled); runCurrent()
+        for (i in 0..2) { input.speech(i * 5000000L); runCurrent() }
+        assertEquals(CaptionStatus.ADAPTING, p.uiState.value.progress.status)
+        for (i in 3..5) { input.speech(i * 5000000L, 3500); runCurrent() }
+        assertEquals(CaptionStatus.ADAPTING, p.uiState.value.progress.status)
+        for (i in 6..8) { input.speech(i * 5000000L, 2500); runCurrent() }
         assertEquals(CaptionStatus.SLOW_DEVICE, p.uiState.value.progress.status)
         assertEquals(1, e.closed); assertTrue(input.closed)
     }

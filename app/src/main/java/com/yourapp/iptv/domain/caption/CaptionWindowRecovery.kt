@@ -1,6 +1,6 @@
 package com.yourapp.iptv.domain.caption
 
-/** Bounded recovery for isolated translation deadlines; no retry of stale audio. */
+/** Adaptive live windows for native and translation deadlines; never replay stale audio. */
 class CaptionWindowRecovery {
     var windowMillis = 5000
         private set
@@ -8,6 +8,12 @@ class CaptionWindowRecovery {
     fun retry(): Boolean {
         consecutiveFailures++
         if (consecutiveFailures >= 3) return false
+        windowMillis = if (windowMillis > 3500) 3500 else 2500
+        return true
+    }
+    /** Throughput recovery cannot loop forever: only smaller windows are useful. */
+    fun adaptThroughput(): Boolean {
+        if (windowMillis <= 2500) return false
         windowMillis = if (windowMillis > 3500) 3500 else 2500
         return true
     }

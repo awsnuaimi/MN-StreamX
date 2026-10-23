@@ -10,6 +10,7 @@ internal class NativeWhisper {
         target: String): Array<String>
     external fun cancel(handle: Long)
     external fun park(handle: Long)
+    external fun resetState(handle: Long)
     external fun trimMemory()
     external fun release(handle: Long)
     companion object { init { System.loadLibrary("mnx-whisper") } }

@@ -1,182 +1,161 @@
-#include <jni.h>
-#include <whisper.h>
-#include <atomic>
-#include <algorithm>
-#include <chrono>
-#include <cmath>
-#include <string>
-#include <vector>
-#include <new>
-#if defined(__ANDROID__) || defined(__GLIBC__)
-#include <malloc.h>
-#endif
+package com.yourapp.iptv.domain.caption
 
-// Supplied by the checked patch of the pinned upstream source.
-extern "C" whisper_state * mnx_whisper_init_live_state(whisper_context *, int);
-extern "C" int mnx_whisper_full_with_target(whisper_context *, whisper_state *, whisper_full_params,
-                                           const float *, int, const char *);
+import com.yourapp.iptv.domain.model.*
+import com.yourapp.iptv.domain.repository.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.test.*
+import org.junit.Assert.*
+import org.junit.Test
+import java.io.File
 
-struct Session {
-    whisper_context *context = nullptr;
-    whisper_state *state = nullptr;
-    int threads = 1;
-    std::atomic<bool> cancelled{false};
-    int detectedLanguage = -1;
-    std::string modelPath;
-    std::chrono::steady_clock::time_point deadline;
-};
-static bool abortWork(void *data) {
-    auto *s = static_cast<Session *>(data);
-    return s->cancelled.load(std::memory_order_relaxed) || std::chrono::steady_clock::now() > s->deadline;
-}
-static void error(JNIEnv *env, const char *message) {
-    env->ThrowNew(env->FindClass("java/io/IOException"), message);
-}
-static bool loadModel(Session *s) {
-    if (s->cancelled.load(std::memory_order_relaxed)) return false;
-    if (s->context) return true;
-    auto options = whisper_context_default_params(); options.use_gpu = false;
-    s->context = whisper_init_from_file_with_params_no_state(s->modelPath.c_str(), options);
-    return s->context != nullptr;
-}
-static void purgeUnusedMemory() {
-    // Return already-freed pages at phase boundaries; never change the global allocator policy.
-#if defined(__ANDROID__)
-    mallopt(M_PURGE, 0); // Available since API 28; application minSdk is 29.
-#elif defined(__GLIBC__)
-    malloc_trim(0);
-#endif
-}
-// Whisper returns UTF-8, whereas JNI NewStringUTF expects modified UTF-8.
-static jstring javaString(JNIEnv *env, const std::string &text) {
-    auto bytes = env->NewByteArray(static_cast<jsize>(text.size()));
-    if (!bytes) return nullptr;
-    env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(text.size()), reinterpret_cast<const jbyte *>(text.data()));
-    auto cls = env->FindClass("java/lang/String");
-    auto constructor = env->GetMethodID(cls, "<init>", "([BLjava/lang/String;)V");
-    auto encoding = env->NewStringUTF("UTF-8");
-    auto result = static_cast<jstring>(env->NewObject(cls, constructor, bytes, encoding));
-    env->DeleteLocalRef(bytes); env->DeleteLocalRef(encoding); env->DeleteLocalRef(cls);
-    return result;
-}
-extern "C" JNIEXPORT jlong JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_create(JNIEnv *env, jobject, jstring path, jint threads) {
-    const char *name = env->GetStringUTFChars(path, nullptr);
-    if (!name) return 0;
-    Session *s = nullptr;
-    try {
-        s = new Session();
-        s->modelPath = name;
-        s->threads = threads < 1 ? 1 : (threads > 2 ? 2 : threads);
-        whisper_log_set([](ggml_log_level, const char *, void *) {}, nullptr);
-        loadModel(s);
-    } catch (...) { }
-    env->ReleaseStringUTFChars(path, name);
-    if (!s || !s->context) { delete s; error(env, "Could not load the local speech model"); return 0; }
-    return reinterpret_cast<jlong>(s);
-}
-extern "C" JNIEXPORT jobjectArray JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jlong handle,
-                                                      jfloatArray samples, jstring language, jboolean translateToEnglish,
-                                                      jstring targetLanguage) {
-    auto *s = reinterpret_cast<Session *>(handle);
-    const jsize count = env->GetArrayLength(samples);
-    if (!s || count < 16000 || count > 96000) { error(env, "Invalid speech window"); return nullptr; }
-    s->deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-    try { if (!loadModel(s)) { error(env, "Could not reload the local speech model"); return nullptr; } }
-    catch (...) { error(env, "Could not reload the local speech model"); return nullptr; }
-    if (!s->state) {
-        // Capacity covers the entire maximum six-second input (300 steps, rounded to 320).
-        // The upstream default allocates encoder/decoder buffers for a 30-second file.
-        try { s->state = mnx_whisper_init_live_state(s->context, 320); }
-        catch (...) { error(env, "Could not allocate speech state"); return nullptr; }
-        if (!s->state) { error(env, "Could not allocate speech state"); return nullptr; }
-    }
-    const char *lang = env->GetStringUTFChars(language, nullptr);
-    if (!lang) return nullptr;
-    std::string selected(lang); env->ReleaseStringUTFChars(language, lang);
-    const char *targetValue = env->GetStringUTFChars(targetLanguage, nullptr);
-    if (!targetValue) return nullptr;
-    std::string target(targetValue); env->ReleaseStringUTFChars(targetLanguage, targetValue);
-    if (selected == "auto" && s->detectedLanguage >= 0) selected = whisper_lang_str(s->detectedLanguage);
-    std::vector<float> input;
-    try { input.resize(count); } catch (...) { error(env, "Not enough speech memory"); return nullptr; }
-    env->GetFloatArrayRegion(samples, 0, count, input.data());
-    if (env->ExceptionCheck()) return nullptr;
-    auto p = whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH);
-    p.greedy.best_of = 1; p.beam_search.beam_size = 4;
-    p.n_threads = s->threads;
-    p.language = selected == "auto" ? "auto" : selected.c_str();
-    p.translate = translateToEnglish == JNI_TRUE; p.no_context = true; p.single_segment = true;
-    // One encoder step covers 320 PCM samples. Round up, keeping the entire audio window.
-    p.audio_ctx = std::max(128, ((count + 319) / 320 + 31) / 32 * 32); p.max_tokens = 72; p.n_max_text_ctx = 0;
-    p.print_realtime = false; p.print_progress = false; p.print_timestamps = false; p.print_special = false;
-    p.suppress_nst = true; p.temperature = 0.0f; p.temperature_inc = 0.0f;
-    p.abort_callback = abortWork; p.abort_callback_user_data = s;
-    if (abortWork(s)) {
-        if (s->cancelled.load(std::memory_order_relaxed)) error(env, "Local speech inference interrupted");
-        else env->ThrowNew(env->FindClass("java/util/concurrent/TimeoutException"), "Local speech exceeded its time budget");
-        return nullptr;
-    }
-    int result;
-    try { result = mnx_whisper_full_with_target(s->context, s->state, p, input.data(), count, target.c_str()); }
-    catch (...) { error(env, "Local speech inference failed"); return nullptr; }
-    if (std::chrono::steady_clock::now() > s->deadline) {
-        env->ThrowNew(env->FindClass("java/util/concurrent/TimeoutException"), "Local speech exceeded its time budget");
-        return nullptr;
-    }
-    if (result != 0 || abortWork(s)) { error(env, "Local speech inference interrupted"); return nullptr; }
-    s->detectedLanguage = whisper_full_lang_id_from_state(s->state);
-    std::string text;
-    int64_t first = 0, last = 0;
-    const int segments = whisper_full_n_segments_from_state(s->state);
-    for (int i = 0; i < segments; ++i) {
-        if (whisper_full_get_segment_no_speech_prob_from_state(s->state, i) > 0.75f) continue;
-        double logProbability = 0.0;
-        int tokens = 0;
-        for (int j = 0; j < whisper_full_n_tokens_from_state(s->state, i); ++j) {
-            const auto token = whisper_full_get_token_data_from_state(s->state, i, j);
-            if (token.id < whisper_token_eot(s->context)) { logProbability += token.plog; ++tokens; }
+@OptIn(ExperimentalCoroutinesApi::class)
+class CaptionPipelineRecoveryTest {
+    private class Session(val scope: TestScope) {
+        val frames = Channel<AudioWindow>(1)
+        val limits = mutableListOf<Int>()
+        val failures = ArrayDeque<Boolean>()
+        val speechFailures = ArrayDeque<Boolean>()
+        var speechRecoveries = 0
+        var time = 0L; var speechCalls = 0; var textCalls = 0
+        var speechClosed = 0; var textClosed = 0; var cancelled = 0; var feedClosed = false
+        val input = object : CaptionAudioInput {
+            override val positionUs = Long.MIN_VALUE
+            override fun limitWindow(millis: Int) { limits += millis }
+            override fun open() = CaptionFeed(frames) { feedClosed = true }
         }
-        if (tokens == 0 || !std::isfinite(logProbability) || logProbability / tokens < -1.2) continue;
-        if (text.empty()) first = whisper_full_get_segment_t0_from_state(s->state, i) * 10;
-        text += whisper_full_get_segment_text_from_state(s->state, i);
-        last = whisper_full_get_segment_t1_from_state(s->state, i) * 10;
+        val pipeline = CaptionPipeline(scope.backgroundScope, StandardTestDispatcher(scope.testScheduler),
+            object : CaptionModels { override suspend fun prepare(progress: (Int) -> Unit) = File("verified-model") },
+            SpeechEngineFactory { object : SpeechEngine {
+                override suspend fun transcribe(samples: FloatArray, language: String): SpeechText {
+                    speechCalls++
+                    if (speechFailures.removeFirstOrNull() == true) {
+                        time += 10025
+                        throw CaptionDeadlineException(CaptionStage.SPEECH, 10025, 10000)
+                    }
+                    time += 100
+                    return SpeechText("en", "Good morning", 0, samples.size * 1000L / 16000)
+                }
+                override fun recoverAfterDeadline() { speechRecoveries++ }
+                override fun cancel() { cancelled++ }
+                override fun close() { speechClosed++ }
+            } }, CaptionTranslatorFactory { object : CaptionTranslator {
+                override suspend fun prepare(target: String, progress: (Int) -> Unit) = Unit
+                override suspend fun translate(text: String): String {
+                    textCalls++
+                    if (failures.removeFirstOrNull() == true) {
+                        time += 8036
+                        throw CaptionDeadlineException(CaptionStage.TRANSLATION, 8036, 8000)
+                    }
+                    time += 100
+                    return "translated:$text"
+                }
+                override fun cancel() { cancelled++ }
+                override fun close() { textClosed++ }
+            } }, CaptionDevice { true }, now = { time })
+        fun start() {
+            pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED))
+            scope.runCurrent()
+        }
+        suspend fun audio(millis: Int, startUs: Long = 0) {
+            frames.send(AudioWindow(FloatArray(millis * 16) { 0.2f }, startUs))
+            scope.runCurrent()
+        }
+        fun stop() { pipeline.stop(); scope.runCurrent() }
     }
-    const std::string detected = whisper_lang_str(s->detectedLanguage);
-    const bool translated = translateToEnglish == JNI_TRUE && detected != target;
-    std::string values[] = {translated ? "en" : detected, std::to_string(first), std::to_string(last), text};
-    if (text.empty()) s->detectedLanguage = -1; // Re-detect after an unreliable automatic window.
-    auto output = env->NewObjectArray(4, env->FindClass("java/lang/String"), nullptr);
-    if (!output) return nullptr;
-    for (int i = 0; i < 4; ++i) {
-        auto value = javaString(env, values[i]);
-        if (!value || env->ExceptionCheck()) return nullptr;
-        env->SetObjectArrayElement(output, i, value); env->DeleteLocalRef(value);
+    @Test fun anIsolatedDeadlineShortensAudioAndTheNextWindowPublishesNormally() = runTest {
+        val session = Session(this); session.failures += true; session.start(); session.audio(5000)
+        assertEquals(CaptionStatus.ADAPTING, session.pipeline.uiState.value.progress.status)
+        assertEquals(listOf(5000, 3500), session.limits)
+        assertEquals(0, session.cancelled); assertEquals(0, session.textClosed)
+        assertFalse(session.feedClosed)
+        session.audio(3500, 5000000)
+        assertEquals("translated:Good morning", session.pipeline.uiState.value.cue?.text)
+        assertEquals(CaptionStatus.LISTENING, session.pipeline.uiState.value.progress.status)
+        session.stop()
+        assertEquals(1, session.speechClosed); assertEquals(1, session.textClosed)
     }
-    return output;
-}
-extern "C" JNIEXPORT void JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_cancel(JNIEnv *, jobject, jlong handle) {
-    if (handle) reinterpret_cast<Session *>(handle)->cancelled.store(true, std::memory_order_relaxed);
-}
-extern "C" JNIEXPORT void JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_park(JNIEnv *, jobject, jlong handle) {
-    auto *s = reinterpret_cast<Session *>(handle);
-    if (s) {
-        whisper_free_state(s->state); s->state = nullptr;
-        // Text inference must not retain even the speech weights on low-RAM televisions.
-        // The verified file path and detected language suffice to reload on the next window.
-        whisper_free(s->context); s->context = nullptr;
-        purgeUnusedMemory();
+    @Test fun aQueuedOldLongWindowIsDiscardedInsteadOfRetryingTheHeavyWork() = runTest {
+        val session = Session(this); session.failures += true; session.start(); session.audio(5000)
+        session.audio(5000, 5000000)
+        assertEquals(1, session.speechCalls); assertEquals(1, session.textCalls)
+        session.audio(3500, 10000000)
+        assertEquals(2, session.textCalls); assertNotNull(session.pipeline.uiState.value.cue)
+        session.stop()
     }
-}
-extern "C" JNIEXPORT void JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_trimMemory(JNIEnv *, jobject) {
-    purgeUnusedMemory();
-}
-extern "C" JNIEXPORT void JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_release(JNIEnv *, jobject, jlong handle) {
-    auto *s = reinterpret_cast<Session *>(handle);
-    if (s) { whisper_free_state(s->state); whisper_free(s->context); delete s; purgeUnusedMemory(); }
+    @Test fun threeConsecutiveTranslationDeadlinesStillStopAndReleaseResources() = runTest {
+        val session = Session(this); repeat(3) { session.failures += true }; session.start()
+        session.audio(5000); session.audio(3500, 5000000); session.audio(2500, 8500000)
+        val progress = session.pipeline.uiState.value.progress
+        assertEquals(CaptionStatus.SLOW_DEVICE, progress.status)
+        assertEquals(CaptionStage.TRANSLATION, progress.stage)
+        assertEquals(8000L, progress.budgetMillis); assertEquals(8036L, progress.elapsedMillis)
+        assertEquals(listOf(5000, 3500, 2500), session.limits)
+        assertTrue(session.feedClosed)
+        assertEquals(1, session.speechClosed); assertEquals(1, session.textClosed)
+    }
+    @Test fun successfulWindowsResetTheFailureStreakButKeepTheLighterWindowSize() = runTest {
+        val session = Session(this)
+        repeat(4) { session.failures += true; session.failures += false }
+        session.start()
+        var pts = 0L
+        repeat(4) {
+            session.audio(session.limits.last(), pts); pts += 5000000
+            session.audio(session.limits.last(), pts); pts += 5000000
+            assertNotNull(session.pipeline.uiState.value.cue)
+            assertFalse(session.feedClosed)
+        }
+        assertEquals(8, session.textCalls); assertEquals(2500, session.limits.last())
+        session.stop()
+    }
+    @Test fun speechDeadlineResetsDecoderAndContinuesWithShorterFreshWindows() = runTest {
+        val session = Session(this)
+        session.speechFailures += true; session.start(); session.audio(5000)
+        assertEquals(CaptionStatus.ADAPTING, session.pipeline.uiState.value.progress.status)
+        assertEquals(listOf(5000, 3500), session.limits)
+        assertEquals(1, session.speechRecoveries)
+        assertFalse(session.feedClosed)
+        session.audio(5000, 5000000)
+        assertEquals(1, session.speechCalls)
+        session.audio(3500, 10000000)
+        assertEquals("translated:Good morning", session.pipeline.uiState.value.cue?.text)
+        assertEquals(2, session.speechCalls)
+        session.stop()
+        assertEquals(1, session.speechClosed); assertEquals(1, session.textClosed)
+    }
+    @Test fun threeSpeechDeadlinesStopWithoutInfiniteRetryOrModelReload() = runTest {
+        val session = Session(this); repeat(3) { session.speechFailures += true }; session.start()
+        session.audio(5000)
+        session.audio(3500, 5000000)
+        session.audio(2500, 8500000)
+        val progress = session.pipeline.uiState.value.progress
+        assertEquals(CaptionStatus.SLOW_DEVICE, progress.status)
+        assertEquals(CaptionStage.SPEECH, progress.stage)
+        assertEquals(10000L, progress.budgetMillis)
+        assertEquals(10025L, progress.elapsedMillis)
+        assertEquals(2, session.speechRecoveries)
+        assertEquals(listOf(5000, 3500, 2500), session.limits)
+        assertEquals(1, session.speechClosed); assertEquals(1, session.textClosed)
+        assertTrue(session.feedClosed)
+    }
+    @Test fun goodSpeechAfterTimeoutResetsFailureCounterWithoutExpandingTheWindow() = runTest {
+        val session = Session(this); session.speechFailures.addAll(listOf(true, false, true, false, true, false))
+        session.start(); var startUs = 0L
+        repeat(3) {
+            session.audio(session.limits.last(), startUs); startUs += 5000000
+            session.audio(session.limits.last(), startUs); startUs += 5000000
+            assertNotNull(session.pipeline.uiState.value.cue)
+            assertFalse(session.feedClosed)
+        }
+        assertEquals(3, session.speechRecoveries)
+        assertEquals(2500, session.limits.last())
+        session.stop()
+    }
+    @Test fun stoppingDuringAdaptationCannotResumeInferenceOnLaterAudio() = runTest {
+        val session = Session(this); session.failures += true; session.start(); session.audio(5000)
+        session.stop(); session.audio(3500, 5000000)
+        assertEquals(1, session.textCalls); assertNull(session.pipeline.uiState.value.cue)
+        assertEquals(CaptionStatus.OFF, session.pipeline.uiState.value.progress.status)
+        assertTrue(session.feedClosed)
+    }
 }

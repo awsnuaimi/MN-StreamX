@@ -15,6 +15,8 @@ interface SpeechEngine : AutoCloseable {
     val memoryStage: String get() = CaptionResourcePolicy.SPEECH
     /** Serial worker only: release temporary computation buffers before text inference. */
     fun releaseWorkingMemory() = Unit
+    /** Drop an interrupted decoding state without unloading reusable model weights. */
+    fun recoverAfterDeadline() = releaseWorkingMemory()
     fun cancel()
     override fun close()
 }
