@@ -4,7 +4,7 @@
     <string name="caption_off">Untertitel aus</string>
     <string name="caption_embedded">Untertitel des Streams</string>
     <string name="caption_generate">Lokal erzeugen und benötigte Modelle herunterladen</string>
-    <string name="caption_local_description">Der Senderton wird auf diesem Gerät verarbeitet. Erzeugte Untertitel können verzögert oder fehlerhaft sein. Bei Überlastung wird die Erzeugung gestoppt.</string>
+    <string name="caption_local_description">Der Sendeton wird auf diesem Gerät verarbeitet. Erzeugte Untertitel können verzögert oder fehlerhaft sein. Bei Überlastung wird die Erzeugung gestoppt.</string>
     <string name="caption_download_size">Modellgröße beim ersten Download: etwa %1$d MB. Heruntergeladene Modelle werden wiederverwendet.</string>
     <string name="caption_target">Bevorzugte Untertitelsprache</string>
     <string name="caption_source">Gesprochene Sprache: %1$s — zum Ändern drücken</string>
@@ -33,9 +33,9 @@
     <string name="caption_save_error">Untertiteleinstellungen wurden nicht gespeichert.</string>
     <string name="caption_device">Gerät: %1$s · CPU-Kerne: %2$d · RAM gesamt %3$d MB · RAM verfügbar %4$d MB</string>
     <string name="caption_storage_available">Verfügbarer Speicherplatz für Untertitelmodelle: %1$d MB</string>
-    <string name="caption_low_ram_details">Die Modelldateien sind bereit. RAM zum Prüfzeitpunkt: %1$d MB; diese Phase benötigt mehr als %2$d MB. Versuchen Sie es erneut, wenn mehr RAM verfügbar ist.</string>
+    <string name="caption_low_ram_details">%3$s: Verfügbarer RAM bei der Prüfung: %1$d MiB. Das vorsorgliche Phasenbudget beträgt %2$d MiB einschließlich Wiedergabereserve. Dies ist eine Schätzung, kein gemessener Modellverbrauch.</string>
     <string name="caption_low_storage_details">Zu wenig Speicherplatz zum Herunterladen: verfügbar %1$d MB, benötigt %2$d MB einschließlich Reserve für temporäre Dateien.</string>
-    <string name="caption_memory_pressure_details">Android meldet RAM-Druck. Verfügbar: %1$d MB; Grenzwert dieser Phase: %2$d MB. Die Generierung wurde zum Schutz der Wiedergabe beendet.</string>
+    <string name="caption_memory_pressure_details">%3$s: Android meldet aktiven Speicherdruck. Verfügbar: %1$d MiB; Systemgrenze für niedrigen Speicher: %2$d MiB. Die Erzeugung wurde zum Schutz der Wiedergabe beendet.</string>
     <string name="caption_low_storage">Zu wenig Speicherplatz zum Herunterladen der Untertitelmodelle.</string>
     <string name="caption_memory_pressure">Android meldet RAM-Druck. Die Generierung wurde zum Schutz der Wiedergabe beendet.</string>
     <string name="caption_slow_details">%1$s: %2$d ms, Zeitbudget %3$d ms. Die Erzeugung wurde zum Schutz der Wiedergabe gestoppt.</string>

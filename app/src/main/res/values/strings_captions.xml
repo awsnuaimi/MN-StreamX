@@ -33,9 +33,9 @@
     <string name="caption_save_error">لم يُحفظ تعديل إعدادات الترجمة.</string>
     <string name="caption_device">الجهاز: %1$s · %2$d أنوية · RAM الكلية %3$d MB · RAM المتاحة %4$d MB</string>
     <string name="caption_storage_available">مساحة التخزين المتاحة لحزم الترجمة: %1$d MB</string>
-    <string name="caption_low_ram_details">اكتمل تجهيز الملفات، لكن RAM وقت الفحص كانت %1$d MB، وتحتاج هذه المرحلة أكثر من %2$d MB. أعد المحاولة عندما تتوفر RAM أكثر.</string>
+    <string name="caption_low_ram_details">%3$s: RAM المتاحة وقت الفحص %1$d MiB. ميزانية الوقاية لهذه المرحلة %2$d MiB، وتشمل هامش التشغيل. هذا تقدير للفحص وليس قياسًا لاستهلاك النموذج.</string>
     <string name="caption_low_storage_details">مساحة التخزين غير كافية للتنزيل: المتاح %1$d MB، والمطلوب %2$d MB مع هامش للملفات المؤقتة.</string>
-    <string name="caption_memory_pressure_details">أندرويد يبلغ عن ضغط على RAM. المتاح %1$d MB، وحد هذه المرحلة %2$d MB. أُوقف التوليد لحماية التشغيل.</string>
+    <string name="caption_memory_pressure_details">%3$s: أندرويد أبلغ عن ضغط ذاكرة فعلي. المتاح %1$d MiB، وحد انخفاض ذاكرة النظام %2$d MiB. أُوقف التوليد لحماية التشغيل.</string>
     <string name="caption_low_storage">مساحة التخزين غير كافية لتنزيل حزم الترجمة.</string>
     <string name="caption_memory_pressure">أندرويد يبلغ عن ضغط على ذاكرة RAM. أُوقف التوليد لحماية التشغيل.</string>
     <string name="caption_slow_details">%1$s: %2$d ms، والحد %3$d ms. أُوقف التوليد لحماية البث.</string>

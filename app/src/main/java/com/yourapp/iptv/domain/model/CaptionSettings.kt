@@ -18,4 +18,5 @@ enum class CaptionStatus { OFF, EMBEDDED, PREPARING, DOWNLOADING, LOADING, LISTE
     SLOW_DEVICE, LOW_MEMORY, LOW_STORAGE, MEMORY_PRESSURE, UNAVAILABLE, UNSUPPORTED_LANGUAGE, FAILED, ADAPTING }
 data class CaptionProgress(val status: CaptionStatus = CaptionStatus.OFF, val percent: Int? = null,
     val availableMb: Long? = null, val requiredMb: Long? = null,
-    val stage: CaptionStage? = null, val elapsedMillis: Long? = null, val budgetMillis: Long? = null)
+    val stage: CaptionStage? = null, val elapsedMillis: Long? = null, val budgetMillis: Long? = null,
+    val systemThresholdMb: Long? = null)

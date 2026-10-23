@@ -35,7 +35,8 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
             var check = device.assess(stage)
             if (!check.allowed && release != null) { release(); check = device.assess(stage) }
             if (!check.allowed && generation == token) state.value = CaptionPipelineState(CaptionProgress(
-                check.failure, availableMb = check.availableMb, requiredMb = check.requiredMb))
+                check.failure, availableMb = check.availableMb, requiredMb = check.requiredMb,
+                stage = check.stage, systemThresholdMb = check.systemThresholdMb))
             return check.allowed
         }
         val direct = settings.source != "auto" && settings.source == settings.target.tag
@@ -138,7 +139,8 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
             catch (_: TimeoutException) { status(CaptionStatus.SLOW_DEVICE) }
             catch (error: CaptionMemoryException) {
                 if (generation == token) state.value = CaptionPipelineState(CaptionProgress(error.check.failure,
-                    availableMb = error.check.availableMb, requiredMb = error.check.requiredMb))
+                    availableMb = error.check.availableMb, requiredMb = error.check.requiredMb,
+                    stage = error.check.stage, systemThresholdMb = error.check.systemThresholdMb))
             }
             catch (_: OutOfMemoryError) { status(CaptionStatus.LOW_MEMORY) }
             catch (_: UnsatisfiedLinkError) { status(CaptionStatus.UNAVAILABLE) }

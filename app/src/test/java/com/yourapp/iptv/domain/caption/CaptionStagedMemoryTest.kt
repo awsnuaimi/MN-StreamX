@@ -73,7 +73,9 @@ class CaptionStagedMemoryTest {
         windows.send(AudioWindow(FloatArray(80000), 0)); runCurrent()
         assertEquals(CaptionStatus.LOW_MEMORY, pipeline.uiState.value.progress.status)
         assertEquals(250L, pipeline.uiState.value.progress.availableMb)
-        assertEquals(320L, pipeline.uiState.value.progress.requiredMb)
+        assertEquals(288L, pipeline.uiState.value.progress.requiredMb)
+        assertEquals(128L, pipeline.uiState.value.progress.systemThresholdMb)
+        assertEquals(CaptionStage.TRANSLATION, pipeline.uiState.value.progress.stage)
         assertTrue(voiceClosed); assertTrue(textClosed); assertNull(pipeline.uiState.value.cue)
     }
 }

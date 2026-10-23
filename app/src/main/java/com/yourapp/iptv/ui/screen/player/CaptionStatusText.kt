@@ -19,14 +19,17 @@ internal fun captionStatusText(value: CaptionProgress): String {
     }
     val available = value.availableMb
     val required = value.requiredMb
+    val memoryStage = value.stage?.let { captionStageName(it) }.orEmpty()
+    if (value.status == CaptionStatus.MEMORY_PRESSURE && available != null && value.systemThresholdMb != null) {
+        return stringResource(R.string.caption_memory_pressure_details, available, value.systemThresholdMb, memoryStage)
+    }
     if (available != null && required != null) {
         val detail = when (value.status) {
             CaptionStatus.LOW_MEMORY -> R.string.caption_low_ram_details
             CaptionStatus.LOW_STORAGE -> R.string.caption_low_storage_details
-            CaptionStatus.MEMORY_PRESSURE -> R.string.caption_memory_pressure_details
             else -> null
         }
-        if (detail != null) return stringResource(detail, available, required)
+        if (detail != null) return stringResource(detail, available, required, memoryStage)
     }
     val text = stringResource(when (value.status) {
         CaptionStatus.OFF -> R.string.caption_off
@@ -47,3 +50,11 @@ internal fun captionStatusText(value: CaptionProgress): String {
     })
     return if (value.percent != null) "$text ${value.percent}%" else text
 }
+
+@Composable
+private fun captionStageName(stage: CaptionStage): String = stringResource(when (stage) {
+    CaptionStage.SPEECH -> R.string.caption_stage_speech
+    CaptionStage.TRANSLATION -> R.string.caption_stage_translation
+    CaptionStage.THROUGHPUT -> R.string.caption_stage_throughput
+    CaptionStage.LAG -> R.string.caption_stage_lag
+})

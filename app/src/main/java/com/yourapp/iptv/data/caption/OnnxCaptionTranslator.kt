@@ -121,7 +121,11 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
                     } finally { timeout.cancel(false) }
                 } finally { calls.finish(call) }
             }
-        } finally { nativeMemory.trimMemory() }
+        } finally {
+            // Release the mapped decoder now, including on failure/cancellation. Waiting
+            // for the next audio window leaves its weights resident throughout silence.
+            releaseWorkingMemory()
+        }
     }
     private fun requireMemory(stage: String) {
         val check = device.assess(stage)
