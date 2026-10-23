@@ -64,3 +64,23 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_yourapp_iptv_data_caption_NativePieces_release(JNIEnv *, jobject, jlong handle) {
     delete reinterpret_cast<sentencepiece::SentencePieceProcessor *>(handle);
 }
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_yourapp_iptv_data_caption_NativePieces_decode(JNIEnv *env, jobject, jlong handle, jobjectArray values) {
+    auto *processor = reinterpret_cast<sentencepiece::SentencePieceProcessor *>(handle);
+    if (!processor) { failure(env, "Tokenizer is closed"); return nullptr; }
+    try {
+        const jsize count = env->GetArrayLength(values);
+        if (count > 512) { failure(env, "Invalid translation output"); return nullptr; }
+        std::vector<std::string> pieces;
+        pieces.reserve(count);
+        for (jsize i = 0; i < count; ++i) {
+            auto value = static_cast<jstring>(env->GetObjectArrayElement(values, i));
+            if (!value || env->ExceptionCheck()) return nullptr;
+            pieces.push_back(utf8(env, value)); env->DeleteLocalRef(value);
+            if (env->ExceptionCheck()) return nullptr;
+        }
+        std::string text;
+        if (!processor->Decode(pieces, &text).ok()) { failure(env, "Tokenizer decoding failed"); return nullptr; }
+        return stringValue(env, text);
+    } catch (...) { failure(env, "Tokenizer decoding failed"); return nullptr; }
+}

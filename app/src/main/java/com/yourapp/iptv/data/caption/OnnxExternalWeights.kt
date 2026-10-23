@@ -20,7 +20,10 @@ internal object OnnxExternalWeights {
                 for (initializer in fields(input, graph.start, graph.end).filter { it.tag == 42L }) {
                     currentCoroutineContext().ensureActive()
                     val tensor = fields(input, initializer.start, initializer.end)
-                    require(tensor.none { it.tag ushr 3 in 13L..14L }) { "Weights must be embedded in the pinned source" }
+                    require(tensor.none { it.tag ushr 3 == 13L } && tensor.filter { it.tag ushr 3 == 14L }.all {
+                        input.seek(it.start)
+                        it.tag == 112L && CaptionProto.read(input) == 0L
+                    }) { "Weights must be embedded in the pinned source" }
                     val raw = tensor.singleOrNull { it.tag == 74L } ?: continue
                     val length = raw.end - raw.start
                     if (length < 65536) continue
@@ -29,7 +32,7 @@ internal object OnnxExternalWeights {
                     val offset = written
                     input.seek(raw.start); copy(input, output, length); written += length
                     val metadata = ByteArrayOutputStream()
-                    for (field in tensor.filter { it !== raw }) {
+                    for (field in tensor.filter { it !== raw && it.tag ushr 3 != 14L }) {
                         val size = field.end - field.header
                         require(size <= 65536)
                         input.seek(field.header)

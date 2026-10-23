@@ -18,7 +18,7 @@ class OnnxCaptionTranslatorDownloadTest {
             fail("Disk shortage ignored")
         } catch (error: CaptionStorageException) {
             assertEquals(0L, error.availableBytes)
-            assertEquals(CaptionModelCatalog.translation.bytes + CaptionResourcePolicy.STORAGE_RESERVE, error.requiredBytes)
+            assertEquals(CaptionTranslationCatalog.forTarget("ar").bytes + CaptionResourcePolicy.STORAGE_RESERVE, error.requiredBytes)
         } finally { translator.close() }
     }
     @Test fun englishNeedsNoTextModelDownloadOrOnnxSession() = runTest {

@@ -3,13 +3,17 @@ package com.yourapp.iptv.data.caption
 import com.google.gson.stream.JsonReader
 import java.io.File
 
-/** Streaming vocabulary, one lookup map and a compact reverse array. No JSON DOM or boxed reverse map. */
-internal class MarianTokenizer(folder: File) : AutoCloseable {
+/** The selected bilingual model defines its own IDs and independent source/target tokenizers. */
+internal class MarianTokenizer(folder: File, private val config: MarianModelConfig,
+    private val prefix: String?) : AutoCloseable {
     private val native = NativePieces()
-    private val vocabulary = HashMap<String, Int>(85500)
-    private val decoder = arrayOfNulls<String>(64110)
+    private val vocabulary = HashMap<String, Int>(config.vocabulary * 4 / 3 + 1)
+    private val decoder = arrayOfNulls<String>(config.vocabulary)
+    private var source = 0L
+    private var target = 0L
+    private val unknown: Int
     init {
-        File(folder, "vocab.json").reader().buffered().use { reader ->
+        folder.resolve("vocab.json").reader().buffered().use { reader ->
             JsonReader(reader).use { json ->
                 json.beginObject()
                 while (json.hasNext()) {
@@ -20,22 +24,30 @@ internal class MarianTokenizer(folder: File) : AutoCloseable {
                 json.endObject()
             }
         }
-        require(vocabulary.size == decoder.size)
+        require(vocabulary.size == config.vocabulary)
+        unknown = vocabulary.getValue("<unk>")
+        require(vocabulary.getValue("</s>").toLong() == config.eos)
+        if (prefix != null) require(vocabulary.containsKey(prefix))
+        try {
+            source = native.create(folder.resolve("source.spm").absolutePath)
+            target = native.create(folder.resolve("target.spm").absolutePath)
+            check(source != 0L && target != 0L)
+        } catch (error: Throwable) { close(); throw error }
     }
-    private val unknown = vocabulary.getValue("<unk>")
-    private var handle = native.create(File(folder, "source.spm").absolutePath)
-    fun encode(text: String, target: String): LongArray {
-        check(handle != 0L)
-        val language = when (target) { "ar" -> "ara"; "de" -> "deu"; "pl" -> "pol"; "hi" -> "hin"; else -> "eng" }
-        val prefix = vocabulary.getValue(">>$language<<")
-        val pieces = native.encode(handle, text.take(1000)).take(94)
-        return LongArray(pieces.size + 2).also { result ->
-            result[0] = prefix.toLong()
-            pieces.forEachIndexed { index, piece -> result[index + 1] = (vocabulary[piece] ?: unknown).toLong() }
-        }
+    fun encode(text: String): LongArray {
+        check(source != 0L)
+        require(text.length <= 2000) { "Caption text exceeds the bounded input window" }
+        val pieces = native.encode(source, text)
+        return MarianTokenIds.encode(pieces, vocabulary, unknown, config.eos, prefix)
     }
-    fun decode(ids: List<Long>): String = ids.mapNotNull { decoder.getOrNull(it.toInt()) }
-        .filterNot { it.startsWith("<") || it.startsWith(">>") }
-        .joinToString("").replace('▁', ' ').trim()
-    override fun close() { if (handle != 0L) { native.release(handle); handle = 0 } }
+    fun decode(ids: List<Long>): String {
+        check(target != 0L)
+        val pieces = ids.takeWhile { it != config.eos }.filter { it != config.pad }
+            .map { requireNotNull(decoder.getOrNull(it.toInt())) }.toTypedArray()
+        return native.decode(target, pieces).trim()
+    }
+    override fun close() {
+        if (source != 0L) { native.release(source); source = 0 }
+        if (target != 0L) { native.release(target); target = 0 }
+    }
 }

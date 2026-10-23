@@ -3,6 +3,7 @@
 #include <atomic>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <string>
 #include <vector>
 #include <new>
@@ -12,6 +13,8 @@
 
 // Supplied by the checked patch of the pinned upstream source.
 extern "C" whisper_state * mnx_whisper_init_live_state(whisper_context *, int);
+extern "C" int mnx_whisper_full_with_target(whisper_context *, whisper_state *, whisper_full_params,
+                                           const float *, int, const char *);
 
 struct Session {
     whisper_context *context = nullptr;
@@ -74,7 +77,8 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_create(JNIEnv *env, jobject, js
 }
 extern "C" JNIEXPORT jobjectArray JNICALL
 Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jlong handle,
-                                                      jfloatArray samples, jstring language, jboolean translateToEnglish) {
+                                                      jfloatArray samples, jstring language, jboolean translateToEnglish,
+                                                      jstring targetLanguage) {
     auto *s = reinterpret_cast<Session *>(handle);
     const jsize count = env->GetArrayLength(samples);
     if (!s || count < 16000 || count > 96000) { error(env, "Invalid speech window"); return nullptr; }
@@ -91,13 +95,16 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jl
     const char *lang = env->GetStringUTFChars(language, nullptr);
     if (!lang) return nullptr;
     std::string selected(lang); env->ReleaseStringUTFChars(language, lang);
+    const char *targetValue = env->GetStringUTFChars(targetLanguage, nullptr);
+    if (!targetValue) return nullptr;
+    std::string target(targetValue); env->ReleaseStringUTFChars(targetLanguage, targetValue);
     if (selected == "auto" && s->detectedLanguage >= 0) selected = whisper_lang_str(s->detectedLanguage);
     std::vector<float> input;
     try { input.resize(count); } catch (...) { error(env, "Not enough speech memory"); return nullptr; }
     env->GetFloatArrayRegion(samples, 0, count, input.data());
     if (env->ExceptionCheck()) return nullptr;
-    auto p = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
-    p.greedy.best_of = 1; // Temperature/fallback are disabled; only one greedy path is used.
+    auto p = whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH);
+    p.greedy.best_of = 1; p.beam_search.beam_size = 4;
     p.n_threads = s->threads;
     p.language = selected == "auto" ? "auto" : selected.c_str();
     p.translate = translateToEnglish == JNI_TRUE; p.no_context = true; p.single_segment = true;
@@ -112,7 +119,7 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jl
         return nullptr;
     }
     int result;
-    try { result = whisper_full_with_state(s->context, s->state, p, input.data(), count); }
+    try { result = mnx_whisper_full_with_target(s->context, s->state, p, input.data(), count, target.c_str()); }
     catch (...) { error(env, "Local speech inference failed"); return nullptr; }
     if (std::chrono::steady_clock::now() > s->deadline) {
         env->ThrowNew(env->FindClass("java/util/concurrent/TimeoutException"), "Local speech exceeded its time budget");
@@ -125,11 +132,21 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jl
     const int segments = whisper_full_n_segments_from_state(s->state);
     for (int i = 0; i < segments; ++i) {
         if (whisper_full_get_segment_no_speech_prob_from_state(s->state, i) > 0.75f) continue;
+        double logProbability = 0.0;
+        int tokens = 0;
+        for (int j = 0; j < whisper_full_n_tokens_from_state(s->state, i); ++j) {
+            const auto token = whisper_full_get_token_data_from_state(s->state, i, j);
+            if (token.id < whisper_token_eot(s->context)) { logProbability += token.plog; ++tokens; }
+        }
+        if (tokens == 0 || !std::isfinite(logProbability) || logProbability / tokens < -1.2) continue;
         if (text.empty()) first = whisper_full_get_segment_t0_from_state(s->state, i) * 10;
         text += whisper_full_get_segment_text_from_state(s->state, i);
         last = whisper_full_get_segment_t1_from_state(s->state, i) * 10;
     }
-    std::string values[] = {translateToEnglish ? "en" : whisper_lang_str(s->detectedLanguage), std::to_string(first), std::to_string(last), text};
+    const std::string detected = whisper_lang_str(s->detectedLanguage);
+    const bool translated = translateToEnglish == JNI_TRUE && detected != target;
+    std::string values[] = {translated ? "en" : detected, std::to_string(first), std::to_string(last), text};
+    if (text.empty()) s->detectedLanguage = -1; // Re-detect after an unreliable automatic window.
     auto output = env->NewObjectArray(4, env->FindClass("java/lang/String"), nullptr);
     if (!output) return nullptr;
     for (int i = 0; i < 4; ++i) {
@@ -146,7 +163,13 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_cancel(JNIEnv *, jobject, jlong
 extern "C" JNIEXPORT void JNICALL
 Java_com_yourapp_iptv_data_caption_NativeWhisper_park(JNIEnv *, jobject, jlong handle) {
     auto *s = reinterpret_cast<Session *>(handle);
-    if (s) { whisper_free_state(s->state); s->state = nullptr; purgeUnusedMemory(); }
+    if (s) {
+        whisper_free_state(s->state); s->state = nullptr;
+        // Text inference must not retain even the speech weights on low-RAM televisions.
+        // The verified file path and detected language suffice to reload on the next window.
+        whisper_free(s->context); s->context = nullptr;
+        purgeUnusedMemory();
+    }
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_yourapp_iptv_data_caption_NativeWhisper_trimMemory(JNIEnv *, jobject) {

@@ -21,11 +21,16 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
     override val memoryStage get() = if (stateResident) CaptionResourcePolicy.SPEECH_WARM else CaptionResourcePolicy.SPEECH
     override suspend fun transcribe(samples: FloatArray, language: String): SpeechText = transcribe(samples, language, true)
     override suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText {
+        return decode(samples, language, translateToEnglish, "")
+    }
+    override suspend fun transcribe(samples: FloatArray, language: String, target: String): SpeechText =
+        decode(samples, language, language == "auto" || language != target, target)
+    private suspend fun decode(samples: FloatArray, language: String, translateToEnglish: Boolean, target: String): SpeechText {
         currentCoroutineContext().ensureActive()
         val pointer = synchronized(lock) { handle }
         check(pointer != 0L)
         val started = System.nanoTime()
-        val rows = try { native.decode(pointer, samples, language, translateToEnglish) }
+        val rows = try { native.decode(pointer, samples, language, translateToEnglish, target) }
         catch (_: TimeoutException) {
             currentCoroutineContext().ensureActive()
             throw CaptionDeadlineException(CaptionStage.SPEECH, (System.nanoTime() - started) / 1000000, 10000)

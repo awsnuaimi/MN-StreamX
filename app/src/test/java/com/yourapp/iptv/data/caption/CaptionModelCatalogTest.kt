@@ -10,9 +10,9 @@ class CaptionModelCatalogTest {
         }
     }
     @Test fun crossLanguageAndAutomaticModesKeepTheirRequiredTextModels() {
-        val both = CaptionModelCatalog.speech.bytes + CaptionModelCatalog.translation.bytes
-        assertEquals(both, CaptionModelCatalog.totalBytes("de", "ar"))
-        assertEquals(both, CaptionModelCatalog.totalBytes("ar", "auto"))
+        val speech = CaptionModelCatalog.speech.bytes
+        assertEquals(speech + CaptionTranslationCatalog.forTarget("de").bytes, CaptionModelCatalog.totalBytes("de", "ar"))
+        assertEquals(speech + CaptionTranslationCatalog.forTarget("ar").bytes, CaptionModelCatalog.totalBytes("ar", "auto"))
         assertEquals(CaptionModelCatalog.speech.bytes, CaptionModelCatalog.totalBytes("en", "ar"))
     }
 }

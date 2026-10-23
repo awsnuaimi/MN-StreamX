@@ -48,4 +48,23 @@ class OnnxExternalWeightsTest {
         try { OnnxExternalWeights.export(input, temporary.newFile(), temporary.newFile()); fail("Truncation ignored") }
         catch (_: IllegalArgumentException) { }
     }
+    @Test fun explicitlyEmbeddedWeightsReplaceTheirDefaultLocationRatherThanKeepingTwoLocationFields() = runTest {
+        val input = temporary.newFile("explicit.onnx")
+        input.writeBytes(CaptionProto.message(7, CaptionProto.message(5,
+            tensor("weight", ByteArray(70000) { 7 }) + CaptionProto.integer(14, 0))))
+        val model = temporary.newFile("mapped.onnx"); val weights = temporary.newFile("data.bin")
+        OnnxExternalWeights.export(input, model, weights)
+        val graph = CaptionProto.fields(model.readBytes()).single { it.number == 7 }
+        val moved = CaptionProto.fields(CaptionProto.fields(graph.value).single { it.number == 5 }.value)
+        assertEquals(1, moved.count { it.number == 14 })
+        assertArrayEquals(byteArrayOf(1), moved.single { it.number == 14 }.value)
+        assertArrayEquals(ByteArray(70000) { 7 }, weights.readBytes())
+    }
+    @Test fun existingExternalLocationsAreRejectedEvenWhenTheirRawDataIsPresent() = runTest {
+        val input = temporary.newFile("external.onnx")
+        input.writeBytes(CaptionProto.message(7, CaptionProto.message(5,
+            tensor("weight", ByteArray(70000)) + CaptionProto.integer(14, 1))))
+        try { OnnxExternalWeights.export(input, temporary.newFile(), temporary.newFile()); fail("External input accepted") }
+        catch (_: IllegalArgumentException) { }
+    }
 }

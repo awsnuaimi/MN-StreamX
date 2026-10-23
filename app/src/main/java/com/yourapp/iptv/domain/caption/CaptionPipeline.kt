@@ -5,6 +5,8 @@ import com.yourapp.iptv.domain.repository.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.TimeoutException
 
 class CaptionPipelineState(val progress: CaptionProgress = CaptionProgress(), val cue: CaptionCue? = null,
@@ -19,6 +21,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
     val uiState = state.asStateFlow()
     @Volatile private var generation = 0L
     private var job: Job? = null
+    private val inferenceLock = Mutex()
     @Volatile private var engine: SpeechEngine? = null
     @Volatile private var translator: CaptionTranslator? = null
 
@@ -40,8 +43,8 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
         status(CaptionStatus.PREPARING)
         job = scope.launch {
             try {
-                withContext(worker) {
-                    if (!device.supported()) { status(CaptionStatus.UNAVAILABLE); return@withContext }
+                withContext(worker) { inferenceLock.withLock {
+                    if (!device.supported()) { status(CaptionStatus.UNAVAILABLE); return@withLock }
                     status(CaptionStatus.DOWNLOADING, 0)
                     val model = models.prepare { status(CaptionStatus.DOWNLOADING, it) }
                     currentCoroutineContext().ensureActive()
@@ -50,11 +53,11 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                     try {
                         text.download(textTarget) { status(CaptionStatus.TRANSLATING, it) }
                         currentCoroutineContext().ensureActive()
-                        if (!ramAllowed(CaptionResourcePolicy.SPEECH)) return@withContext
+                        if (!ramAllowed(CaptionResourcePolicy.SPEECH)) return@withLock
                         status(CaptionStatus.LOADING)
                         text.prepare(textTarget) { status(CaptionStatus.TRANSLATING, it) }
                         currentCoroutineContext().ensureActive()
-                        if (!ramAllowed(CaptionResourcePolicy.SPEECH, text::releaseWorkingMemory)) return@withContext
+                        if (!ramAllowed(CaptionResourcePolicy.SPEECH, text::releaseWorkingMemory)) return@withLock
                         val voice = speech.open(model)
                         engine = voice
                         try {
@@ -75,14 +78,16 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     if (textTarget != "en") text.releaseWorkingMemory()
                                     if (!ramAllowed(voice.memoryStage, text::releaseWorkingMemory)) break
                                     val started = now()
-                                    val result = voice.transcribe(window.samples, settings.source, !direct)
+                                    val result = voice.transcribe(window.samples, settings.source, settings.target.tag)
                                     currentCoroutineContext().ensureActive()
                                     val speechEnded = now()
-                                    if (textTarget != "en") voice.releaseWorkingMemory()
+                                    val needsText = textTarget != "en" && !direct &&
+                                        result.language != settings.target.tag && result.text.isNotBlank()
+                                    if (needsText) voice.releaseWorkingMemory()
                                     val translationStarted = now()
                                     val translated = when {
                                         result.text.isBlank() -> ""
-                                        direct -> result.text
+                                        direct || result.language == settings.target.tag -> result.text
                                         else -> try { text.translate(result.text) }
                                         catch (error: CaptionDeadlineException) {
                                             currentCoroutineContext().ensureActive()
@@ -119,7 +124,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                         if (translator === text) translator = null
                         text.cancel(); text.close()
                     }
-                }
+                } }
             } catch (error: CancellationException) { throw error }
             catch (error: CaptionStorageException) {
                 if (generation == token) state.value = CaptionPipelineState(CaptionProgress(CaptionStatus.LOW_STORAGE,

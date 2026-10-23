@@ -9,6 +9,9 @@ import java.io.File
 interface SpeechEngine : AutoCloseable {
     suspend fun transcribe(samples: FloatArray, language: String): SpeechText
     suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText = transcribe(samples, language)
+    /** The native engine can decide direct transcription after automatic language detection. */
+    suspend fun transcribe(samples: FloatArray, language: String, target: String): SpeechText =
+        transcribe(samples, language, language == "auto" || language != target)
     val memoryStage: String get() = CaptionResourcePolicy.SPEECH
     /** Serial worker only: release temporary computation buffers before text inference. */
     fun releaseWorkingMemory() = Unit

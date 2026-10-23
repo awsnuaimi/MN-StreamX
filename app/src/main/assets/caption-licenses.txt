@@ -85,6 +85,18 @@ Abseil: Copyright 2017 The Abseil Authors.
 https://github.com/google/sentencepiece/tree/v0.2.0
 https://huggingface.co/Helsinki-NLP/opus-mt-en-mul
 ONNX conversion: https://huggingface.co/Xenova/opus-mt-en-mul
+MN StreamX v30 selects these additional OPUS-MT exports by requested target:
+https://huggingface.co/Helsinki-NLP/opus-mt-en-ar
+https://huggingface.co/Helsinki-NLP/opus-mt-en-de
+https://huggingface.co/Helsinki-NLP/opus-mt-en-hi
+https://huggingface.co/Helsinki-NLP/opus-mt-en-sla
+ONNX conversions: Xenova/opus-mt-en-ar, Xenova/opus-mt-en-de,
+Xenova/opus-mt-en-hi, and TigreGotico/opus-mt-en-pl-onnx on Hugging Face.
+The latter export uses the Slavic-family model with its explicit >>pol<< token.
+Public immutable revisions and per-file SHA-256 digests are recorded in
+CaptionTranslationCatalog.kt. Models are downloaded only on activation.
+MN StreamX modifies their ONNX storage layout and vocabulary projection into
+bounded transposed uint8 blocks; original model scores and weight bytes are retained.
 The unmodified Apache 2.0 license follows (shared by these components).
 
 
