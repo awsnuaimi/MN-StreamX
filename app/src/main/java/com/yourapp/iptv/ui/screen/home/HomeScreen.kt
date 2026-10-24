@@ -73,7 +73,14 @@ fun HomeScreen(
         }
     }
     var searching by rememberSaveable { mutableStateOf(false) }
-    var dashboardVisible by rememberSaveable(state.browseScope) { mutableStateOf(true) }
+    // Reset only the stored landing-tab choice for this visual release. During the
+    // current navigation session the browse tab still restores normally.
+    var dashboardVisible by rememberSaveable(state.browseScope, "cinematic-home-v3506") {
+        mutableStateOf(true)
+    }
+    // Preserve the caller's tab when returning from video. Previously every return
+    // forced the compact Live grid, hiding the cinematic Smart Home cards.
+    var launchedFromDashboard by rememberSaveable { mutableStateOf(false) }
     // History is observed only while Smart Home is visible. Leaving it releases the subscription.
     LaunchedEffect(state.browseScope, state.needsSource, dashboardVisible) {
         quickAccessViewModel.bind(state.browseScope.takeIf { dashboardVisible && !state.needsSource })
@@ -91,9 +98,13 @@ fun HomeScreen(
         runCatching { sidebarFocus.getValue(target).requestFocus() }
     }
     var initialFocusDone by remember(state.browseScope) { mutableStateOf(false) }
-    LaunchedEffect(returnedChannelId, state.visibleChannels.isNotEmpty()) {
-        if (state.visibleChannels.isNotEmpty()) returnedChannelId?.let {
-            initialFocusDone = true; dashboardVisible = false; viewModel.selectChannel(it); onReturnHandled()
+    LaunchedEffect(returnedChannelId, state.channels.isNotEmpty()) {
+        if (state.channels.isNotEmpty()) returnedChannelId?.let {
+            initialFocusDone = true
+            dashboardVisible = launchedFromDashboard
+            if (!launchedFromDashboard) viewModel.selectChannel(it)
+            launchedFromDashboard = false
+            onReturnHandled()
         }
     }
     LaunchedEffect(state.sessionReady, state.isLoading, state.browseScope) {
@@ -181,10 +192,12 @@ fun HomeScreen(
                             labels.section(HomeSection.REFRESH), viewModel::refresh)
                         dashboardVisible -> Box(Modifier.weight(1f).fillMaxWidth()) { HomeDashboard(labels, dashboardData, state.channels.size,
                             dashboardFocus = dashboardFocus,
+                            suggestedChannels = state.channels.take(5),
                             isDarkTheme = appearance.isDarkTheme,
                             isNightMode = appearance.isNightMode,
                             onPlayChannel = { channel ->
                                 initialFocusDone = true
+                                launchedFromDashboard = true
                                 onPlayChannel(channel.id, null, "", false)
                             },
                             onLive = { select(HomeSection.LIVE) },
@@ -211,6 +224,7 @@ fun HomeScreen(
                             } else key(state.browseScope, state.selectedGroup, state.favoritesOnly, state.query) {
                                 TvChannelGrid(state.visibleChannels, state.selectedChannelId, { channel ->
                                     initialFocusDone = true
+                                    launchedFromDashboard = false
                                     viewModel.selectChannel(channel.id)
                                     onPlayChannel(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
                                 }, Modifier.weight(1f).fillMaxHeight(), columns = appearance.columns,
