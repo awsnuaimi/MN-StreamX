@@ -48,7 +48,11 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
                     }.semantics { this.selected = active; contentDescription = labels.section(section) },
                 color = when { focused -> Color(0xFF1C4D6D); active -> Color(0xFF16344D); else -> Color.Transparent },
                 shape = MaterialTheme.shapes.medium,
-                border = if (focused) BorderStroke(2.dp, NeonBlue) else null) {
+                border = when {
+                    focused -> BorderStroke(2.dp, NeonBlue)
+                    active -> BorderStroke(1.dp, Color(0xFF296281))
+                    else -> null
+                }) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     HomeSidebarIcon(section, if (active || focused) NeonBlue else Color(0xFFB1C3D8))

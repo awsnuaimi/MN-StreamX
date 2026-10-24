@@ -150,12 +150,14 @@ fun HomeScreen(
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 Column(Modifier.weight(1f).fillMaxHeight().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(labels.section(selected), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-                            if (!dashboardVisible) Text(labels.text("${state.visibleChannels.size} قناة ظاهرة من ${state.channels.size}",
+                    if (!dashboardVisible) {
+                        Column(Modifier.fillMaxWidth()) {
+                            Text(labels.section(selected), style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.primary)
+                            Text(labels.text("${state.visibleChannels.size} قناة ظاهرة من ${state.channels.size}",
                                 "${state.visibleChannels.size} of ${state.channels.size} channels",
-                                "${state.visibleChannels.size} von ${state.channels.size} Sendern"), style = MaterialTheme.typography.bodySmall)
+                                "${state.visibleChannels.size} von ${state.channels.size} Sendern"),
+                                style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     if (!dashboardVisible && (searching || state.query.isNotBlank())) OutlinedTextField(state.query, viewModel::updateQuery,
