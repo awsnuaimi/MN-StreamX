@@ -1,6 +1,7 @@
 package com.yourapp.iptv.ui.screen.home
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -106,6 +107,7 @@ private fun DashboardChannelStrip(title: String, channels: List<Channel>, onPlay
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DashboardChannelCard(channel: Channel, onPlay: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -131,6 +133,7 @@ private fun DashboardChannelCard(channel: Channel, onPlay: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DashboardAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     section: HomeSection) {
