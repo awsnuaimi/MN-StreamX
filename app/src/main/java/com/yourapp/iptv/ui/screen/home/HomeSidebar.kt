@@ -19,7 +19,10 @@ import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
 internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selected: HomeSection,
-    loading: Boolean, returnFocus: FocusRequester, onSelect: (HomeSection) -> Unit, modifier: Modifier = Modifier, organizationReady: Boolean = true) {
+    loading: Boolean, focusRequesters: Map<HomeSection, FocusRequester>,
+    onFocused: (HomeSection) -> Unit, onSelect: (HomeSection) -> Unit,
+    dashboardFocus: FocusRequester? = null, modifier: Modifier = Modifier,
+    organizationReady: Boolean = true) {
     var hasFocus by remember { mutableStateOf(false) }
     val expanded = appearance.expandedSidebar || hasFocus
     // Avoid remeasuring the entire channel grid on every animation frame.
@@ -34,8 +37,15 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
             val active = selected == section
             Surface(onClick = { onSelect(section) }, enabled = !(loading && section == HomeSection.REFRESH) && (section != HomeSection.ORGANIZE || organizationReady),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)
-                    .then(if (section == HomeSection.DASHBOARD) Modifier.focusRequester(returnFocus) else Modifier)
-                    .onFocusChanged { focused = it.isFocused }.semantics { this.selected = active; contentDescription = labels.section(section) },
+                    .focusRequester(focusRequesters.getValue(section))
+                    .then(if (selected == HomeSection.DASHBOARD && dashboardFocus != null)
+                        Modifier.focusProperties {
+                            if (appearance.sidebarOnRight) left = dashboardFocus else right = dashboardFocus
+                        } else Modifier)
+                    .onFocusChanged {
+                        focused = it.isFocused
+                        if (it.isFocused) onFocused(section)
+                    }.semantics { this.selected = active; contentDescription = labels.section(section) },
                 color = when { focused -> Color(0xFF1C4D6D); active -> Color(0xFF16344D); else -> Color.Transparent },
                 shape = MaterialTheme.shapes.medium,
                 border = if (focused) BorderStroke(2.dp, NeonBlue) else null) {

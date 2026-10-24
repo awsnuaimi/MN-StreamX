@@ -80,7 +80,14 @@ fun HomeScreen(
         onDispose { quickAccessViewModel.bind(null) }
     }
     val searchFocus = remember { FocusRequester() }
-    val sidebarFocus = remember { FocusRequester() }
+    val sidebarFocus = remember { HomeSection.entries.associateWith { FocusRequester() } }
+    val dashboardFocus = remember { FocusRequester() }
+    var lastSidebarFocus by rememberSaveable { mutableStateOf(HomeSection.DASHBOARD.name) }
+    fun restoreSidebarFocus() {
+        val target = HomeFocusPolicy.restore(lastSidebarFocus, state.isLoading || state.isRefreshing,
+            !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
+        runCatching { sidebarFocus.getValue(target).requestFocus() }
+    }
     var initialFocusDone by remember(state.browseScope) { mutableStateOf(false) }
     LaunchedEffect(returnedChannelId, state.visibleChannels.isNotEmpty()) {
         if (state.visibleChannels.isNotEmpty()) returnedChannelId?.let {
@@ -90,17 +97,17 @@ fun HomeScreen(
     LaunchedEffect(state.sessionReady, state.isLoading, state.browseScope) {
         if (state.sessionReady && !state.isLoading && !initialFocusDone) {
             initialFocusDone = true
-            if (returnedChannelId != null || state.selectedChannelId != null) return@LaunchedEffect
-            withFrameNanos { }; runCatching { sidebarFocus.requestFocus() }
+            if (returnedChannelId != null) return@LaunchedEffect
+            withFrameNanos { }; restoreSidebarFocus()
         }
     }
     LaunchedEffect(searching) { if (searching && state.channels.isNotEmpty()) { withFrameNanos { }; runCatching { searchFocus.requestFocus() } } }
     BackHandler(enabled = searching) {
-        searching = false; viewModel.updateQuery(""); runCatching { sidebarFocus.requestFocus() }
+        searching = false; viewModel.updateQuery(""); restoreSidebarFocus()
     }
     BackHandler(enabled = !searching && !dashboardVisible) {
         dashboardVisible = true
-        runCatching { sidebarFocus.requestFocus() }
+        restoreSidebarFocus()
     }
     val selected = when {
         searching -> HomeSection.SEARCH
@@ -136,7 +143,9 @@ fun HomeScreen(
             false
         }) {
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
-                HomeSidebar(appearance, labels, selected, state.isLoading || state.isRefreshing, sidebarFocus, ::select,
+                HomeSidebar(appearance, labels, selected, state.isLoading || state.isRefreshing,
+                    sidebarFocus, { section -> lastSidebarFocus = section.name }, ::select,
+                    dashboardFocus = dashboardFocus,
                     organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
@@ -165,6 +174,7 @@ fun HomeScreen(
                         state.channels.isEmpty() -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
                             labels.section(HomeSection.REFRESH), viewModel::refresh)
                         dashboardVisible -> Box(Modifier.weight(1f).fillMaxWidth()) { HomeDashboard(labels, dashboardData, state.channels.size,
+                            dashboardFocus = dashboardFocus,
                             onPlayChannel = { channel ->
                                 initialFocusDone = true
                                 onPlayChannel(channel.id, null, "", false)

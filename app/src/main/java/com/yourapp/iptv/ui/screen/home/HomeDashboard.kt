@@ -1,6 +1,9 @@
 package com.yourapp.iptv.ui.screen.home
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -12,7 +15,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -29,6 +35,7 @@ internal fun HomeDashboard(
     labels: HomeLabels,
     selection: HomeDashboardSelection,
     channelCount: Int,
+    dashboardFocus: FocusRequester,
     onPlayChannel: (Channel) -> Unit,
     onLive: () -> Unit,
     onMovies: () -> Unit,
@@ -38,8 +45,11 @@ internal fun HomeDashboard(
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Surface(color = Color(0xFF112845), shape = MaterialTheme.shapes.large) {
-            Column(Modifier.fillMaxWidth().padding(20.dp),
+        Surface(color = Color(0xFF112845), shape = MaterialTheme.shapes.large,
+            border = BorderStroke(1.dp, Color(0xFF254663))) {
+            Column(Modifier.fillMaxWidth()
+                .background(Brush.horizontalGradient(listOf(Color(0xFF173A58), Color(0xFF11203B))))
+                .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("MN StreamX", style = MaterialTheme.typography.headlineMedium,
                     color = NeonBlue)
@@ -60,7 +70,8 @@ internal fun HomeDashboard(
             style = MaterialTheme.typography.titleLarge, color = Color.White)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(end = 8.dp)) {
-            item(key = "live") { DashboardAction(labels.section(HomeSection.LIVE), onLive, section = HomeSection.LIVE) }
+            item(key = "live") { DashboardAction(labels.section(HomeSection.LIVE), onLive,
+                modifier = Modifier.focusRequester(dashboardFocus), section = HomeSection.LIVE) }
             item(key = "movies") { DashboardAction(labels.section(HomeSection.MOVIES), onMovies, section = HomeSection.MOVIES) }
             item(key = "series") { DashboardAction(labels.section(HomeSection.SERIES), onSeries, section = HomeSection.SERIES) }
             item(key = "guide") { DashboardAction(labels.section(HomeSection.GUIDE), onGuide, section = HomeSection.GUIDE) }
@@ -98,12 +109,17 @@ private fun DashboardChannelStrip(title: String, channels: List<Channel>, onPlay
 @Composable
 private fun DashboardChannelCard(channel: Channel, onPlay: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
+    val bringIntoView = remember { BringIntoViewRequester() }
+    LaunchedEffect(focused) { if (focused) bringIntoView.bringIntoView() }
     Surface(onClick = onPlay,
         modifier = Modifier.width(208.dp).heightIn(min = 100.dp)
+            .bringIntoViewRequester(bringIntoView)
             .onFocusChanged { focused = it.isFocused }
             .semantics { contentDescription = channel.name },
         color = if (focused) Color(0xFF174968) else Color(0xFF14243B),
-        border = if (focused) BorderStroke(2.dp, NeonBlue) else null,
+        border = BorderStroke(if (focused) 3.dp else 1.dp,
+            if (focused) NeonBlue else Color(0xFF2D4660)),
+        shadowElevation = if (focused) 7.dp else 0.dp,
         shape = MaterialTheme.shapes.medium) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -119,13 +135,17 @@ private fun DashboardChannelCard(channel: Channel, onPlay: () -> Unit) {
 private fun DashboardAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     section: HomeSection) {
     var focused by remember { mutableStateOf(false) }
+    val bringIntoView = remember { BringIntoViewRequester() }
+    LaunchedEffect(focused) { if (focused) bringIntoView.bringIntoView() }
     Surface(onClick = onClick,
-        modifier = modifier.widthIn(min = 148.dp).heightIn(min = 56.dp)
+        modifier = modifier.widthIn(min = 148.dp).heightIn(min = 62.dp)
+            .bringIntoViewRequester(bringIntoView)
             .onFocusChanged { focused = it.isFocused }
             .semantics { contentDescription = text },
         color = if (focused) Color(0xFF1C4D6D) else Color(0xFF172B46),
-        border = BorderStroke(if (focused) 2.dp else 1.dp,
+        border = BorderStroke(if (focused) 3.dp else 1.dp,
             if (focused) NeonBlue else Color(0xFF2D4660)),
+        shadowElevation = if (focused) 7.dp else 0.dp,
         shape = MaterialTheme.shapes.medium) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
