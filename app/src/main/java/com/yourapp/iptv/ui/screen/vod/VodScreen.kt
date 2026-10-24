@@ -25,11 +25,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.viewmodel.HomeAppearanceViewModel
 import com.yourapp.iptv.viewmodel.VodViewModel
+import com.yourapp.iptv.viewmodel.VodProgressViewModel
 
 @Composable
 fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, String, String) -> Unit,
-    model: VodViewModel = hiltViewModel(), appearanceModel: HomeAppearanceViewModel = hiltViewModel()) {
+    model: VodViewModel = hiltViewModel(), appearanceModel: HomeAppearanceViewModel = hiltViewModel(),
+    progressModel: VodProgressViewModel = hiltViewModel()) {
     val state by model.uiState.collectAsStateWithLifecycle()
+    val progress by progressModel.entries.collectAsStateWithLifecycle()
     val appearance by appearanceModel.appearance.collectAsStateWithLifecycle()
     val language = appearance?.language ?: HomeLanguage.ARABIC
     val labels = remember(language) { VodLabels(language) }
@@ -53,6 +56,12 @@ fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, Strin
                 state.unavailable -> VodMessage(labels.requiresXtream(), labels.back(), onBack)
                 state.error -> VodMessage(labels.failed(), labels.tryAgain(), { model.load(kind, refresh = true) })
                 else -> {
+                    val continued = remember(progress, kind) { progress.filter { it.kind == kind }.take(8) }
+                    if (continued.isNotEmpty()) {
+                        VodContinueWatching(continued, labels) { entry ->
+                            onPlay(entry.kind, entry.id, entry.extension, entry.title)
+                        }
+                    }
                     OutlinedTextField(state.query, model::search, Modifier.fillMaxWidth(), singleLine = true,
                         label = { Text(labels.search()) })
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -73,7 +82,7 @@ fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, Strin
             }
         }
         state.selected?.let { selected ->
-            VodDetailsDialog(state, selected, labels, onDismiss = model::close,
+            VodDetailsDialog(state, selected, labels, progress, onDismiss = model::close,
                 onRetry = { model.open(selected) }, onPlay = { chosenKind, id, ext, title ->
                 model.close()
                 onPlay(chosenKind, id, ext, title)

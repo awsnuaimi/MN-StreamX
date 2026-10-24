@@ -13,7 +13,7 @@ import com.yourapp.iptv.viewmodel.VodUiState
 
 @Composable
 internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLabels,
-    onDismiss: () -> Unit, onRetry: () -> Unit, onPlay: (VodKind, String, String, String) -> Unit) {
+    progress: List<VodProgressEntry>, onDismiss: () -> Unit, onRetry: () -> Unit, onPlay: (VodKind, String, String, String) -> Unit) {
     val item = state.details?.item ?: chosen
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp)) {
@@ -26,6 +26,10 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
                     Text(it.take(650), style = MaterialTheme.typography.bodyMedium, maxLines = 5)
                 }
                 if (state.kind == VodKind.MOVIE) {
+                    VodProgress.find(progress, VodKind.MOVIE, item.id)?.let { saved ->
+                        Text("${labels.resume()}: ${labels.position(saved.positionMs)}",
+                            style = MaterialTheme.typography.bodyMedium)
+                    }
                     Button(onClick = { onPlay(VodKind.MOVIE, item.id, item.extension, item.name) }) {
                         Text(labels.play())
                     }
@@ -45,7 +49,11 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
                                 OutlinedButton(onClick = {
                                     onPlay(VodKind.SERIES, episode.id, episode.extension, episode.name)
                                 }, modifier = Modifier.fillMaxWidth()) {
-                                    Text("${episode.number}. ${episode.name}", maxLines = 2)
+                                    val position = VodProgress.find(progress, VodKind.SERIES, episode.id)
+                                    Text(buildString {
+                                        append("${episode.number}. ${episode.name}")
+                                        if (position != null) append("  •  ${labels.resume()} ${labels.position(position.positionMs)}")
+                                    }, maxLines = 2)
                                 }
                             }
                         }

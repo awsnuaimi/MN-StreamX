@@ -19,6 +19,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.delay
 import com.yourapp.iptv.viewmodel.VodPlaybackState
 import com.yourapp.iptv.viewmodel.VodPlaybackViewModel
 
@@ -29,21 +30,30 @@ fun VodPlaybackScreen(onBack: () -> Unit, model: VodPlaybackViewModel = hiltView
     when (val value = state) {
         VodPlaybackState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         VodPlaybackState.Error -> PlaybackFailure(onBack)
-        is VodPlaybackState.Ready -> VodPlaybackPlayer(value, onBack)
+        is VodPlaybackState.Ready -> VodPlaybackPlayer(value, model, onBack)
     }
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-private fun VodPlaybackPlayer(value: VodPlaybackState.Ready, onBack: () -> Unit) {
+private fun VodPlaybackPlayer(value: VodPlaybackState.Ready, model: VodPlaybackViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var failed by remember(value.url) { mutableStateOf(false) }
     val player = remember(value.url) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(value.url))
+            if (value.resumeMs > 0L) seekTo(value.resumeMs)
             prepare()
             playWhenReady = true
+        }
+    }
+    LaunchedEffect(player) {
+        while (true) {
+            delay(10_000L)
+            if (player.playbackState == Player.STATE_READY && player.isPlaying) {
+                model.capture(player.currentPosition, player.duration)
+            }
         }
     }
     DisposableEffect(player, lifecycle) {
@@ -51,14 +61,23 @@ private fun VodPlaybackPlayer(value: VodPlaybackState.Ready, onBack: () -> Unit)
             override fun onPlayerError(error: PlaybackException) { failed = true }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) failed = false
+                if (playbackState == Player.STATE_ENDED) {
+                    model.capture(player.currentPosition, player.duration, completed = true)
+                }
             }
         }
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) player.pause()
+            if (event == Lifecycle.Event.ON_STOP) {
+                model.capture(player.currentPosition, player.duration,
+                    completed = player.playbackState == Player.STATE_ENDED)
+                player.pause()
+            }
         }
         player.addListener(listener)
         lifecycle.addObserver(observer)
         onDispose {
+            model.capture(player.currentPosition, player.duration,
+                completed = player.playbackState == Player.STATE_ENDED)
             lifecycle.removeObserver(observer)
             player.removeListener(listener)
             player.release()

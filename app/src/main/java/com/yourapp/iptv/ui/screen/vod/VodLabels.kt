@@ -16,6 +16,11 @@ internal class VodLabels(private val language: HomeLanguage) {
     fun tryAgain() = text("إعادة المحاولة", "Retry", "Erneut versuchen")
     fun back() = text("رجوع", "Back", "Zurück")
     fun play() = text("تشغيل", "Play", "Abspielen")
+    fun resume() = text("متابعة المشاهدة", "Continue watching", "Weitersehen")
+    fun position(ms: Long): String {
+        val minutes = (ms / 60_000L).coerceAtLeast(0L)
+        return "%02d:%02d".format(java.util.Locale.ROOT, minutes / 60, minutes % 60)
+    }
     fun episodes() = text("الحلقات", "Episodes", "Folgen")
     fun empty() = text("لا توجد نتائج", "No results", "Keine Ergebnisse")
     fun failed() = text("تعذر تحميل المحتوى من السيرفر.", "Could not load the catalog.", "Katalog konnte nicht geladen werden.")
