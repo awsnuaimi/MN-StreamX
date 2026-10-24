@@ -49,4 +49,17 @@
     <string name="player_list_hint">↑ ↓ Browse · OK Play · BACK Close list</string>
     <string name="player_cards_hint">← → Browse · OK Play · ↓ Next channel · ↑ Hide · More for tools</string>
     <string name="player_watch_hint">↓ Channel cards · ↑ Previous channel · OK / INFO Information · MENU Channel list</string>
+    <string name="cloud_engine_title">Translation engine</string>
+    <string name="cloud_engine_offline">Offline – Whisper and Marian</string>
+    <string name="cloud_engine_online">Online – Azure Speech</string>
+    <string name="cloud_audio_notice">Online mode sends channel audio to Microsoft Azure. Your account may incur charges. No microphone access.</string>
+    <string name="cloud_key_saved">Azure key encrypted and saved on this device</string>
+    <string name="cloud_key_missing">No Azure key configured</string>
+    <string name="cloud_key_label">Azure Speech subscription key</string>
+    <string name="cloud_region_label">Azure region (e.g. germanywestcentral)</string>
+    <string name="cloud_key_save">Save key on this device</string>
+    <string name="cloud_key_remove">Remove saved key</string>
+    <string name="cloud_key_error">Could not save Azure settings. Check the key and region.</string>
+    <string name="cloud_setup_required">Enter your Azure key and region in caption settings</string>
+    <string name="cloud_connection_error">Azure Speech unavailable. Check network, key, region, and quota.</string>
 </resources>

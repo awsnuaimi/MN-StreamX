@@ -1,6 +1,9 @@
 package com.yourapp.iptv.ui.screen.player
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,6 +36,10 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
     val tracks by embedded?.tracks?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList()) }
     val loading by embedded?.loading?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(true) }
     val settings = state.settings
+    var newCloudKey by remember { mutableStateOf("") }
+    var selectedRegion by remember(state.cloudRegion) {
+        mutableStateOf(state.cloudRegion.ifBlank { "germanywestcentral" })
+    }
     val device by produceState<CaptionDeviceStats?>(null, model) {
         while (true) { value = withContext(Dispatchers.IO) { model.deviceStats() }; delay(2000) }
     }
@@ -74,7 +81,7 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             }
                         }
                     }
-                    item {
+                    if (settings.translationBackend == TranslationBackend.OFFLINE) item {
                         val mb = CaptionModelCatalog.totalBytes(settings.target.tag, settings.source) / (1024 * 1024)
                         Text(stringResource(R.string.caption_download_size, mb), style = MaterialTheme.typography.bodySmall)
                     }
@@ -86,6 +93,46 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                         Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving) }
                     item { AppButton((if (settings.mode == CaptionMode.GENERATED) "✓ " else "") + stringResource(R.string.caption_generate), { model.save(settings.copy(mode = CaptionMode.GENERATED)) },
                         Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving) }
+                    item { Text(stringResource(R.string.cloud_engine_title), style = MaterialTheme.typography.titleMedium) }
+                    item {
+                        AppButton((if (settings.translationBackend == TranslationBackend.OFFLINE) "✓ " else "") +
+                            stringResource(R.string.cloud_engine_offline), {
+                                model.save(settings.copy(translationBackend = TranslationBackend.OFFLINE))
+                            }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
+                    }
+                    item {
+                        AppButton((if (settings.translationBackend == TranslationBackend.CLOUD) "✓ " else "") +
+                            stringResource(R.string.cloud_engine_online), {
+                                model.save(settings.copy(translationBackend = TranslationBackend.CLOUD))
+                            }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
+                    }
+                    item { Text(stringResource(R.string.cloud_audio_notice), style = MaterialTheme.typography.bodySmall) }
+                    item { Text(stringResource(if (state.cloudConfigured) R.string.cloud_key_saved else
+                        R.string.cloud_key_missing), style = MaterialTheme.typography.bodySmall) }
+                    item {
+                        OutlinedTextField(value = newCloudKey, onValueChange = { newCloudKey = it.take(300) },
+                            modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.cloud_key_label)) },
+                            singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                    }
+                    item {
+                        OutlinedTextField(value = selectedRegion, onValueChange = { selectedRegion = it.take(40) },
+                            modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.cloud_region_label)) },
+                            singleLine = true)
+                    }
+                    item {
+                        AppButton(stringResource(R.string.cloud_key_save), {
+                            model.saveCloudCredentials(newCloudKey, selectedRegion)
+                            newCloudKey = ""
+                        }, Modifier.fillMaxWidth(), enabled = !state.cloudSaving && newCloudKey.length >= 10)
+                    }
+                    if (state.cloudConfigured) item {
+                        AppButton(stringResource(R.string.cloud_key_remove), model::deleteCloudCredentials,
+                            Modifier.fillMaxWidth(), enabled = !state.cloudSaving)
+                    }
+                    if (state.cloudSaveFailed) item {
+                        Text(stringResource(R.string.cloud_key_error), color = MaterialTheme.colorScheme.error)
+                    }
                     item { Text(stringResource(R.string.caption_target), style = MaterialTheme.typography.titleMedium) }
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

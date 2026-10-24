@@ -47,6 +47,8 @@ internal fun captionStatusText(value: CaptionProgress): String {
         CaptionStatus.UNSUPPORTED_LANGUAGE -> R.string.caption_unsupported
         CaptionStatus.FAILED -> R.string.caption_failed
         CaptionStatus.ADAPTING -> R.string.caption_adapting
+        CaptionStatus.CLOUD_SETUP_REQUIRED -> R.string.cloud_setup_required
+        CaptionStatus.CLOUD_ERROR -> R.string.cloud_connection_error
     })
     return if (value.percent != null) "$text ${value.percent}%" else text
 }

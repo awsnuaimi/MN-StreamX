@@ -49,4 +49,17 @@
     <string name="player_list_hint">↑ ↓ Navigieren · OK Wiedergeben · BACK Liste schließen</string>
     <string name="player_cards_hint">← → Navigieren · OK Wiedergeben · ↓ Nächster Sender · ↑ Ausblenden · Mehr für Funktionen</string>
     <string name="player_watch_hint">↓ Senderkarten · ↑ Vorheriger Sender · OK / INFO Informationen · MENU Senderliste</string>
+    <string name="cloud_engine_title">Übersetzungsdienst</string>
+    <string name="cloud_engine_offline">Offline – Whisper und Marian</string>
+    <string name="cloud_engine_online">Online – Azure Speech</string>
+    <string name="cloud_audio_notice">Im Online-Modus wird Senderaudio an Microsoft Azure übertragen. Für Ihr Konto können Kosten entstehen. Kein Mikrofonzugriff.</string>
+    <string name="cloud_key_saved">Azure-Schlüssel verschlüsselt auf diesem Gerät gespeichert</string>
+    <string name="cloud_key_missing">Noch kein Azure-Schlüssel eingerichtet</string>
+    <string name="cloud_key_label">Azure Speech-Abonnementschlüssel</string>
+    <string name="cloud_region_label">Azure-Region (z. B. germanywestcentral)</string>
+    <string name="cloud_key_save">Schlüssel auf dem Gerät speichern</string>
+    <string name="cloud_key_remove">Gespeicherten Schlüssel löschen</string>
+    <string name="cloud_key_error">Azure-Einstellungen konnten nicht gespeichert werden. Schlüssel und Region prüfen.</string>
+    <string name="cloud_setup_required">Azure-Schlüssel und Region in den Untertiteleinstellungen eingeben</string>
+    <string name="cloud_connection_error">Azure Speech nicht erreichbar. Netzwerk, Schlüssel, Region und Kontingent prüfen.</string>
 </resources>

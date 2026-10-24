@@ -117,6 +117,7 @@ tasks.configureEach { task ->
 
 dependencies {
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
+    implementation 'com.microsoft.cognitiveservices.speech:client-sdk:1.51.0'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
     implementation "androidx.media3:media3-exoplayer-hls:$media3_version"
     implementation 'androidx.core:core-ktx:1.13.1'

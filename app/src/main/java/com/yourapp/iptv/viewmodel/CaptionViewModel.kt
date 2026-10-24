@@ -11,22 +11,68 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
+import java.util.Locale
 
 @HiltViewModel
 class CaptionViewModel @Inject constructor(private val repository: CaptionRepository,
     @CaptionWorker worker: CoroutineDispatcher, models: CaptionModels, speech: SpeechEngineFactory,
-    translators: CaptionTranslatorFactory, private val device: CaptionDevice) : ViewModel() {
+    translators: CaptionTranslatorFactory, private val device: CaptionDevice,
+    private val vault: CloudCredentialVault, cloudFactory: CloudCaptionSessionFactory) : ViewModel() {
     private val state = MutableStateFlow(CaptionUiState())
     val uiState = state.asStateFlow()
-    private val pipeline = CaptionPipeline(viewModelScope, worker, models, speech, translators, device)
+    private val pipeline = CaptionPipeline(viewModelScope, worker, models, speech, translators, device, vault, cloudFactory)
     val generated = pipeline.uiState
     private var observe: Job? = null
     private var write: Job? = null
     private var input: CaptionAudioInput? = null
     private var inputKey: String? = null
-    private var activeKey: Triple<CaptionAudioInput?, String?, Pair<String, String>>? = null
+    private data class ActiveKey(val input: CaptionAudioInput, val media: String, val source: String,
+        val target: String, val backend: TranslationBackend, val credentialsRevision: Int)
+    private var activeKey: ActiveKey? = null
+    private var credentialsRevision = 0
 
-    init { reload() }
+    init {
+        reload()
+        val revisionAtStart = credentialsRevision
+        viewModelScope.launch {
+            val saved = try { vault.read() }
+                catch (error: CancellationException) { throw error }
+                catch (_: Exception) { null }
+            if (revisionAtStart == credentialsRevision) {
+                state.value = state.value.copy(cloudConfigured = saved != null,
+                    cloudRegion = saved?.region.orEmpty())
+            }
+        }
+    }
+    fun saveCloudCredentials(key: String, region: String) {
+        if (state.value.cloudSaving) return
+        val credential = CloudCredentials(key.trim(), region.trim().lowercase(Locale.ROOT))
+        if (!credential.valid()) { state.value = state.value.copy(cloudSaveFailed = true); return }
+        state.value = state.value.copy(cloudSaving = true, cloudSaveFailed = false)
+        viewModelScope.launch {
+            try {
+                vault.save(credential)
+                credentialsRevision++
+                state.value = state.value.copy(cloudSaving = false, cloudSaveFailed = false,
+                    cloudConfigured = true, cloudRegion = credential.region)
+                reconcile()
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { state.value = state.value.copy(cloudSaving = false, cloudSaveFailed = true) }
+        }
+    }
+    fun deleteCloudCredentials() {
+        if (state.value.cloudSaving) return
+        state.value = state.value.copy(cloudSaving = true, cloudSaveFailed = false)
+        viewModelScope.launch {
+            try {
+                vault.clear()
+                credentialsRevision++
+                state.value = state.value.copy(cloudSaving = false, cloudConfigured = false, cloudRegion = "")
+                reconcile()
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { state.value = state.value.copy(cloudSaving = false, cloudSaveFailed = true) }
+        }
+    }
     fun reload() {
         if (observe?.isActive == true) return
         state.value = state.value.copy(readFailed = false)
@@ -61,7 +107,8 @@ class CaptionViewModel @Inject constructor(private val repository: CaptionReposi
         val settings = state.value.settings
         val current = input
         val key = if (state.value.loaded && settings.mode == CaptionMode.GENERATED && current != null && inputKey != null)
-            Triple(current, inputKey, settings.source to settings.target.tag) else null
+            ActiveKey(current, inputKey!!, settings.source, settings.target.tag,
+                settings.translationBackend, credentialsRevision) else null
         if (key == activeKey) return
         activeKey = key
         if (key == null) pipeline.stop() else pipeline.start(current!!, settings)

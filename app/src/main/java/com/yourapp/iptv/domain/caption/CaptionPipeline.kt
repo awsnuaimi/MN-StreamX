@@ -16,6 +16,8 @@ class CaptionPipelineState(val progress: CaptionProgress = CaptionProgress(), va
 class CaptionPipeline(private val scope: CoroutineScope, private val worker: CoroutineDispatcher,
     private val models: CaptionModels, private val speech: SpeechEngineFactory,
     private val translators: CaptionTranslatorFactory, private val device: CaptionDevice,
+    private val cloudVault: CloudCredentialVault? = null,
+    private val cloudFactory: CloudCaptionSessionFactory? = null,
     private val now: () -> Long = { System.nanoTime() / 1000000 }) {
     private val state = MutableStateFlow(CaptionPipelineState())
     val uiState = state.asStateFlow()
@@ -24,6 +26,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
     private val inferenceLock = Mutex()
     @Volatile private var engine: SpeechEngine? = null
     @Volatile private var translator: CaptionTranslator? = null
+    @Volatile private var cloudSession: CloudCaptionSession? = null
 
     fun start(input: CaptionAudioInput, settings: CaptionSettings) {
         stop()
@@ -44,6 +47,20 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
         status(CaptionStatus.PREPARING)
         job = scope.launch {
             try {
+                if (settings.translationBackend == TranslationBackend.CLOUD) {
+                    val vault = cloudVault
+                    val factory = cloudFactory
+                    if (vault == null || factory == null) {
+                        status(CaptionStatus.CLOUD_SETUP_REQUIRED)
+                    } else {
+                        withContext(worker) { inferenceLock.withLock {
+                            CloudCaptionRunner(vault, factory, now).run(input, settings,
+                                { generation == token }, { value -> if (generation == token) state.value = value },
+                                { cloudSession = it })
+                        } }
+                    }
+                    return@launch
+                }
                 withContext(worker) { inferenceLock.withLock {
                     if (!device.supported()) { status(CaptionStatus.UNAVAILABLE); return@withLock }
                     status(CaptionStatus.DOWNLOADING, 0)
@@ -190,13 +207,16 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
             }
             catch (_: OutOfMemoryError) { status(CaptionStatus.LOW_MEMORY) }
             catch (_: UnsatisfiedLinkError) { status(CaptionStatus.UNAVAILABLE) }
-            catch (_: Exception) { status(CaptionStatus.FAILED) }
+            catch (_: Exception) {
+                status(if (settings.translationBackend == TranslationBackend.CLOUD) CaptionStatus.CLOUD_ERROR
+                    else CaptionStatus.FAILED)
+            }
         }
     }
     /** Cancellation never waits for native work on the player thread. */
     fun stop() {
         generation++
-        engine?.cancel(); translator?.cancel()
+        engine?.cancel(); translator?.cancel(); cloudSession?.cancel()
         job?.cancel(); job = null
         state.value = CaptionPipelineState()
     }

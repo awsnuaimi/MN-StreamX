@@ -20,15 +20,19 @@ internal object CaptionCodec {
     private val source = stringPreferencesKey("source")
     private val size = stringPreferencesKey("size")
     private val shaded = booleanPreferencesKey("shaded")
+    private val backend = stringPreferencesKey("translation_backend")
     fun decode(p: Preferences) = CaptionSettings(
         CaptionMode.entries.firstOrNull { it.name == read<String>(p, mode) } ?: CaptionMode.OFF,
         CaptionLanguage.fromTag(read(p, target)) ?: CaptionLanguage.ARABIC,
         read(p, source) ?: "auto",
         CaptionTextSize.entries.firstOrNull { it.name == read<String>(p, size) } ?: CaptionTextSize.MEDIUM,
-        read(p, shaded) ?: true).normalized()
+        read(p, shaded) ?: true,
+        TranslationBackend.entries.firstOrNull { it.name == read<String>(p, backend) }
+            ?: TranslationBackend.OFFLINE).normalized()
     fun encode(p: MutablePreferences, v: CaptionSettings) {
         p[mode] = v.mode.name; p[target] = v.target.tag; p[source] = v.source
         p[size] = v.textSize.name; p[shaded] = v.shaded
+        p[backend] = v.translationBackend.name
     }
     private inline fun <reified T> read(p: Preferences, key: Preferences.Key<T>): T? = p.asMap()[key] as? T
 }

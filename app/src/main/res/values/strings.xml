@@ -49,4 +49,17 @@
     <string name="player_list_hint">↑ ↓ للتنقل · OK للتشغيل · BACK لإغلاق القائمة</string>
     <string name="player_cards_hint">← → تصفّح · OK تشغيل · ↓ القناة التالية · ↑ إخفاء · المزيد للأدوات</string>
     <string name="player_watch_hint">↓ بطاقات القنوات · ↑ القناة السابقة · OK / INFO معلومات · MENU القائمة</string>
+    <string name="cloud_engine_title">محرك الترجمة</string>
+    <string name="cloud_engine_offline">محلي — Whisper وMarian</string>
+    <string name="cloud_engine_online">سحابي — Azure Speech</string>
+    <string name="cloud_audio_notice">الوضع السحابي يرسل صوت القناة إلى Microsoft Azure. قد تُطبق رسوم على حسابك. لا يُستخدم الميكروفون.</string>
+    <string name="cloud_key_saved">تم حفظ مفتاح Azure على هذا الجهاز بشكل مشفّر</string>
+    <string name="cloud_key_missing">لم يُضف مفتاح Azure بعد</string>
+    <string name="cloud_key_label">مفتاح اشتراك Azure Speech</string>
+    <string name="cloud_region_label">منطقة Azure (مثال: germanywestcentral)</string>
+    <string name="cloud_key_save">حفظ المفتاح على الجهاز</string>
+    <string name="cloud_key_remove">حذف المفتاح المحفوظ</string>
+    <string name="cloud_key_error">تعذر حفظ إعداد Azure؛ تحقق من المفتاح والمنطقة</string>
+    <string name="cloud_setup_required">أدخل مفتاح Azure والمنطقة من إعدادات الترجمة</string>
+    <string name="cloud_connection_error">تعذر تشغيل Azure Speech؛ تحقق من الشبكة والمفتاح والمنطقة والحصة</string>
 </resources>

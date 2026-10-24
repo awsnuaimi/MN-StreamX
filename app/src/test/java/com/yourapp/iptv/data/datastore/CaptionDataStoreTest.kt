@@ -18,6 +18,8 @@ class CaptionDataStoreTest {
         assertEquals(CaptionMode.OFF, CaptionCodec.decode(emptyPreferences()).mode)
         val bad = mutablePreferencesOf(booleanPreferencesKey("mode") to true, intPreferencesKey("source") to 3)
         assertEquals(CaptionSettings(), CaptionCodec.decode(bad))
+        bad[stringPreferencesKey("translation_backend")] = "BOGUS"
+        assertEquals(TranslationBackend.OFFLINE, CaptionCodec.decode(bad).translationBackend)
     }
     @Test fun codecRetainsUnrelatedKeysAndNormalizesUnsupportedSourceHints() {
         val values = mutablePreferencesOf(stringPreferencesKey("future") to "keep")
@@ -29,7 +31,7 @@ class CaptionDataStoreTest {
     @Test fun actualSettingsSurviveClosingAndReopeningTheStore() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val file = temporary.root.resolve("captions.preferences_pb")
-        val wanted = CaptionSettings(CaptionMode.GENERATED, CaptionLanguage.POLISH, "de", CaptionTextSize.LARGE, false)
+        val wanted = CaptionSettings(CaptionMode.GENERATED, CaptionLanguage.POLISH, "de", CaptionTextSize.LARGE, false, TranslationBackend.CLOUD)
         var scope = CoroutineScope(SupervisorJob() + dispatcher)
         try {
             val store = PreferenceDataStoreFactory.create(scope = scope) { file }

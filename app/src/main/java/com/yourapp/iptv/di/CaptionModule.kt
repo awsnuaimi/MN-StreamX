@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Process
 import com.yourapp.iptv.data.caption.*
 import com.yourapp.iptv.data.datastore.CaptionDataStore
+import com.yourapp.iptv.data.datastore.EncryptedCloudCredentialVault
 import com.yourapp.iptv.data.datastore.captionStore
 import com.yourapp.iptv.domain.repository.*
 import dagger.Module
@@ -30,6 +31,12 @@ object CaptionModule {
         override suspend fun prepare(progress: (Int) -> Unit) = files.prepare(CaptionModelCatalog.speech, progress)
             .resolve("ggml-tiny-q5_1.bin")
     }
+    @Provides @Singleton fun credentialVault(@ApplicationContext context: Context): CloudCredentialVault =
+        EncryptedCloudCredentialVault(context)
+    @Provides @Singleton fun cloudFactory(): CloudCaptionSessionFactory =
+        CloudCaptionSessionFactory { credentials, source, target ->
+            AzureCloudCaptionSession(credentials, source, target)
+        }
     @Provides @Singleton fun device(@ApplicationContext context: Context): CaptionDevice = CaptionDeviceInfo(context)
     @Provides @Singleton fun speech(): SpeechEngineFactory = SpeechEngineFactory { WhisperSpeechEngine(it) }
     @Provides @Singleton internal fun translators(files: VerifiedModelFiles, device: CaptionDevice): CaptionTranslatorFactory =

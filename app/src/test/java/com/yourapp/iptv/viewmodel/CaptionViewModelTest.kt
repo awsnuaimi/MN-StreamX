@@ -55,7 +55,12 @@ class CaptionViewModelTest {
             override fun cancel() = Unit
             override fun close() = Unit
         } }
-        return CaptionViewModel(repository, dispatcher, models, speech, text, CaptionDevice { true })
+        return CaptionViewModel(repository, dispatcher, models, speech, text, CaptionDevice { true },
+            object : CloudCredentialVault {
+                override suspend fun read(): CloudCredentials? = null
+                override suspend fun save(value: CloudCredentials) = Unit
+                override suspend fun clear() = Unit
+            }, CloudCaptionSessionFactory { _, _, _ -> error("unused in offline tests") })
             .also { store.put("captions", it) }
     }
     @Test fun disabledAndEmbeddedModesNeverLoadModels() = runTest(dispatcher) {
@@ -80,6 +85,17 @@ class CaptionViewModelTest {
         advanceTimeBy(3000); runCurrent(); assertEquals(1, repository.reads)
         repository.failRead = false; model.reload(); runCurrent()
         assertTrue(model.uiState.value.loaded); assertEquals(1, modelsRead)
+        model.bind(null, null); runCurrent()
+    }
+    @Test fun choosingCloudStopsLocalInferenceWithoutLoadingAnotherModel() = runTest(dispatcher) {
+        val repository = Repository().apply { values.value = CaptionSettings(mode = CaptionMode.GENERATED) }
+        val model = model(repository)
+        model.bind(Input(), "channel"); runCurrent()
+        assertEquals(1, modelsRead)
+        model.save(repository.values.value.copy(translationBackend = TranslationBackend.CLOUD)); runCurrent()
+        assertEquals(1, modelsRead)
+        assertEquals(1, enginesClosed)
+        assertEquals(CaptionStatus.CLOUD_SETUP_REQUIRED, model.generated.value.progress.status)
         model.bind(null, null); runCurrent()
     }
     @Test fun failedSaveKeepsTheActualSettingAndClearingReleasesInference() = runTest(dispatcher) {
