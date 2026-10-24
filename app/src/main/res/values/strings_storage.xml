@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="storage_title">التخزين الداخلي</string>
+    <string name="storage_description">حذف نماذج الترجمة المحلية المحمّلة فقط؛ تبقى الحسابات والقنوات والمفضلة وإعدادات Azure محفوظة.</string>
+    <string name="storage_available">المساحة المتاحة: %1$s</string>
+    <string name="storage_downloaded">النماذج المحمّلة: %1$s</string>
+    <string name="storage_refresh">تحديث المساحة</string>
+    <string name="storage_delete_button">حذف النماذج المحلية</string>
+    <string name="storage_working">جارٍ فحص التخزين أو تنظيفه…</string>
+    <string name="storage_busy">أوقف الترجمة الجارية ثم حاول مرة أخرى.</string>
+    <string name="storage_error">تعذر قراءة التخزين أو تنظيف النماذج.</string>
+    <string name="storage_deleted">الملفات المحذوفة: نحو %1$s</string>
+    <string name="storage_confirm_title">تنظيف نماذج الترجمة؟</string>
+    <string name="storage_confirm_message">سيُحذف نحو %1$s من النماذج المحلية. ستحتاج إلى تنزيلها مجددًا عند استخدام Offline. لن يُحذف تسجيل الدخول أو بيانات البث.</string>
+    <string name="storage_confirm_delete">حذف النماذج</string>
+    <string name="storage_cancel">إلغاء</string>
+    <string name="storage_apk_note">حذف النماذج لا يقلّص حجم APK. استخدم ملف التحديث المطابق لمعمارية معالج تلفازك.</string>
+</resources>

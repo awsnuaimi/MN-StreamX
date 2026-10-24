@@ -77,43 +77,52 @@ jobs:
             echo "::error::Android apksigner was not found."
             exit 1
           fi
-          apk_path="app/build/outputs/apk/release/app-release.apk"
-          signing_report="$("$signer_path" verify --print-certs "$apk_path")"
-          actual_cert="$(
-            printf '%s\n' "$signing_report" |
-              awk '
-                /^[[:space:]]*(Signer([[:space:]]+#[0-9]+)?|V[0-9]+(\.[0-9]+)?[[:space:]]+Signer([[:space:]]+#[0-9]+)?):?[[:space:]]+certificate SHA-256 digest:/ {
-                  digest = $NF
-                  sub(/\r$/, "", digest)
-                  if (length(digest) == 64 && digest !~ /[^0-9A-Fa-f]/) {
-                    print tolower(digest)
-                  }
-                }
-              ' | sort -u
-          )"
-          printf 'APK certificate SHA-256: %s\n' "${actual_cert:-not found}"
-          if [[ ! "$actual_cert" =~ ^[0-9a-f]{64}$ ]]; then
-            printf '%s\n' "$signing_report"
-            echo "::error::Cannot read one unique APK signing certificate digest from the public apksigner report."
-            exit 1
-          fi
-          if [[ "$actual_cert" != "$expected_cert" ]]; then
-            echo "::error::Signing certificate changed. Refusing to publish an incompatible update."
-            exit 1
-          fi
           version_code=$((100000 + GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
           version_name="1.1.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
           aapt_path="${signer_path%/apksigner}/aapt"
-          badging="$("$aapt_path" dump badging "$apk_path")"
-          package_line="${badging%%$'\n'*}"
-          if [[ "$package_line" != *"name='com.yourapp.iptv'"* || "$package_line" != *"versionCode='$version_code'"* ]]; then
-            echo "::error::Package ID or versionCode does not match the update configuration."
-            exit 1
-          fi
           mkdir -p dist
-          cp "$apk_path" "dist/MN-StreamX-${version_name}.apk"
-          printf '### MN StreamX update APK\nVersion: %s\n\nVersion code: %s\n\nCertificate SHA-256: `%s`\n' \
-            "$version_name" "$version_code" "$actual_cert" >> "$GITHUB_STEP_SUMMARY"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            apk_path="app/build/outputs/apk/release/app-${abi}-release.apk"
+            if [[ ! -f "$apk_path" ]]; then
+              echo "::error::Missing signed APK for ${abi}: $apk_path"
+              exit 1
+            fi
+            signing_report="$("$signer_path" verify --print-certs "$apk_path")"
+            actual_cert="$(
+              printf '%s\n' "$signing_report" |
+                awk '
+                  /^[[:space:]]*(Signer([[:space:]]+#[0-9]+)?|V[0-9]+(\.[0-9]+)?[[:space:]]+Signer([[:space:]]+#[0-9]+)?):?[[:space:]]+certificate SHA-256 digest:/ {
+                    digest = $NF
+                    sub(/\r$/, "", digest)
+                    if (length(digest) == 64 && digest !~ /[^0-9A-Fa-f]/) {
+                      print tolower(digest)
+                    }
+                  }
+                ' | sort -u
+            )"
+            printf '%s APK certificate SHA-256: %s\n' "$abi" "${actual_cert:-not found}"
+            if [[ ! "$actual_cert" =~ ^[0-9a-f]{64}$ ]]; then
+              printf '%s\n' "$signing_report"
+              echo "::error::Cannot read unique certificate digest for $abi"
+              exit 1
+            fi
+            if [[ "$actual_cert" != "$expected_cert" ]]; then
+              echo "::error::Signing certificate mismatch for $abi"
+              exit 1
+            fi
+            badging="$("$aapt_path" dump badging "$apk_path")"
+            package_line="${badging%%$'\n'*}"
+            if [[ "$package_line" != *"name='com.yourapp.iptv'"* || "$package_line" != *"versionCode='$version_code'"* ]]; then
+              echo "::error::Package ID or version code mismatch for $abi"
+              exit 1
+            fi
+            output="dist/MN-StreamX-${version_name}-${abi}.apk"
+            cp "$apk_path" "$output"
+            printf '%s: %s MiB\n' "$abi" "$(du -m "$output" | cut -f1)"
+            printf ' - `%s` (%s MiB)\n' "$(basename "$output")" "$(du -m "$output" | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+          done
+          printf '\nVersion: %s | Version code: %s | Certificate SHA-256: `%s`\n' \
+            "$version_name" "$version_code" "$expected_cert" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload signed update APK
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

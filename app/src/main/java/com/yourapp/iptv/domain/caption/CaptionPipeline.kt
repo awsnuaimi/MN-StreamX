@@ -18,7 +18,8 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
     private val translators: CaptionTranslatorFactory, private val device: CaptionDevice,
     private val cloudVault: CloudCredentialVault? = null,
     private val cloudFactory: CloudCaptionSessionFactory? = null,
-    private val now: () -> Long = { System.nanoTime() / 1000000 }) {
+    private val now: () -> Long = { System.nanoTime() / 1000000 },
+    private val storageCoordinator: CaptionStorageCoordinator? = null) {
     private val state = MutableStateFlow(CaptionPipelineState())
     val uiState = state.asStateFlow()
     @Volatile private var generation = 0L
@@ -46,6 +47,8 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
         val textTarget = if (direct) "en" else settings.target.tag
         status(CaptionStatus.PREPARING)
         job = scope.launch {
+            val admitted = storageCoordinator?.beginSession() ?: true
+            if (!admitted) { status(CaptionStatus.UNAVAILABLE); return@launch }
             try {
                 if (settings.translationBackend == TranslationBackend.CLOUD) {
                     val vault = cloudVault
@@ -210,7 +213,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
             catch (_: Exception) {
                 status(if (settings.translationBackend == TranslationBackend.CLOUD) CaptionStatus.CLOUD_ERROR
                     else CaptionStatus.FAILED)
-            }
+            } finally { storageCoordinator?.endSession() }
         }
     }
     /** Cancellation never waits for native work on the player thread. */

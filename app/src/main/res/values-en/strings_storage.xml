@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="storage_title">Internal storage</string>
+    <string name="storage_description">Delete only downloaded offline translation models. Sign-in, channels, favorites, and Azure settings are preserved.</string>
+    <string name="storage_available">Available storage: %1$s</string>
+    <string name="storage_downloaded">Downloaded models: %1$s</string>
+    <string name="storage_refresh">Refresh storage</string>
+    <string name="storage_delete_button">Delete offline models</string>
+    <string name="storage_working">Checking or cleaning storage…</string>
+    <string name="storage_busy">Stop active captions and try again.</string>
+    <string name="storage_error">Could not inspect storage or remove models.</string>
+    <string name="storage_deleted">Removed files: about %1$s</string>
+    <string name="storage_confirm_title">Delete translation models?</string>
+    <string name="storage_confirm_message">About %1$s of offline models will be removed and must be downloaded again to use offline captions. Sign-in and channel data will stay.</string>
+    <string name="storage_confirm_delete">Delete models</string>
+    <string name="storage_cancel">Cancel</string>
+    <string name="storage_apk_note">Deleting models does not shrink the APK. Use the update matching your TV CPU architecture.</string>
+</resources>

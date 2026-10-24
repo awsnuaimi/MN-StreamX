@@ -48,6 +48,7 @@ fun SettingsScreen(
         AppButton(stringResource(R.string.ui_home_appearance), onHomeAppearance, enabled = !state.isSaving)
         AppButton(stringResource(R.string.ui_player_title), onPlayerAppearance, enabled = !state.isSaving)
         StartupPlaybackSetting()
+        StorageManagementSection()
         if (state.isLoading) {
             CircularProgressIndicator()
             Text(stringResource(R.string.ui_settings_loading))

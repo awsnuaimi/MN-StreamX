@@ -17,10 +17,12 @@ import java.util.Locale
 class CaptionViewModel @Inject constructor(private val repository: CaptionRepository,
     @CaptionWorker worker: CoroutineDispatcher, models: CaptionModels, speech: SpeechEngineFactory,
     translators: CaptionTranslatorFactory, private val device: CaptionDevice,
-    private val vault: CloudCredentialVault, cloudFactory: CloudCaptionSessionFactory) : ViewModel() {
+    private val vault: CloudCredentialVault, cloudFactory: CloudCaptionSessionFactory,
+    storageCoordinator: CaptionStorageCoordinator = CaptionStorageCoordinator()) : ViewModel() {
     private val state = MutableStateFlow(CaptionUiState())
     val uiState = state.asStateFlow()
-    private val pipeline = CaptionPipeline(viewModelScope, worker, models, speech, translators, device, vault, cloudFactory)
+    private val pipeline = CaptionPipeline(viewModelScope, worker, models, speech, translators, device, vault, cloudFactory,
+        storageCoordinator = storageCoordinator)
     val generated = pipeline.uiState
     private var observe: Job? = null
     private var write: Job? = null

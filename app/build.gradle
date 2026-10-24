@@ -46,7 +46,6 @@ android {
         targetSdk 35
         versionCode updateVersionCode.toInteger()
         versionName updateVersionName
-        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
@@ -82,6 +81,17 @@ android {
     }
 
     externalNativeBuild { cmake { path file('src/main/cpp/CMakeLists.txt'); version '3.22.1' } }
+
+    // One APK per Android ABI: smaller sideload/update footprint on low-storage TVs.
+    // All outputs retain the same application ID, version code and signing certificate.
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+            universalApk false
+        }
+    }
 
     sourceSets.main.assets.srcDir(layout.buildDirectory.dir("generated/captionNotices"))
 

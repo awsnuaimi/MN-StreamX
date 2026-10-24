@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="storage_title">Interner Speicher</string>
+    <string name="storage_description">Nur heruntergeladene Offline-Übersetzungsmodelle löschen. Anmeldung, Sender, Favoriten und Azure-Einstellungen bleiben erhalten.</string>
+    <string name="storage_available">Freier Speicher: %1$s</string>
+    <string name="storage_downloaded">Gespeicherte Modelle: %1$s</string>
+    <string name="storage_refresh">Speicher aktualisieren</string>
+    <string name="storage_delete_button">Offline-Modelle entfernen</string>
+    <string name="storage_working">Speicher wird geprüft oder bereinigt…</string>
+    <string name="storage_busy">Bitte aktive Untertitel beenden und erneut versuchen.</string>
+    <string name="storage_error">Speicher konnte nicht geprüft oder bereinigt werden.</string>
+    <string name="storage_deleted">Entfernte Dateien: ca. %1$s</string>
+    <string name="storage_confirm_title">Übersetzungsmodelle löschen?</string>
+    <string name="storage_confirm_message">Ca. %1$s lokale Modelle werden entfernt und müssen für Offline-Untertitel neu geladen werden. Anmeldung und Senderdaten bleiben erhalten.</string>
+    <string name="storage_confirm_delete">Modelle löschen</string>
+    <string name="storage_cancel">Abbrechen</string>
+    <string name="storage_apk_note">Modelle zu löschen verkleinert die APK nicht. Verwenden Sie das Update für die CPU-Architektur Ihres Fernsehers.</string>
+</resources>
