@@ -6,10 +6,16 @@ import com.yourapp.iptv.domain.model.Channel
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /** A small, private, evictable cache. Captures are neither backed up nor shared. */
 internal object ChannelFrameStore {
     private const val DIRECTORY = "live-hero-frames"
+    private val changed = MutableStateFlow(0L)
+    /** Hero listens only while composed; a late disk write also refreshes its artwork. */
+    val revision = changed.asStateFlow()
     private const val MAX_FRAMES = 8
     private const val MAX_AGE_MS = 12L * 60L * 60L * 1000L
 
@@ -36,6 +42,7 @@ internal object ChannelFrameStore {
                 if (!temp.renameTo(destination)) return@withContext false
                 destination.setLastModified(System.currentTimeMillis())
                 prune(dir)
+                changed.update { it + 1L }
                 true
             } catch (_: Exception) {
                 false

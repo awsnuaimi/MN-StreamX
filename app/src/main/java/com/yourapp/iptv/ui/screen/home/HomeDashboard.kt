@@ -106,6 +106,7 @@ private fun DashboardWelcome(labels: HomeLabels, highlighted: Channel?, channelC
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     var resumeEpoch by remember { mutableIntStateOf(0) }
+    val frameRevision by ChannelFrameStore.revision.collectAsState()
     DisposableEffect(owner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) resumeEpoch++
@@ -113,7 +114,7 @@ private fun DashboardWelcome(labels: HomeLabels, highlighted: Channel?, channelC
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
-    val savedFrame = remember(context, highlighted?.id, highlighted?.streamUrl, resumeEpoch) {
+    val savedFrame = remember(context, highlighted?.id, highlighted?.streamUrl, resumeEpoch, frameRevision) {
         highlighted?.let { ChannelFrameStore.fileFor(context, it) }
     }
     Surface(Modifier.fillMaxWidth(), color = colors.surface,

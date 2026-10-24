@@ -3,6 +3,10 @@ package com.yourapp.iptv.ui.screen.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -67,7 +71,10 @@ internal fun HomeImageBackdrop(
                 contentScale = ContentScale.Fit,
                 alignment = Alignment.CenterEnd,
                 alpha = if (large) 0.95f else 0.85f,
-                modifier = Modifier.matchParentSize()
+                // Logos are square artwork, never cinematic frames. Keep them
+                // contained on the image side instead of filling the whole Hero.
+                modifier = Modifier.align(Alignment.CenterEnd)
+                    .fillMaxHeight(0.72f).aspectRatio(1f).padding(8.dp)
             )
         }
         if (source is HomeArtworkSource.Monogram) {

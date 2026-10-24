@@ -10,43 +10,55 @@ import com.yourapp.iptv.domain.model.Channel
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-/** Captures from the existing player surface; never starts another decoder or stream. */
+/** A single attempt on the currently visible Live TV surface; no second decoder. */
 internal object LiveFrameCapture {
-    suspend fun saveIfNeeded(context: Context, channel: Channel, surface: SurfaceView) {
-        if (ChannelFrameStore.fileFor(context, channel) != null) return
-        if (!surface.holder.surface.isValid || surface.width <= 0 || surface.height <= 0) return
-        val bitmap = capture(surface) ?: return
+
+    suspend fun saveIfNeeded(context: Context, channel: Channel, surface: SurfaceView): FrameCaptureResult {
+        if (ChannelFrameStore.fileFor(context, channel) != null) return FrameCaptureResult.ALREADY_CACHED
+        if (!surface.isAttachedToWindow || !surface.holder.surface.isValid ||
+            surface.width <= 0 || surface.height <= 0) return FrameCaptureResult.SURFACE_NOT_READY
+        val (status, bitmap) = capture(surface)
+        if (bitmap == null) return when (status) {
+            PixelCopy.ERROR_SOURCE_INVALID -> FrameCaptureResult.PROTECTED_OR_INVALID
+            PixelCopy.ERROR_SOURCE_NO_DATA, PixelCopy.ERROR_TIMEOUT -> FrameCaptureResult.SURFACE_NOT_READY
+            else -> FrameCaptureResult.COPY_FAILED
+        }
         try {
-            if (containsPicture(bitmap)) ChannelFrameStore.save(context, channel, bitmap)
+            if (!containsPicture(bitmap)) return FrameCaptureResult.EMPTY_IMAGE
+            return if (ChannelFrameStore.save(context, channel, bitmap)) FrameCaptureResult.SAVED
+                else FrameCaptureResult.SAVE_FAILED
         } finally {
-            bitmap.recycle()
+            if (!bitmap.isRecycled) bitmap.recycle()
         }
     }
 
-    private suspend fun capture(surface: SurfaceView): Bitmap? =
-        suspendCancellableCoroutine { result ->
+    /** PixelCopy callback always owns the bitmap until it returns to the caller. */
+    private suspend fun capture(surface: SurfaceView): Pair<Int, Bitmap?> =
+        suspendCancellableCoroutine { continuation ->
             val bitmap = try {
                 Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888)
             } catch (_: RuntimeException) {
-                result.resume(null)
+                continuation.resume(PixelCopy.ERROR_DESTINATION_INVALID to null)
                 return@suspendCancellableCoroutine
             }
             try {
                 PixelCopy.request(surface, bitmap, { status ->
-                    if (status == PixelCopy.SUCCESS && result.isActive) {
-                        result.resume(bitmap)
+                    if (status == PixelCopy.SUCCESS && continuation.isActive) {
+                        continuation.resume(status to bitmap)
                     } else {
-                        bitmap.recycle()
-                        if (result.isActive) result.resume(null)
+                        if (!bitmap.isRecycled) bitmap.recycle()
+                        if (continuation.isActive) continuation.resume(status to null)
                     }
                 }, Handler(Looper.getMainLooper()))
             } catch (_: RuntimeException) {
-                bitmap.recycle()
-                if (result.isActive) result.resume(null)
+                if (!bitmap.isRecycled) bitmap.recycle()
+                if (continuation.isActive) {
+                    continuation.resume(PixelCopy.ERROR_UNKNOWN to null)
+                }
             }
         }
 
-    /** Reject nearly uniform black/protected surfaces without processing every pixel. */
+    /** Reject uniform or nearly-black video surfaces; sample only 35 pixels. */
     private fun containsPicture(bitmap: Bitmap): Boolean {
         var lit = 0
         var varied = 0

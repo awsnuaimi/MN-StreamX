@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.SurfaceView
 import android.util.TypedValue
+import android.util.Log
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.exoplayer.ExoPlayer
 import com.yourapp.iptv.domain.model.CaptionSettings
@@ -63,7 +64,11 @@ fun PlayerSurface(
         PlayerPlaybackSession(PlayerController(context), channel,
             onError = { id, error -> reportError(id, error) },
             onBuffering = { id, loading -> reportBuffering(id, loading) },
-            onStarted = { renderedChannel = it; reportStarted(it) })
+            onStarted = {
+                Log.i("MNX.FrameCapture", "first video frame rendered")
+                renderedChannel = it
+                reportStarted(it)
+            })
     }
 
     LaunchedEffect(session, generatedAudio) { session.configureCaptionAudio(if (generatedAudio) audioTap else null) }
@@ -74,22 +79,33 @@ fun PlayerSurface(
 
     PlayerTechnicalInfoObserver(if (technicalInfoEnabled) session.player else null, channel.id, onTechnicalInfo)
 
-    // Wait until a real video frame is visible. This task is cancelled on channel/ retry changes.
+    // First-frame notifications may arrive before the SurfaceView can be copied.
+    // Retry only a few times while the same channel/player is visible; never open a
+    // second player or keep a capture job alive after leaving this screen.
     LaunchedEffect(channel.id, channel.streamUrl, retryToken, renderedChannel) {
         val candidate = renderedChannel ?: return@LaunchedEffect
         if (candidate.id != channel.id || candidate.streamUrl != channel.streamUrl) return@LaunchedEffect
-        delay(1200)
-        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return@LaunchedEffect
-        val currentPlayer = session.player ?: return@LaunchedEffect
-        if (currentPlayer.currentMediaItem?.mediaId?.startsWith("${candidate.id}:") != true)
-            return@LaunchedEffect
-        val playerView = handle.view ?: return@LaunchedEffect
-        if (playerView.player !== currentPlayer) return@LaunchedEffect
-        val source = playerView.videoSurfaceView as? SurfaceView ?: return@LaunchedEffect
-        LiveFrameCapture.saveIfNeeded(context, candidate, source)
+        for (attempt in 0 until FrameCapturePolicy.MAX_ATTEMPTS) {
+            delay(FrameCapturePolicy.delayBeforeMs(attempt))
+            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) break
+            val currentPlayer = session.player ?: break
+            if (currentPlayer.currentMediaItem?.mediaId?.startsWith("${candidate.id}:") != true) break
+            val playerView = handle.view
+            if (playerView == null || playerView.player == null) {
+                Log.i("MNX.FrameCapture", "attempt=${attempt + 1} result=VIEW_NOT_READY")
+                continue
+            }
+            if (playerView.player !== currentPlayer) break
+            val source = playerView.videoSurfaceView as? SurfaceView
+            val outcome = if (source == null) FrameCaptureResult.SURFACE_NOT_READY
+                else LiveFrameCapture.saveIfNeeded(context, candidate, source)
+            Log.i("MNX.FrameCapture", "attempt=${attempt + 1} result=$outcome")
+            if (!FrameCapturePolicy.continueAfter(outcome, attempt + 1)) break
+        }
     }
 
     LaunchedEffect(channel.id, channel.streamUrl, retryToken) {
+        renderedChannel = null
         session.selectChannel(channel, retryToken)
     }
     DisposableEffect(session, lifecycle, handle) {
