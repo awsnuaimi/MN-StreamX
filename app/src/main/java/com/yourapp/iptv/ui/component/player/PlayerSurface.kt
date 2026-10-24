@@ -2,6 +2,7 @@ package com.yourapp.iptv.ui.component.player
 
 import android.view.KeyEvent
 import android.view.View
+import android.view.SurfaceView
 import android.util.TypedValue
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.exoplayer.ExoPlayer
@@ -14,6 +15,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -22,6 +25,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.delay
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
 import com.yourapp.iptv.player.controller.PlayerController
@@ -52,13 +56,14 @@ fun PlayerSurface(
     val reportControls by rememberUpdatedState(onControllerVisibilityChanged)
     val reportStarted by rememberUpdatedState(onPlaybackStarted)
     val reportCaptionBinding by rememberUpdatedState(onCaptionBinding)
+    var renderedChannel by remember { mutableStateOf<Channel?>(null) }
     val audioTap = remember { CaptionAudioTap() }
     val generatedAudio = captionSettings.mode == CaptionMode.GENERATED
     val session = remember(context) {
         PlayerPlaybackSession(PlayerController(context), channel,
             onError = { id, error -> reportError(id, error) },
             onBuffering = { id, loading -> reportBuffering(id, loading) },
-            onStarted = { reportStarted(it) })
+            onStarted = { renderedChannel = it; reportStarted(it) })
     }
 
     LaunchedEffect(session, generatedAudio) { session.configureCaptionAudio(if (generatedAudio) audioTap else null) }
@@ -68,6 +73,21 @@ fun PlayerSurface(
     }
 
     PlayerTechnicalInfoObserver(if (technicalInfoEnabled) session.player else null, channel.id, onTechnicalInfo)
+
+    // Wait until a real video frame is visible. This task is cancelled on channel/ retry changes.
+    LaunchedEffect(channel.id, channel.streamUrl, retryToken, renderedChannel) {
+        val candidate = renderedChannel ?: return@LaunchedEffect
+        if (candidate.id != channel.id || candidate.streamUrl != channel.streamUrl) return@LaunchedEffect
+        delay(1200)
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return@LaunchedEffect
+        val currentPlayer = session.player ?: return@LaunchedEffect
+        if (currentPlayer.currentMediaItem?.mediaId?.startsWith("${candidate.id}:") != true)
+            return@LaunchedEffect
+        val playerView = handle.view ?: return@LaunchedEffect
+        if (playerView.player !== currentPlayer) return@LaunchedEffect
+        val source = playerView.videoSurfaceView as? SurfaceView ?: return@LaunchedEffect
+        LiveFrameCapture.saveIfNeeded(context, candidate, source)
+    }
 
     LaunchedEffect(channel.id, channel.streamUrl, retryToken) {
         session.selectChannel(channel, retryToken)
