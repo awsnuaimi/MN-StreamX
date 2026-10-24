@@ -8,7 +8,9 @@ data class HomeAppearance(
     val expandedSidebar: Boolean = false,
     val columns: Int = 3,
     val restoreBrowseSession: Boolean = true,
-    val isDarkTheme: Boolean = true
+    val isDarkTheme: Boolean = true,
+    /** Independent OLED/true-black night override. Never mutates the selected theme. */
+    val isNightMode: Boolean = false
 ) {
     val sidebarOnRight: Boolean get() = sidebarSide == SidebarSide.RIGHT ||
         (sidebarSide == SidebarSide.AUTO && language == HomeLanguage.ARABIC)

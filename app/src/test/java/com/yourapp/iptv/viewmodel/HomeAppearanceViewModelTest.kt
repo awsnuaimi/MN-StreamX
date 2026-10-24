@@ -64,6 +64,36 @@ class HomeAppearanceViewModelTest {
         assertTrue(viewModel.themeError.value)
         assertFalse(viewModel.themeSaving.value)
     }
+    @Test fun nightButtonTogglesTrueBlackWithoutChangingSavedThemeOrPreferences() = runTest(dispatcher) {
+        val repository = Repository()
+        val saved = HomeAppearance(HomeLanguage.GERMAN, SidebarSide.LEFT,
+            true, 4, restoreBrowseSession = false, isDarkTheme = false)
+        repository.values.value = saved
+        val viewModel = HomeAppearanceViewModel(repository).also { store.put("nightReader", it) }
+        runCurrent()
+        viewModel.toggleNightMode()
+        viewModel.toggleNightMode() // ignored while saving
+        advanceTimeBy(21); runCurrent()
+        assertEquals(1, repository.writes)
+        assertEquals(saved.copy(isNightMode = true), repository.values.value)
+        viewModel.toggleNightMode()
+        advanceTimeBy(21); runCurrent()
+        assertEquals(saved, repository.values.value)
+    }
+    @Test fun nightModeErrorKeepsPreviousValueAndTheme() = runTest(dispatcher) {
+        val repository = Repository().apply {
+            values.value = HomeAppearance(isDarkTheme = false)
+            failWrite = true
+        }
+        val viewModel = HomeAppearanceViewModel(repository).also { store.put("nightError", it) }
+        runCurrent()
+        viewModel.toggleNightMode()
+        advanceTimeBy(21); runCurrent()
+        assertFalse(repository.values.value.isNightMode)
+        assertFalse(repository.values.value.isDarkTheme)
+        assertTrue(viewModel.nightError.value)
+        assertFalse(viewModel.nightSaving.value)
+    }
     @Test fun failedReadBlocksOverwriteUntilExplicitReloadSucceeds() = runTest(dispatcher) {
         val repository = Repository().apply { failRead = true }
         val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("editor", it) }

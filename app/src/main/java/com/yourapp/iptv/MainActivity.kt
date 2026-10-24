@@ -26,7 +26,8 @@ class MainActivity : ComponentActivity() {
         startupPlayback.initialize(freshLaunch = savedInstanceState == null)
         setContent {
             val appearance by homeAppearance.appearance.collectAsStateWithLifecycle()
-            IPTVAppTheme(isDarkTheme = appearance?.isDarkTheme ?: true) {
+            IPTVAppTheme(isDarkTheme = appearance?.isDarkTheme ?: true,
+                isNightMode = appearance?.isNightMode ?: false) {
                 AppLanguageHost {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         AppNavGraph(startupPlayback)

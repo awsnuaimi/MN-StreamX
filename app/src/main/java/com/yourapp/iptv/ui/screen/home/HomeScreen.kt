@@ -53,8 +53,8 @@ fun HomeScreen(
         HomeDashboardSelection.project(state.channels, ids)
     }
     val savedAppearance by appearanceViewModel.appearance.collectAsStateWithLifecycle()
-    val themeSaving by appearanceViewModel.themeSaving.collectAsStateWithLifecycle()
-    val themeError by appearanceViewModel.themeError.collectAsStateWithLifecycle()
+    val nightSaving by appearanceViewModel.nightSaving.collectAsStateWithLifecycle()
+    val nightError by appearanceViewModel.nightError.collectAsStateWithLifecycle()
     val appearance = savedAppearance
     if (appearance == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -147,8 +147,8 @@ fun HomeScreen(
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 HomeSidebar(appearance, labels, selected, state.isLoading || state.isRefreshing,
                     sidebarFocus, { section -> lastSidebarFocus = section.name }, ::select,
-                    onToggleTheme = appearanceViewModel::toggleTheme,
-                    themeSaving = themeSaving, themeError = themeError,
+                    onToggleNightMode = appearanceViewModel::toggleNightMode,
+                    nightSaving = nightSaving, nightError = nightError,
                     dashboardFocus = dashboardFocus,
                     organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
             }
@@ -182,6 +182,7 @@ fun HomeScreen(
                         dashboardVisible -> Box(Modifier.weight(1f).fillMaxWidth()) { HomeDashboard(labels, dashboardData, state.channels.size,
                             dashboardFocus = dashboardFocus,
                             isDarkTheme = appearance.isDarkTheme,
+                            isNightMode = appearance.isNightMode,
                             onPlayChannel = { channel ->
                                 initialFocusDone = true
                                 onPlayChannel(channel.id, null, "", false)

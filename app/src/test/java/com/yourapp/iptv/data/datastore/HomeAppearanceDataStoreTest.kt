@@ -64,6 +64,26 @@ class HomeAppearanceDataStoreTest {
         val values = mutablePreferencesOf(stringPreferencesKey("is_dark_theme") to "invalid")
         assertTrue(HomeAppearanceCodec.decode(values).isDarkTheme)
     }
+    @Test fun nightModeDefaultsOffAndDoesNotOverwriteLegacyDarkTheme() {
+        val legacy = mutablePreferencesOf(booleanPreferencesKey("is_dark_theme") to false)
+        assertFalse(HomeAppearanceCodec.decode(legacy).isNightMode)
+        assertFalse(HomeAppearanceCodec.decode(legacy).isDarkTheme)
+        val night = HomeAppearance(HomeLanguage.GERMAN, SidebarSide.LEFT,
+            columns = 4, isDarkTheme = false, isNightMode = true)
+        HomeAppearanceCodec.encode(legacy, night)
+        assertEquals(night, HomeAppearanceCodec.decode(legacy))
+        val dayAgain = night.copy(isNightMode = false)
+        HomeAppearanceCodec.encode(legacy, dayAgain)
+        assertEquals(dayAgain, HomeAppearanceCodec.decode(legacy))
+        assertFalse(HomeAppearanceCodec.decode(legacy).isDarkTheme)
+    }
+    @Test fun corruptedNightPreferenceDoesNotAlterSavedTheme() {
+        val values = mutablePreferencesOf(
+            stringPreferencesKey("night_mode") to "invalid",
+            booleanPreferencesKey("is_dark_theme") to true)
+        assertFalse(HomeAppearanceCodec.decode(values).isNightMode)
+        assertTrue(HomeAppearanceCodec.decode(values).isDarkTheme)
+    }
     @Test fun sessionPreferenceDefaultsOnAndPersistsWithoutChangingExistingChoices() {
         val values = mutablePreferencesOf(stringPreferencesKey("future") to "keep")
         assertTrue(HomeAppearanceCodec.decode(values).restoreBrowseSession)

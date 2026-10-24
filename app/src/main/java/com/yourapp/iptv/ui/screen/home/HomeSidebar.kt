@@ -19,10 +19,10 @@ import com.yourapp.iptv.domain.model.HomeAppearance
 internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selected: HomeSection,
     loading: Boolean, focusRequesters: Map<HomeSection, FocusRequester>,
     onFocused: (HomeSection) -> Unit, onSelect: (HomeSection) -> Unit,
-    onToggleTheme: () -> Unit, themeSaving: Boolean, themeError: Boolean,
+    onToggleNightMode: () -> Unit, nightSaving: Boolean, nightError: Boolean,
     dashboardFocus: FocusRequester? = null, modifier: Modifier = Modifier,
     organizationReady: Boolean = true) {
-    val colors = HomeTvPalettes.forMode(appearance.isDarkTheme)
+    val colors = HomeTvPalettes.forMode(appearance.isDarkTheme, appearance.isNightMode)
     var hasFocus by remember { mutableStateOf(false) }
     val expanded = appearance.expandedSidebar || hasFocus
     val width = if (expanded) 180.dp else 70.dp
@@ -73,10 +73,10 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
         }
         Spacer(Modifier.height(6.dp))
         var focusedTheme by remember { mutableStateOf(false) }
-        val switchLabel = if (appearance.isDarkTheme)
-            labels.text("الوضع النهاري", "Light mode", "Helles Design")
-        else labels.text("الوضع الليلي", "Dark mode", "Dunkles Design")
-        Surface(onClick = onToggleTheme, enabled = !themeSaving,
+        val switchLabel = if (appearance.isNightMode)
+            labels.text("إيقاف الوضع الليلي", "Night mode off", "Nachtmodus aus")
+        else labels.text("الوضع الليلي الأسود", "Black night mode", "Schwarzer Nachtmodus")
+        Surface(onClick = onToggleNightMode, enabled = !nightSaving,
             modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)
                 .onFocusChanged { focusedTheme = it.isFocused }
                 .semantics { contentDescription = switchLabel },
@@ -86,14 +86,14 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
             Row(Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(if (appearance.isDarkTheme) "☀" else "☾",
+                Text(if (appearance.isNightMode) "☀" else "☾",
                     color = colors.accent, style = MaterialTheme.typography.titleMedium)
                 if (expanded) Text(switchLabel, color = colors.text,
                     style = MaterialTheme.typography.labelLarge, maxLines = 1)
             }
         }
-        if (themeError && expanded) Text(
-            labels.text("تعذّر حفظ المظهر", "Could not save theme", "Design konnte nicht gespeichert werden"),
+        if (nightError && expanded) Text(
+            labels.text("تعذّر حفظ الوضع الليلي", "Could not save night mode", "Nachtmodus konnte nicht gespeichert werden"),
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall)
     }

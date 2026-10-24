@@ -52,11 +52,24 @@ fun HomeAppearanceScreen(onBack: () -> Unit, viewModel: HomeAppearanceSettingsVi
                 Text(if (value.sidebarOnRight) stringResource(R.string.ui_preview_right) else stringResource(R.string.ui_preview_left))
                 AppearanceToggle(
                     when (value.language) {
-                        HomeLanguage.ARABIC -> "الوضع الليلي"
-                        HomeLanguage.ENGLISH -> "Dark mode"
-                        HomeLanguage.GERMAN -> "Dunkles Design"
+                        HomeLanguage.ARABIC -> "الثيم الداكن (الأزرق)"
+                        HomeLanguage.ENGLISH -> "Dark blue theme"
+                        HomeLanguage.GERMAN -> "Dunkelblaues Design"
                     }, value.isDarkTheme, enabled
                 ) { viewModel.update(value.copy(isDarkTheme = it)) }
+                AppearanceToggle(
+                    when (value.language) {
+                        HomeLanguage.ARABIC -> "الوضع الليلي الأسود (مستقل عن الثيم)"
+                        HomeLanguage.ENGLISH -> "True-black night mode (independent of theme)"
+                        HomeLanguage.GERMAN -> "Schwarzer Nachtmodus (unabhängig vom Design)"
+                    }, value.isNightMode, enabled
+                ) { viewModel.update(value.copy(isNightMode = it)) }
+                Text(when (value.language) {
+                    HomeLanguage.ARABIC -> "الوضع الليلي يغيّر الخلفية إلى الأسود دون تغيير الثيم المختار."
+                    HomeLanguage.ENGLISH -> "Night mode uses a black background without changing your saved theme."
+                    HomeLanguage.GERMAN -> "Der Nachtmodus verwendet Schwarz, ohne das gewählte Design zu ändern."
+                }, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 AppearanceToggle(stringResource(R.string.home_session_restore), value.restoreBrowseSession, enabled) {
                     viewModel.update(value.copy(restoreBrowseSession = it))
                 }

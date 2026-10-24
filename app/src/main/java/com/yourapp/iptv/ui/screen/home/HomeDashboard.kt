@@ -20,17 +20,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.HomeDashboardSelection
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
@@ -43,6 +37,7 @@ internal fun HomeDashboard(
     channelCount: Int,
     dashboardFocus: FocusRequester,
     isDarkTheme: Boolean,
+    isNightMode: Boolean,
     onPlayChannel: (Channel) -> Unit,
     onLive: () -> Unit,
     onMovies: () -> Unit,
@@ -50,7 +45,7 @@ internal fun HomeDashboard(
     onGuide: () -> Unit,
     onHistory: () -> Unit
 ) {
-    val colors = HomeTvPalettes.forMode(isDarkTheme)
+    val colors = HomeTvPalettes.forMode(isDarkTheme, isNightMode)
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background)) {
         val metrics = remember(maxWidth) { HomeDashboardLayout.forWidth(maxWidth.value.toInt()) }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -88,23 +83,11 @@ internal fun HomeDashboard(
 @Composable
 private fun DashboardWelcome(labels: HomeLabels, highlighted: Channel?, channelCount: Int,
     metrics: HomeDashboardMetrics, colors: HomeTvPalette, onPlayChannel: (Channel) -> Unit) {
-    val logoUrl = highlighted?.logoUrl?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
-    val context = LocalContext.current
-    val request = remember(context, logoUrl) {
-        logoUrl?.let { ImageRequest.Builder(context).data(it).size(720, 360)
-            .crossfade(false).build() }
-    }
-    val gradient = if (LocalLayoutDirection.current == LayoutDirection.Rtl)
-        colors.heroOverlay.reversed() else colors.heroOverlay
     Surface(Modifier.fillMaxWidth(), color = colors.surface,
         shape = MaterialTheme.shapes.large, border = BorderStroke(1.dp, colors.outline)) {
-        Box(Modifier.fillMaxWidth().background(Brush.horizontalGradient(colors.heroGradient))) {
-            if (request != null) {
-                AsyncImage(model = request, contentDescription = null,
-                    contentScale = ContentScale.Crop, alpha = 0.45f,
-                    modifier = Modifier.matchParentSize())
-                Box(Modifier.matchParentSize().background(Brush.horizontalGradient(gradient)))
-            }
+        Box(Modifier.fillMaxWidth()) {
+            HomeImageBackdrop(highlighted?.logoUrl, colors,
+                Modifier.matchParentSize(), large = true)
             Column(Modifier.fillMaxWidth().padding(metrics.heroPadding.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("MN StreamX", style = MaterialTheme.typography.headlineMedium,
@@ -169,17 +152,21 @@ private fun DashboardChannelCard(channel: Channel, metrics: HomeDashboardMetrics
             if (focused) colors.accent else colors.outline),
         shadowElevation = if (focused) 8.dp else 0.dp,
         shape = MaterialTheme.shapes.medium) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Surface(shape = MaterialTheme.shapes.small, color = colors.logoSurface) {
-                Box(Modifier.size(metrics.logoSize.dp), contentAlignment = Alignment.Center) {
-                    ChannelLogo(channel.name, channel.logoUrl,
-                        Modifier.fillMaxSize().padding(5.dp))
+        Box(Modifier.fillMaxSize()) {
+            HomeImageBackdrop(channel.logoUrl, colors, Modifier.matchParentSize())
+            Row(Modifier.fillMaxSize().padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(shape = MaterialTheme.shapes.small, color = colors.logoSurface) {
+                    Box(Modifier.size(metrics.logoSize.dp), contentAlignment = Alignment.Center) {
+                        ChannelLogo(channel.name, channel.logoUrl,
+                            Modifier.fillMaxSize().padding(5.dp))
+                    }
                 }
+                Text(channel.name, Modifier.weight(1f), maxLines = 2,
+                    overflow = TextOverflow.Ellipsis, color = colors.text,
+                    style = MaterialTheme.typography.bodyMedium)
             }
-            Text(channel.name, Modifier.weight(1f), maxLines = 2,
-                overflow = TextOverflow.Ellipsis, color = colors.text,
-                style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -204,12 +191,16 @@ private fun DashboardAction(text: String, onClick: () -> Unit,
             if (focused) colors.accent else colors.outline),
         shadowElevation = if (focused) 8.dp else 0.dp,
         shape = MaterialTheme.shapes.medium) {
-        Row(Modifier.padding(horizontal = 13.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeSidebarIcon(section, colors.accent)
-            Text(text, color = colors.text, maxLines = 2,
-                overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
+            if (focused) listOf(colors.focused, colors.selected)
+            else colors.heroGradient))) {
+            Row(Modifier.fillMaxSize().padding(horizontal = 13.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HomeSidebarIcon(section, colors.accent)
+                Text(text, color = colors.text, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }

@@ -18,15 +18,27 @@ class HomeAppearanceViewModel @Inject constructor(private val repository: HomeAp
     private val themeErrorState = MutableStateFlow(false)
     val themeError = themeErrorState.asStateFlow()
 
-    fun toggleTheme() {
+    // Both controls share the same write gate to prevent conflicting writes to DataStore.
+    val nightSaving = themeSaving
+    val nightError = themeError
+
+    fun toggleTheme() = saveAppearanceChange { current ->
+        current.copy(isDarkTheme = !current.isDarkTheme)
+    }
+
+    fun toggleNightMode() = saveAppearanceChange { current ->
+        current.copy(isNightMode = !current.isNightMode)
+    }
+
+    private fun saveAppearanceChange(change: (HomeAppearance) -> HomeAppearance) {
         if (themeBusyState.value) return
         themeBusyState.value = true
         themeErrorState.value = false
         viewModelScope.launch {
             try {
-                // Read current stored values: never overwrite sidebar/language with a stale draft.
+                // Re-read current persisted values: never discard sidebar, language or theme.
                 val current = repository.observe().first().normalized()
-                repository.save(current.copy(isDarkTheme = !current.isDarkTheme))
+                repository.save(change(current))
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {

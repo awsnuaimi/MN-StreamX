@@ -30,10 +30,43 @@ private val LightColorScheme = lightColorScheme(
     outline = Color(0xFF75899D)
 )
 
+private val NightColorScheme = darkColorScheme(
+    primary = NeonBlue,
+    onPrimary = Color.Black,
+    background = Color.Black,
+    onBackground = Color.White,
+    surface = Color(0xFF090909),
+    onSurface = Color.White,
+    onSurfaceVariant = Color(0xFFCACACA),
+    surfaceVariant = Color(0xFF161616),
+    surfaceDim = Color.Black,
+    surfaceBright = Color(0xFF202020),
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = Color(0xFF050505),
+    surfaceContainer = Color(0xFF0A0A0A),
+    surfaceContainerHigh = Color(0xFF141414),
+    surfaceContainerHighest = Color(0xFF202020),
+    inverseSurface = Color(0xFFE8E8E8),
+    inverseOnSurface = Color(0xFF111111),
+    outline = Color(0xFF595959),
+    outlineVariant = Color(0xFF383838),
+    scrim = Color.Black,
+    error = Color(0xFFFF8080),
+    onError = Color.Black
+)
+
 @Composable
-fun IPTVAppTheme(isDarkTheme: Boolean = true, content: @Composable () -> Unit) {
+fun IPTVAppTheme(
+    isDarkTheme: Boolean = true,
+    isNightMode: Boolean = false,
+    content: @Composable () -> Unit
+) {
     MaterialTheme(
-        colorScheme = if (isDarkTheme) DarkColorScheme else LightColorScheme,
+        colorScheme = when {
+            isNightMode -> NightColorScheme
+            isDarkTheme -> DarkColorScheme
+            else -> LightColorScheme
+        },
         typography = AppTypography,
         content = content
     )
