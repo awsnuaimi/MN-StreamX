@@ -27,7 +27,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.HomeDashboardSelection
-import com.yourapp.iptv.ui.component.channel.ChannelLogo
 
 /** Smart Home only projects cached channel state. It never creates a player. */
 @Composable
@@ -53,7 +52,7 @@ internal fun HomeDashboard(
             DashboardWelcome(labels, selection.highlighted, channelCount, metrics, colors, onPlayChannel)
             DashboardSectionTitle(labels.text("اكتشف المحتوى", "Explore", "Entdecken"), colors)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(end = 8.dp)) {
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)) {
                 item(key = "live") { DashboardAction(labels.section(HomeSection.LIVE), onLive,
                     metrics, HomeSection.LIVE, colors, Modifier.focusRequester(dashboardFocus)) }
                 item(key = "movies") { DashboardAction(labels.section(HomeSection.MOVIES), onMovies,
@@ -67,9 +66,9 @@ internal fun HomeDashboard(
             }
             if (selection.recent.isNotEmpty()) DashboardChannelStrip(
                 labels.text("شوهدت مؤخرًا", "Recently watched", "Zuletzt gesehen"),
-                selection.recent, metrics, colors, onPlayChannel)
+                selection.recent, metrics, colors, labels, onPlayChannel)
             if (selection.favorites.isNotEmpty()) DashboardChannelStrip(
-                labels.section(HomeSection.FAVORITES), selection.favorites, metrics, colors, onPlayChannel)
+                labels.section(HomeSection.FAVORITES), selection.favorites, metrics, colors, labels, onPlayChannel)
             if (selection.recent.isEmpty() && selection.favorites.isEmpty()) Text(
                 labels.text("شاهد قناة أو أضف قنوات للمفضلة لتظهر هنا.",
                     "Watch a channel or add favorites to see them here.",
@@ -123,49 +122,15 @@ private fun DashboardSectionTitle(label: String, colors: HomeTvPalette) {
 
 @Composable
 private fun DashboardChannelStrip(title: String, channels: List<Channel>,
-    metrics: HomeDashboardMetrics, colors: HomeTvPalette, onPlay: (Channel) -> Unit) {
+    metrics: HomeDashboardMetrics, colors: HomeTvPalette, labels: HomeLabels,
+    onPlay: (Channel) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         DashboardSectionTitle(title, colors)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(end = 8.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)) {
             items(channels, key = { it.id }) { channel ->
-                DashboardChannelCard(channel, metrics, colors, onPlay = { onPlay(channel) })
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun DashboardChannelCard(channel: Channel, metrics: HomeDashboardMetrics,
-    colors: HomeTvPalette, onPlay: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val bringIntoView = remember { BringIntoViewRequester() }
-    LaunchedEffect(focused) { if (focused) bringIntoView.bringIntoView() }
-    Surface(onClick = onPlay,
-        modifier = Modifier.width(metrics.channelWidth.dp).height(metrics.channelHeight.dp)
-            .bringIntoViewRequester(bringIntoView)
-            .onFocusChanged { focused = it.isFocused }
-            .semantics { contentDescription = channel.name },
-        color = if (focused) colors.focused else colors.surface,
-        border = BorderStroke(if (focused) 3.dp else 1.dp,
-            if (focused) colors.accent else colors.outline),
-        shadowElevation = if (focused) 8.dp else 0.dp,
-        shape = MaterialTheme.shapes.medium) {
-        Box(Modifier.fillMaxSize()) {
-            HomeImageBackdrop(channel.logoUrl, colors, Modifier.matchParentSize())
-            Row(Modifier.fillMaxSize().padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Surface(shape = MaterialTheme.shapes.small, color = colors.logoSurface) {
-                    Box(Modifier.size(metrics.logoSize.dp), contentAlignment = Alignment.Center) {
-                        ChannelLogo(channel.name, channel.logoUrl,
-                            Modifier.fillMaxSize().padding(5.dp))
-                    }
-                }
-                Text(channel.name, Modifier.weight(1f), maxLines = 2,
-                    overflow = TextOverflow.Ellipsis, color = colors.text,
-                    style = MaterialTheme.typography.bodyMedium)
+                HomeCinematicChannelCard(channel, metrics, colors, labels,
+                    onClick = { onPlay(channel) })
             }
         }
     }

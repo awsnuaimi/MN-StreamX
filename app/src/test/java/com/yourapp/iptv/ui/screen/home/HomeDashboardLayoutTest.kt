@@ -6,12 +6,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HomeDashboardLayoutTest {
-    @Test fun compactTvKeepsActionTilesAndLogosWithinSmallerDimensions() {
-        val compact = HomeDashboardLayout.forWidth(420)
-        assertTrue(compact.compact)
-        assertEquals(132, compact.actionWidth)
-        assertEquals(168, compact.channelWidth)
-        assertEquals(42, compact.logoSize)
+    @Test fun compactScreenPreservesReadableTileWidth() {
+        val metrics = HomeDashboardLayout.forWidth(420)
+        assertTrue(metrics.compact)
+        assertEquals(132, metrics.actionWidth)
+        assertEquals(192, metrics.channelWidth)
+        assertEquals(42, metrics.logoSize)
     }
 
     @Test fun breakpointsAreDeterministic() {
@@ -22,12 +22,20 @@ class HomeDashboardLayoutTest {
         assertEquals(186, HomeDashboardLayout.forWidth(920).actionWidth)
     }
 
-    @Test fun dimensionsGrowWithAvailableWidthWithoutUnboundedTiles() {
+    @Test fun dimensionsGrowWithoutExceedingFixedLimits() {
         val sizes = listOf(0, 320, 559, 560, 800, 919, 920, 1920, 3840)
             .map(HomeDashboardLayout::forWidth)
         assertTrue(sizes.zipWithNext().all { (a, b) ->
-            a.actionWidth <= b.actionWidth && a.channelWidth <= b.channelWidth && a.logoSize <= b.logoSize
+            a.actionWidth <= b.actionWidth &&
+                a.channelWidth <= b.channelWidth && a.logoSize <= b.logoSize
         })
-        assertTrue(sizes.all { it.actionHeight >= 64 && it.channelHeight <= 120 })
+        assertTrue(sizes.all { it.actionHeight >= 64 && it.channelWidth <= 272 })
+    }
+
+    @Test fun everyChannelCardIs16By9() {
+        for (width in listOf(320, 559, 560, 919, 920, 1920)) {
+            assertEquals(16f / 9f,
+                HomeDashboardLayout.forWidth(width).channelAspectRatio, 0.001f)
+        }
     }
 }
