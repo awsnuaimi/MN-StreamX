@@ -75,11 +75,21 @@ class HomeAppearanceViewModelTest {
     @Test fun failedWritePreservesDraftAndRetrySavesIt() = runTest(dispatcher) {
         val repository = Repository().apply { failWrite = true }
         val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("editor", it) }
-        runCurrent(); editor.update(HomeAppearance(columns = 2)); editor.save()
-        advanceTimeBy(21); runCurrent()
-        assertNotNull(editor.uiState.value.error); assertEquals(2, editor.uiState.value.columns)
-        assertFalse(editor.uiState.value.saved)
-        repository.failWrite = false; editor.save(); advanceTimeBy(21); runCurrent()
-        assertTrue(editor.uiState.value.saved); assertEquals(2, repository.values.value.columns)
+        val expectedAppearance = HomeAppearance(columns = 2)
+        runCurrent()
+        editor.update(expectedAppearance)
+        editor.save()
+        advanceTimeBy(21)
+        runCurrent()
+        val failedDraft: HomeAppearanceEditorState = editor.uiState.value
+        assertNotNull(failedDraft.error)
+        assertEquals(expectedAppearance, failedDraft.value)
+        assertFalse(failedDraft.saved)
+        repository.failWrite = false
+        editor.save()
+        advanceTimeBy(21)
+        runCurrent()
+        assertTrue(editor.uiState.value.saved)
+        assertEquals(expectedAppearance, repository.values.value)
     }
 }
