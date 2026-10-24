@@ -51,6 +51,19 @@ class HomeAppearanceDataStoreTest {
             assertArrayEquals(sourceBefore, source.readBytes()); assertArrayEquals(playerBefore, player.readBytes())
         } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
     }
+    @Test fun themeDefaultsDarkAndCanBeSavedLightWithoutChangingExistingChoices() {
+        val values = mutablePreferencesOf(stringPreferencesKey("other_setting") to "keep")
+        assertTrue(HomeAppearanceCodec.decode(values).isDarkTheme)
+        val saved = HomeAppearance(language = HomeLanguage.GERMAN,
+            sidebarSide = SidebarSide.RIGHT, columns = 4, isDarkTheme = false)
+        HomeAppearanceCodec.encode(values, saved)
+        assertEquals(saved, HomeAppearanceCodec.decode(values))
+        assertEquals("keep", values[stringPreferencesKey("other_setting")])
+    }
+    @Test fun themeWrongTypeSafelyKeepsDarkDefault() {
+        val values = mutablePreferencesOf(stringPreferencesKey("is_dark_theme") to "invalid")
+        assertTrue(HomeAppearanceCodec.decode(values).isDarkTheme)
+    }
     @Test fun sessionPreferenceDefaultsOnAndPersistsWithoutChangingExistingChoices() {
         val values = mutablePreferencesOf(stringPreferencesKey("future") to "keep")
         assertTrue(HomeAppearanceCodec.decode(values).restoreBrowseSession)

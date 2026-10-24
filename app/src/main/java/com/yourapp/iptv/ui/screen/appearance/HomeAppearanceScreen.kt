@@ -50,6 +50,13 @@ fun HomeAppearanceScreen(onBack: () -> Unit, viewModel: HomeAppearanceSettingsVi
                     viewModel.update(value.copy(expandedSidebar = it))
                 }
                 Text(if (value.sidebarOnRight) stringResource(R.string.ui_preview_right) else stringResource(R.string.ui_preview_left))
+                AppearanceToggle(
+                    when (value.language) {
+                        HomeLanguage.ARABIC -> "الوضع الليلي"
+                        HomeLanguage.ENGLISH -> "Dark mode"
+                        HomeLanguage.GERMAN -> "Dunkles Design"
+                    }, value.isDarkTheme, enabled
+                ) { viewModel.update(value.copy(isDarkTheme = it)) }
                 AppearanceToggle(stringResource(R.string.home_session_restore), value.restoreBrowseSession, enabled) {
                     viewModel.update(value.copy(restoreBrowseSession = it))
                 }

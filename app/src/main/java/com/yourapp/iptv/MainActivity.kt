@@ -5,6 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import com.yourapp.iptv.viewmodel.StartupPlaybackViewModel
+import com.yourapp.iptv.viewmodel.HomeAppearanceViewModel
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -17,11 +20,13 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val startupPlayback: StartupPlaybackViewModel by viewModels()
+    private val homeAppearance: HomeAppearanceViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         startupPlayback.initialize(freshLaunch = savedInstanceState == null)
         setContent {
-            IPTVAppTheme {
+            val appearance by homeAppearance.appearance.collectAsStateWithLifecycle()
+            IPTVAppTheme(isDarkTheme = appearance?.isDarkTheme ?: true) {
                 AppLanguageHost {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         AppNavGraph(startupPlayback)

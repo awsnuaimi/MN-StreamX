@@ -20,12 +20,14 @@ internal object HomeAppearanceCodec {
     private val expanded = booleanPreferencesKey("expanded_sidebar")
     private val columns = intPreferencesKey("columns")
     private val restore = booleanPreferencesKey("restore_browse_session")
+    private val darkTheme = booleanPreferencesKey("is_dark_theme")
     fun decode(values: Preferences) = HomeAppearance(
         language = HomeLanguage.entries.firstOrNull { it.name == read(values, language) } ?: HomeLanguage.ARABIC,
         sidebarSide = SidebarSide.entries.firstOrNull { it.name == read(values, side) } ?: SidebarSide.AUTO,
         expandedSidebar = read(values, expanded) ?: false,
         columns = read(values, columns) ?: 3,
-        restoreBrowseSession = read(values, restore) ?: true
+        restoreBrowseSession = read(values, restore) ?: true,
+        isDarkTheme = read(values, darkTheme) ?: true
     ).normalized()
     fun encode(values: MutablePreferences, appearance: HomeAppearance) {
         val value = appearance.normalized()
@@ -34,6 +36,7 @@ internal object HomeAppearanceCodec {
         values[expanded] = value.expandedSidebar
         values[columns] = value.columns
         values[restore] = value.restoreBrowseSession
+        values[darkTheme] = value.isDarkTheme
     }
     private inline fun <reified T> read(values: Preferences, key: Preferences.Key<T>): T? = values.asMap()[key] as? T
 }

@@ -7,7 +7,8 @@ data class HomeAppearance(
     val sidebarSide: SidebarSide = SidebarSide.AUTO,
     val expandedSidebar: Boolean = false,
     val columns: Int = 3,
-    val restoreBrowseSession: Boolean = true
+    val restoreBrowseSession: Boolean = true,
+    val isDarkTheme: Boolean = true
 ) {
     val sidebarOnRight: Boolean get() = sidebarSide == SidebarSide.RIGHT ||
         (sidebarSide == SidebarSide.AUTO && language == HomeLanguage.ARABIC)

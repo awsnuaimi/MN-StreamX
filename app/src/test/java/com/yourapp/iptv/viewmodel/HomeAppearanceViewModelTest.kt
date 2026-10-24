@@ -38,6 +38,32 @@ class HomeAppearanceViewModelTest {
         assertEquals(choice, reader.appearance.value)
         assertTrue(editor.uiState.value.saved)
     }
+    @Test fun sidebarThemeTogglePreservesOtherSettingsAndRejectsDoubleTap() = runTest(dispatcher) {
+        val repository = Repository()
+        val saved = HomeAppearance(HomeLanguage.GERMAN, SidebarSide.LEFT,
+            true, 4, restoreBrowseSession = false)
+        repository.values.value = saved
+        val viewModel = HomeAppearanceViewModel(repository).also { store.put("themeReader", it) }
+        runCurrent()
+        viewModel.toggleTheme()
+        viewModel.toggleTheme()
+        assertTrue(viewModel.themeSaving.value)
+        advanceTimeBy(21); runCurrent()
+        assertEquals(1, repository.writes)
+        assertEquals(saved.copy(isDarkTheme = false), repository.values.value)
+        assertFalse(viewModel.themeSaving.value)
+        assertFalse(viewModel.themeError.value)
+    }
+    @Test fun sidebarThemeFailureKeepsPreviousPreferenceAndShowsError() = runTest(dispatcher) {
+        val repository = Repository().apply { failWrite = true }
+        val viewModel = HomeAppearanceViewModel(repository).also { store.put("themeFailure", it) }
+        runCurrent()
+        viewModel.toggleTheme()
+        advanceTimeBy(21); runCurrent()
+        assertTrue(repository.values.value.isDarkTheme)
+        assertTrue(viewModel.themeError.value)
+        assertFalse(viewModel.themeSaving.value)
+    }
     @Test fun failedReadBlocksOverwriteUntilExplicitReloadSucceeds() = runTest(dispatcher) {
         val repository = Repository().apply { failRead = true }
         val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("editor", it) }
@@ -51,7 +77,7 @@ class HomeAppearanceViewModelTest {
         val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("editor", it) }
         runCurrent(); editor.update(HomeAppearance(columns = 2)); editor.save()
         advanceTimeBy(21); runCurrent()
-        assertNotNull(editor.uiState.value.error); assertEquals(2, editor.uiState.value.value.columns)
+        assertNotNull(editor.uiState.value.error); assertEquals(2, editor.uiState.value.columns)
         assertFalse(editor.uiState.value.saved)
         repository.failWrite = false; editor.save(); advanceTimeBy(21); runCurrent()
         assertTrue(editor.uiState.value.saved); assertEquals(2, repository.values.value.columns)

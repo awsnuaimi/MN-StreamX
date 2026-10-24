@@ -10,9 +10,32 @@ import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
 @HiltViewModel
-class HomeAppearanceViewModel @Inject constructor(repository: HomeAppearanceRepository) : ViewModel() {
+class HomeAppearanceViewModel @Inject constructor(private val repository: HomeAppearanceRepository) : ViewModel() {
     private val state = MutableStateFlow<HomeAppearance?>(null)
     val appearance = state.asStateFlow()
+    private val themeBusyState = MutableStateFlow(false)
+    val themeSaving = themeBusyState.asStateFlow()
+    private val themeErrorState = MutableStateFlow(false)
+    val themeError = themeErrorState.asStateFlow()
+
+    fun toggleTheme() {
+        if (themeBusyState.value) return
+        themeBusyState.value = true
+        themeErrorState.value = false
+        viewModelScope.launch {
+            try {
+                // Read current stored values: never overwrite sidebar/language with a stale draft.
+                val current = repository.observe().first().normalized()
+                repository.save(current.copy(isDarkTheme = !current.isDarkTheme))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                themeErrorState.value = true
+            } finally {
+                themeBusyState.value = false
+            }
+        }
+    }
     init { viewModelScope.launch {
         while (isActive) {
             try { repository.observe().collect { state.value = it.normalized() }; break }
