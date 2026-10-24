@@ -12,7 +12,7 @@ import java.nio.LongBuffer
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-/** One selected language pack, mapped uint8 heads, and serial four-hypothesis decoding. */
+/** One selected language pack, mapped uint8 heads, and single-path live decoding. */
 internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
     private val device: CaptionDevice = CaptionDevice { true },
     private val budgetMillis: () -> Long = { 8000L }) : CaptionTranslator {
@@ -106,8 +106,12 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
                             encoded.use { result ->
                                 nativeMemory.trimMemory()
                                 currentCoroutineContext().ensureActive()
-                                val generated = MarianBeamDecoder(env, checkNotNull(config), ::firstSession, ::cachedSession, ::run)
-                                    .decode(mask, result[0] as OnnxTensor)
+                                // Live captions are short utterances; use one hypothesis rather than
+                                // four full decoder passes per generated token.
+                                val maxTokens = (ids.size * 2 + 12).coerceIn(16, 48)
+                                val generated = MarianLiveDecoder(env, checkNotNull(config),
+                                    ::firstSession, ::cachedSession, ::run)
+                                    .decode(mask, result[0] as OnnxTensor, maxTokens)
                                 currentCoroutineContext().ensureActive()
                                 checkCall()
                                 return codec.decode(generated)

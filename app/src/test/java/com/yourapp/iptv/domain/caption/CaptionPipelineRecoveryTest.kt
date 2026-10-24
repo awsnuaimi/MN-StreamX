@@ -55,49 +55,44 @@ class CaptionPipelineRecoveryTest {
         }
         fun stop() { pipeline.stop(); scope.runCurrent() }
     }
-    @Test fun anIsolatedDeadlineShortensAudioAndTheNextWindowPublishesNormally() = runTest {
+    @Test fun isolatedTranslatorTimeoutDoesNotTerminateTheLiveFeed() = runTest {
         val session = Session(this); session.failures += true; session.start(); session.audio(5000)
         assertEquals(CaptionStatus.ADAPTING, session.pipeline.uiState.value.progress.status)
-        assertEquals(listOf(5000, 3500), session.limits)
-        assertEquals(0, session.cancelled); assertEquals(0, session.textClosed)
+        assertTrue(session.pipeline.uiState.value.cue?.text?.contains("untranslated") == true)
+        assertEquals(1, session.textCalls)
         assertFalse(session.feedClosed)
-        session.audio(3500, 5000000)
+        session.audio(5000, 5000000)
+        session.audio(5000, 10000000)
+        assertEquals(1, session.textCalls)
+        session.audio(5000, 15000000)
         assertEquals("translated:Good morning", session.pipeline.uiState.value.cue?.text)
         assertEquals(CaptionStatus.LISTENING, session.pipeline.uiState.value.progress.status)
         session.stop()
         assertEquals(1, session.speechClosed); assertEquals(1, session.textClosed)
     }
-    @Test fun aQueuedOldLongWindowIsDiscardedInsteadOfRetryingTheHeavyWork() = runTest {
-        val session = Session(this); session.failures += true; session.start(); session.audio(5000)
-        session.audio(5000, 5000000)
-        assertEquals(1, session.speechCalls); assertEquals(1, session.textCalls)
-        session.audio(3500, 10000000)
-        assertEquals(2, session.textCalls); assertNotNull(session.pipeline.uiState.value.cue)
-        session.stop()
-    }
-    @Test fun threeConsecutiveTranslationDeadlinesStillStopAndReleaseResources() = runTest {
-        val session = Session(this); repeat(3) { session.failures += true }; session.start()
-        session.audio(5000); session.audio(3500, 5000000); session.audio(2500, 8500000)
-        val progress = session.pipeline.uiState.value.progress
-        assertEquals(CaptionStatus.SLOW_DEVICE, progress.status)
-        assertEquals(CaptionStage.TRANSLATION, progress.stage)
-        assertEquals(8000L, progress.budgetMillis); assertEquals(8036L, progress.elapsedMillis)
-        assertEquals(listOf(5000, 3500, 2500), session.limits)
-        assertTrue(session.feedClosed)
-        assertEquals(1, session.speechClosed); assertEquals(1, session.textClosed)
-    }
-    @Test fun successfulWindowsResetTheFailureStreakButKeepTheLighterWindowSize() = runTest {
+    @Test fun sustainedTranslatorOverloadOpensBoundedCircuitWithoutStoppingPlayer() = runTest {
         val session = Session(this)
-        repeat(4) { session.failures += true; session.failures += false }
+        repeat(3) { session.failures += true }
         session.start()
-        var pts = 0L
-        repeat(4) {
-            session.audio(session.limits.last(), pts); pts += 5000000
-            session.audio(session.limits.last(), pts); pts += 5000000
-            assertNotNull(session.pipeline.uiState.value.cue)
-            assertFalse(session.feedClosed)
-        }
-        assertEquals(8, session.textCalls); assertEquals(2500, session.limits.last())
+        repeat(9) { session.audio(5000, it * 5000000L) }
+        assertEquals(3, session.textCalls)
+        assertEquals(CaptionStatus.ADAPTING, session.pipeline.uiState.value.progress.status)
+        assertFalse(session.feedClosed)
+        assertEquals(9, session.speechCalls)
+        session.stop()
+        assertTrue(session.feedClosed)
+        assertEquals(1, session.speechClosed)
+    }
+    @Test fun failedTranslationStillShowsIdentifiedSourceTextAndCanRecover() = runTest {
+        val session = Session(this)
+        session.failures += true
+        session.start(); session.audio(5000)
+        assertEquals("[EN · untranslated] Good morning", session.pipeline.uiState.value.cue?.text)
+        repeat(2) { session.audio(5000, (it + 1) * 5000000L) }
+        assertEquals(1, session.textCalls)
+        session.audio(5000, 15000000)
+        assertEquals(2, session.textCalls)
+        assertEquals("translated:Good morning", session.pipeline.uiState.value.cue?.text)
         session.stop()
     }
     @Test fun stoppingDuringAdaptationCannotResumeInferenceOnLaterAudio() = runTest {
