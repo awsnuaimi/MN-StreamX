@@ -85,12 +85,14 @@ android {
 
     sourceSets.main.assets.srcDir(layout.buildDirectory.dir("generated/captionNotices"))
 
-    // Azure Speech depends on Netty modules that each contain a JAR index.
-    // JAR indexes are not needed in the Android APK, so exclude only this file.
-    // Keep META-INF/services and other runtime resources intact.
+    // Azure Speech's Netty dependencies publish duplicate packaging metadata.
+    // Keep service registrations and executable resources intact. The Netty
+    // version properties are diagnostic metadata, not runtime class files.
+    // These two exclusions match the Azure Speech Android sample configuration.
     packaging {
         resources {
             excludes.add('/META-INF/INDEX.LIST')
+            excludes.add('/META-INF/io.netty.versions.properties')
         }
     }
 
