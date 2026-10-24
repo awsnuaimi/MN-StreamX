@@ -23,6 +23,14 @@ internal fun HomeSidebarIcon(section: HomeSection, color: Color) {
             scale(size.width / 24f, size.height / 24f, pivot = Offset.Zero) {
                 val stroke = Stroke(1.8f)
                 when (section) {
+                    HomeSection.DASHBOARD -> {
+                        val house = Path().apply {
+                            moveTo(2f, 11f); lineTo(12f, 3f); lineTo(22f, 11f)
+                            moveTo(5f, 10f); lineTo(5f, 22f); lineTo(19f, 22f); lineTo(19f, 10f)
+                            moveTo(10f, 22f); lineTo(10f, 15f); lineTo(14f, 15f); lineTo(14f, 22f)
+                        }
+                        drawPath(house, color, style = stroke)
+                    }
                     HomeSection.LIVE -> {
                         drawRoundRect(color, Offset(2f, 4f), Size(20f, 14f), CornerRadius(2f), style = stroke)
                         drawLine(color, Offset(8f, 22f), Offset(16f, 22f), 1.8f)

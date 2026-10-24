@@ -24,6 +24,8 @@ import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.tv.TvChannelGrid
 import com.yourapp.iptv.viewmodel.HomeViewModel
 import com.yourapp.iptv.viewmodel.HomeAppearanceViewModel
+import com.yourapp.iptv.viewmodel.HomeQuickAccessViewModel
+import com.yourapp.iptv.domain.model.HomeDashboardSelection
 
 @Composable
 fun HomeScreen(
@@ -34,6 +36,7 @@ fun HomeScreen(
     onReturnHandled: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
     appearanceViewModel: HomeAppearanceViewModel = hiltViewModel(),
+    quickAccessViewModel: HomeQuickAccessViewModel = hiltViewModel(),
     onHomeAppearance: () -> Unit = {},
     onOrganization: () -> Unit = {},
     onHistory: () -> Unit = {},
@@ -44,6 +47,11 @@ fun HomeScreen(
     HomeSessionLifecycle(viewModel)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
+    val quickAccess by quickAccessViewModel.uiState.collectAsStateWithLifecycle()
+    val dashboardData = remember(state.channels, quickAccess) {
+        val ids = if (quickAccess.sourceKey == state.browseScope) quickAccess.channelIds else emptyList()
+        HomeDashboardSelection.project(state.channels, ids)
+    }
     val savedAppearance by appearanceViewModel.appearance.collectAsStateWithLifecycle()
     val appearance = savedAppearance
     if (appearance == null) {
@@ -63,12 +71,20 @@ fun HomeScreen(
         }
     }
     var searching by rememberSaveable { mutableStateOf(false) }
+    var dashboardVisible by rememberSaveable(state.browseScope) { mutableStateOf(true) }
+    // History is observed only while Smart Home is visible. Leaving it releases the subscription.
+    LaunchedEffect(state.browseScope, state.needsSource, dashboardVisible) {
+        quickAccessViewModel.bind(state.browseScope.takeIf { dashboardVisible && !state.needsSource })
+    }
+    DisposableEffect(quickAccessViewModel) {
+        onDispose { quickAccessViewModel.bind(null) }
+    }
     val searchFocus = remember { FocusRequester() }
     val sidebarFocus = remember { FocusRequester() }
     var initialFocusDone by remember(state.browseScope) { mutableStateOf(false) }
     LaunchedEffect(returnedChannelId, state.visibleChannels.isNotEmpty()) {
         if (state.visibleChannels.isNotEmpty()) returnedChannelId?.let {
-            initialFocusDone = true; viewModel.selectChannel(it); onReturnHandled()
+            initialFocusDone = true; dashboardVisible = false; viewModel.selectChannel(it); onReturnHandled()
         }
     }
     LaunchedEffect(state.sessionReady, state.isLoading, state.browseScope) {
@@ -82,15 +98,25 @@ fun HomeScreen(
     BackHandler(enabled = searching) {
         searching = false; viewModel.updateQuery(""); runCatching { sidebarFocus.requestFocus() }
     }
-    val selected = when { searching -> HomeSection.SEARCH; state.favoritesOnly -> HomeSection.FAVORITES; else -> HomeSection.LIVE }
+    BackHandler(enabled = !searching && !dashboardVisible) {
+        dashboardVisible = true
+        runCatching { sidebarFocus.requestFocus() }
+    }
+    val selected = when {
+        searching -> HomeSection.SEARCH
+        dashboardVisible -> HomeSection.DASHBOARD
+        state.favoritesOnly -> HomeSection.FAVORITES
+        else -> HomeSection.LIVE
+    }
     fun select(section: HomeSection) {
         initialFocusDone = true
         viewModel.onBrowseInteraction()
         when (section) {
-            HomeSection.LIVE, HomeSection.FAVORITES -> { searching = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
+            HomeSection.DASHBOARD -> { searching = false; dashboardVisible = true }
+            HomeSection.LIVE, HomeSection.FAVORITES -> { searching = false; dashboardVisible = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
             HomeSection.MOVIES -> onMovies()
             HomeSection.SERIES -> onSeries()
-            HomeSection.SEARCH -> searching = true
+            HomeSection.SEARCH -> { dashboardVisible = false; searching = true }
             HomeSection.HISTORY -> onHistory()
             HomeSection.GUIDE -> onOpenGuide(state.selectedChannelId, state.selectedGroup, state.query, state.favoritesOnly)
             HomeSection.SETTINGS -> onSettings()
@@ -118,12 +144,12 @@ fun HomeScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(labels.section(selected), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-                            Text(labels.text("${state.visibleChannels.size} قناة ظاهرة من ${state.channels.size}",
+                            if (!dashboardVisible) Text(labels.text("${state.visibleChannels.size} قناة ظاهرة من ${state.channels.size}",
                                 "${state.visibleChannels.size} of ${state.channels.size} channels",
                                 "${state.visibleChannels.size} von ${state.channels.size} Sendern"), style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    if (searching || state.query.isNotBlank()) OutlinedTextField(state.query, viewModel::updateQuery,
+                    if (!dashboardVisible && (searching || state.query.isNotBlank())) OutlinedTextField(state.query, viewModel::updateQuery,
                         label = { Text(labels.text("البحث عن قناة", "Search channels", "Sender suchen")) }, singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         modifier = Modifier.fillMaxWidth().focusRequester(searchFocus))
@@ -138,6 +164,16 @@ fun HomeScreen(
                         state.isLoading && state.visibleChannels.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                         state.channels.isEmpty() -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
                             labels.section(HomeSection.REFRESH), viewModel::refresh)
+                        dashboardVisible -> Box(Modifier.weight(1f).fillMaxWidth()) { HomeDashboard(labels, dashboardData, state.channels.size,
+                            onPlayChannel = { channel ->
+                                initialFocusDone = true
+                                onPlayChannel(channel.id, null, "", false)
+                            },
+                            onLive = { select(HomeSection.LIVE) },
+                            onMovies = onMovies,
+                            onSeries = onSeries,
+                            onGuide = { onOpenGuide(null, null, "", false) },
+                            onHistory = onHistory) }
                         else -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                         val categoryWidth = (maxWidth * 0.28f).coerceIn(160.dp, 220.dp)
                         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {

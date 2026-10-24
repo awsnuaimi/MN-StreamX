@@ -34,7 +34,7 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
             val active = selected == section
             Surface(onClick = { onSelect(section) }, enabled = !(loading && section == HomeSection.REFRESH) && (section != HomeSection.ORGANIZE || organizationReady),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)
-                    .then(if (section == HomeSection.LIVE) Modifier.focusRequester(returnFocus) else Modifier)
+                    .then(if (section == HomeSection.DASHBOARD) Modifier.focusRequester(returnFocus) else Modifier)
                     .onFocusChanged { focused = it.isFocused }.semantics { this.selected = active; contentDescription = labels.section(section) },
                 color = when { focused -> Color(0xFF1C4D6D); active -> Color(0xFF16344D); else -> Color.Transparent },
                 shape = MaterialTheme.shapes.medium,
