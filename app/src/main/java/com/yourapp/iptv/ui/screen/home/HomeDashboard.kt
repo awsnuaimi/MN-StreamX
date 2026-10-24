@@ -40,6 +40,7 @@ internal fun HomeDashboard(
     selection: HomeDashboardSelection,
     channelCount: Int,
     dashboardFocus: FocusRequester,
+    suggestedChannels: List<Channel>,
     isDarkTheme: Boolean,
     isNightMode: Boolean,
     onPlayChannel: (Channel) -> Unit,
@@ -54,7 +55,22 @@ internal fun HomeDashboard(
         val metrics = remember(maxWidth) { HomeDashboardLayout.forWidth(maxWidth.value.toInt()) }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(metrics.sectionSpacing.dp)) {
-            DashboardWelcome(labels, selection.highlighted, channelCount, metrics, colors, onPlayChannel)
+            // Put the cinematic cards above the Hero and actions: on 720p TVs
+            // they were previously below the visible viewport.
+            val featured = HomeFeaturedChannels.select(selection, suggestedChannels)
+            if (featured.channels.isNotEmpty()) {
+                val featuredTitle = when (featured.kind) {
+                    HomeFeaturedKind.RECENT -> labels.text(
+                        "شوهدت مؤخرًا", "Recently watched", "Zuletzt gesehen")
+                    HomeFeaturedKind.FAVORITES -> labels.section(HomeSection.FAVORITES)
+                    HomeFeaturedKind.DISCOVER -> labels.text(
+                        "اكتشف قنوات مباشرة", "Discover live channels", "Live-Sender entdecken")
+                }
+                DashboardChannelStrip(featuredTitle, featured.channels,
+                    metrics, colors, labels, onPlayChannel)
+            }
+            DashboardWelcome(labels, selection.highlighted, channelCount,
+                metrics, colors, onPlayChannel)
             DashboardSectionTitle(labels.text("اكتشف المحتوى", "Explore", "Entdecken"), colors)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)) {
@@ -69,16 +85,16 @@ internal fun HomeDashboard(
                 item(key = "history") { DashboardAction(labels.section(HomeSection.HISTORY), onHistory,
                     metrics, HomeSection.HISTORY, colors) }
             }
-            if (selection.recent.isNotEmpty()) DashboardChannelStrip(
-                labels.text("شوهدت مؤخرًا", "Recently watched", "Zuletzt gesehen"),
-                selection.recent, metrics, colors, labels, onPlayChannel)
-            if (selection.favorites.isNotEmpty()) DashboardChannelStrip(
-                labels.section(HomeSection.FAVORITES), selection.favorites, metrics, colors, labels, onPlayChannel)
-            if (selection.recent.isEmpty() && selection.favorites.isEmpty()) Text(
-                labels.text("شاهد قناة أو أضف قنوات للمفضلة لتظهر هنا.",
-                    "Watch a channel or add favorites to see them here.",
-                    "Sieh dir einen Sender an oder füge Favoriten hinzu."),
-                color = colors.muted, style = MaterialTheme.typography.bodyMedium)
+            // A second row is useful only when the first is recent channels.
+            if (featured.kind == HomeFeaturedKind.RECENT && selection.favorites.isNotEmpty()) {
+                val remainingFavorites = selection.favorites.filterNot { favorite ->
+                    featured.channels.any { it.id == favorite.id }
+                }
+                if (remainingFavorites.isNotEmpty()) {
+                    DashboardChannelStrip(labels.section(HomeSection.FAVORITES),
+                        remainingFavorites, metrics, colors, labels, onPlayChannel)
+                }
+            }
             Spacer(Modifier.height(8.dp))
         }
     }
