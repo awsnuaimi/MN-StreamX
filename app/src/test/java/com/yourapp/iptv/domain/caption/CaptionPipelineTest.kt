@@ -51,7 +51,7 @@ class CaptionPipelineTest {
             }
         }
         fun TestScope.pipeline(device: CaptionDevice = CaptionDevice { available }) = CaptionPipeline(backgroundScope,
-            StandardTestDispatcher(testScheduler), models, factory, text, device) { time }
+            StandardTestDispatcher(testScheduler), models, factory, text, device, now = { time })
     }
     private val enabled = CaptionSettings(mode = CaptionMode.GENERATED)
     @Test fun optionalPipelineDoesNothingBeforeExplicitActivation() = runTest {
