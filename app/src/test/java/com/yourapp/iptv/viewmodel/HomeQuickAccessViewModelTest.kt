@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModelStore
 import com.yourapp.iptv.domain.model.WatchHistoryEntry
 import com.yourapp.iptv.domain.repository.WatchHistoryRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.*
 import org.junit.After
