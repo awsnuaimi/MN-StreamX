@@ -2,7 +2,6 @@ package com.yourapp.iptv.ui.component.player
 
 import android.view.KeyEvent
 import android.view.View
-import android.view.SurfaceView
 import android.util.TypedValue
 import android.util.Log
 import androidx.media3.ui.CaptionStyleCompat
@@ -96,9 +95,7 @@ fun PlayerSurface(
                 continue
             }
             if (playerView.player !== currentPlayer) break
-            val source = playerView.videoSurfaceView as? SurfaceView
-            val outcome = if (source == null) FrameCaptureResult.SURFACE_NOT_READY
-                else LiveFrameCapture.saveIfNeeded(context, candidate, source)
+            val outcome = LiveFrameCapture.saveIfNeeded(context, candidate, playerView)
             Log.i("MNX.FrameCapture", "attempt=${attempt + 1} result=$outcome")
             if (!FrameCapturePolicy.continueAfter(outcome, attempt + 1)) break
         }

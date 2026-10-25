@@ -7,10 +7,10 @@ import org.junit.Test
 
 class FrameCapturePolicyTest {
     @Test fun retryWindowIsFiniteAndStartsAfterFirstFrame() {
-        assertEquals(4, FrameCapturePolicy.MAX_ATTEMPTS)
-        assertEquals(1200L, FrameCapturePolicy.delayBeforeMs(0))
-        assertEquals(1500L, FrameCapturePolicy.delayBeforeMs(1))
-        assertEquals(1500L, FrameCapturePolicy.delayBeforeMs(3))
+        assertEquals(6, FrameCapturePolicy.MAX_ATTEMPTS)
+        assertEquals(900L, FrameCapturePolicy.delayBeforeMs(0))
+        assertEquals(1600L, FrameCapturePolicy.delayBeforeMs(1))
+        assertEquals(1600L, FrameCapturePolicy.delayBeforeMs(5))
     }
 
     @Test fun transientFailuresMayRetryOnlyInsideWindow() {
@@ -18,7 +18,8 @@ class FrameCapturePolicyTest {
                 FrameCaptureResult.EMPTY_IMAGE, FrameCaptureResult.COPY_FAILED)) {
             assertTrue(FrameCapturePolicy.continueAfter(outcome, 1))
             assertTrue(FrameCapturePolicy.continueAfter(outcome, 3))
-            assertFalse(FrameCapturePolicy.continueAfter(outcome, 4))
+            assertTrue(FrameCapturePolicy.continueAfter(outcome, 4))
+            assertFalse(FrameCapturePolicy.continueAfter(outcome, 6))
         }
     }
 

@@ -10,11 +10,11 @@ internal enum class FrameCaptureResult {
 }
 
 internal object FrameCapturePolicy {
-    const val MAX_ATTEMPTS = 4
+    const val MAX_ATTEMPTS = 6
 
     fun delayBeforeMs(attempt: Int): Long {
         require(attempt in 0 until MAX_ATTEMPTS)
-        return if (attempt == 0) 1200L else 1500L
+        return if (attempt == 0) 900L else 1600L
     }
 
     fun continueAfter(result: FrameCaptureResult, attemptsCompleted: Int): Boolean =
