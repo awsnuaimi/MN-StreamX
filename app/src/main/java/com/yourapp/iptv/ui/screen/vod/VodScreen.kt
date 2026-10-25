@@ -48,6 +48,7 @@ fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, Strin
                 Button(onClick = onBack, modifier = Modifier.focusRequester(backFocus)) { Text(labels.back()) }
                 Text(labels.title(kind), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.weight(1f))
+                if (!state.loading) Button(onClick = { model.load(kind, refresh = true) }) { Text(labels.refresh()) }
                 if (!state.loading) Text("${visible.size} / ${state.catalog.items.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             when {
@@ -55,6 +56,10 @@ fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, Strin
                 state.unavailable -> VodMessage(labels.requiresXtream(), labels.back(), onBack)
                 state.error -> VodMessage(labels.failed(), labels.tryAgain(), { model.load(kind, refresh = true) })
                 else -> {
+                    if (state.catalog.categoryScoped) Text(labels.categoryMode(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    if (state.catalog.categoriesUnavailable) Text(labels.categoriesUnavailable(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     val continued = remember(progress, kind) { progress.filter { it.kind == kind }.take(8) }
                     if (continued.isNotEmpty()) {
                         VodContinueWatching(continued, labels) { entry ->
@@ -65,13 +70,17 @@ fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, Strin
                         label = { Text(labels.search()) })
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         LazyColumn(Modifier.width(178.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            item { VodCategoryButton(labels.all(), state.categoryId == null) { model.filter(null) } }
+                            if (!state.catalog.categoryScoped) item { VodCategoryButton(labels.all(), state.categoryId == null) { model.filter(null) } }
                             items(state.catalog.categories, key = { it.id }) { category ->
                                 VodCategoryButton(category.name, state.categoryId == category.id) { model.filter(category.id) }
                             }
                         }
-                        if (visible.isEmpty()) Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                            Text(labels.empty())
+                        if (state.categoryLoading) Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        } else if (state.categoryError) Box(Modifier.weight(1f).fillMaxHeight()) {
+                            VodMessage(labels.failed(), labels.tryAgain(), { model.filter(state.categoryId, retry = true) })
+                        } else if (visible.isEmpty()) Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                            Text(if (state.catalog.items.isEmpty() && state.query.isBlank()) labels.emptyCatalog() else labels.empty())
                         } else LazyVerticalGrid(GridCells.Adaptive(135.dp), modifier = Modifier.weight(1f).fillMaxHeight(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             items(visible, key = { it.id }) { item -> VodPosterCard(item) { model.open(item) } }

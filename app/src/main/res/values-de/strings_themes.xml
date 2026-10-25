@@ -10,4 +10,5 @@
     <string name="theme_preview_text">Texte, Karten und Menüs verwenden das gewählte Design.</string>
     <string name="theme_focus">Fernbedienungsfokus</string>
     <string name="theme_selection">Ausgewähltes Element</string>
+    <string name="theme_red">Rot</string>
 </resources>

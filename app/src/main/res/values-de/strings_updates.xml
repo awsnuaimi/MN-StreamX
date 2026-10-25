@@ -11,8 +11,8 @@
     <string name="update_install">Installation fortsetzen</string>
     <string name="update_cancel">Update abbrechen</string>
     <string name="update_confirmation_note">Android fragt nach einer Installationsbestätigung. Beim ersten Update muss die Installation aus dieser App eventuell erlaubt werden.</string>
-    <string name="update_not_configured">In dieser Version ist keine Update-Quelle eingerichtet. Bitte aus dem Projekt-Repository auf GitHub erstellen.</string>
-    <string name="update_no_release">Keine veröffentlichte Version gefunden. Das Repository muss öffentlich sein und APK-Dateien in GitHub Releases enthalten.</string>
+    <string name="update_not_configured">In diesem Build fehlt die Update-Quelle. MN_STREAMX_UPDATE_REPOSITORY festlegen und neu bauen.</string>
+    <string name="update_no_release">Die Update-Quelle ist erreichbar, enthält aber keine veröffentlichte stabile Version. Ein erfolgreicher Build oder ein Actions-Artefakt ist kein Release; publish_update in Actions aktivieren.</string>
     <string name="update_access">Die Update-Quelle ist nicht erreichbar. Bitte prüfen, ob die Version öffentlich ist.</string>
     <string name="update_network">Das Update konnte nicht geladen werden. Verbindung prüfen und erneut versuchen.</string>
     <string name="update_rate_limit">Die Update-Quelle hat die Anfrage abgelehnt oder das Anfragelimit erreicht. Bitte später versuchen.</string>
@@ -26,4 +26,6 @@
     <string name="update_android_unsupported">Dieses Update benötigt eine neuere Android-Version.</string>
     <string name="update_permission">Die Installation wurde nicht erlaubt. Zum erneuten Versuch Installation fortsetzen auswählen.</string>
     <string name="update_install_unavailable">Installationseinstellungen oder Paketinstallation konnten auf diesem Gerät nicht geöffnet werden.</string>
+    <string name="update_source">Paketquelle: %1$s</string>
+    <string name="update_source_unavailable">Die Paketquelle ist nicht erreichbar: möglicherweise privat, verschoben oder falsch konfiguriert. Der Quellcode kann privat bleiben; APKs können in ein separates öffentliches Repository.</string>
 </resources>

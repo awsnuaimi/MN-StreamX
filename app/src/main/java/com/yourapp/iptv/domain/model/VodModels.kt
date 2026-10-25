@@ -12,8 +12,11 @@ data class VodItem(
     val extension: String = "mp4",
     val plot: String? = null,
     val rating: String? = null,
-    val year: String? = null
-)
+    val year: String? = null,
+    val categoryIds: List<String> = listOfNotNull(categoryId)
+) {
+    fun belongsTo(category: String) = categoryId == category || category in categoryIds
+}
 
 data class VodEpisode(
     val id: String,
@@ -28,4 +31,9 @@ data class VodSeason(val number: Int, val name: String, val episodes: List<VodEp
 
 data class VodDetails(val item: VodItem, val seasons: List<VodSeason> = emptyList())
 
-data class VodCatalog(val categories: List<VodCategory>, val items: List<VodItem>)
+data class VodCatalog(
+    val categories: List<VodCategory>,
+    val items: List<VodItem>,
+    val categoryScoped: Boolean = false,
+    val categoriesUnavailable: Boolean = false
+)

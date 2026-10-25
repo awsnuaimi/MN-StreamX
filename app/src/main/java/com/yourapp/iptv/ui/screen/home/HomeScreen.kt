@@ -73,15 +73,10 @@ fun HomeScreen(
         }
     }
     var searching by rememberSaveable { mutableStateOf(false) }
-    // Reset only the stored landing-tab choice for this visual release. During the
-    // current navigation session the browse tab still restores normally.
     var dashboardVisible by rememberSaveable(state.browseScope, "cinematic-home-v3506") {
         mutableStateOf(true)
     }
-    // Preserve the caller's tab when returning from video. Previously every return
-    // forced the compact Live grid, hiding the cinematic Smart Home cards.
     var launchedFromDashboard by rememberSaveable { mutableStateOf(false) }
-    // History is observed only while Smart Home is visible. Leaving it releases the subscription.
     LaunchedEffect(state.browseScope, state.needsSource, dashboardVisible) {
         quickAccessViewModel.bind(state.browseScope.takeIf { dashboardVisible && !state.needsSource })
     }
@@ -146,7 +141,6 @@ fun HomeScreen(
         }
     }
     val languageDirection = if (appearance.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
-    // Physical sidebar placement is independent of the direction of text and channel names.
     CompositionLocalProvider(LocalLayoutDirection provides if (appearance.sidebarOnRight) LayoutDirection.Rtl else LayoutDirection.Ltr) {
         Row(Modifier.fillMaxSize().onPreviewKeyEvent {
             if (it.type == KeyEventType.KeyDown) {
@@ -197,6 +191,7 @@ fun HomeScreen(
                             dashboardFocus = dashboardFocus,
                             suggestedChannels = state.channels.take(5),
                             isDarkTheme = appearance.isDarkTheme,
+                            theme = appearance.theme,
                             isNightMode = appearance.isNightMode,
                             onPlayChannel = { channel ->
                                 initialFocusDone = true

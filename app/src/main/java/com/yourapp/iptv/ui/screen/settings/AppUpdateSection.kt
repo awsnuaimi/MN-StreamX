@@ -71,6 +71,10 @@ internal fun AppUpdateCard(state: AppUpdateUiState, onUpdate: () -> Unit,
         Text(stringResource(R.string.update_title), style = MaterialTheme.typography.titleLarge)
         Text(stringResource(R.string.update_installed, BuildConfig.VERSION_NAME),
             style = MaterialTheme.typography.bodyMedium)
+        if (BuildConfig.UPDATE_REPOSITORY.isNotBlank()) {
+            Text(stringResource(R.string.update_source, BuildConfig.UPDATE_REPOSITORY),
+                style = MaterialTheme.typography.bodySmall)
+        }
         when (state.phase) {
             AppUpdatePhase.CHECKING -> Text(stringResource(R.string.update_checking))
             AppUpdatePhase.DOWNLOADING -> {
@@ -98,6 +102,7 @@ internal fun AppUpdateCard(state: AppUpdateUiState, onUpdate: () -> Unit,
 private fun updateIssueText(issue: UpdateIssue): Int = when (issue) {
     UpdateIssue.NOT_CONFIGURED -> R.string.update_not_configured
     UpdateIssue.NO_RELEASE -> R.string.update_no_release
+    UpdateIssue.SOURCE_UNAVAILABLE -> R.string.update_source_unavailable
     UpdateIssue.ACCESS -> R.string.update_access
     UpdateIssue.NETWORK -> R.string.update_network
     UpdateIssue.RATE_LIMIT -> R.string.update_rate_limit

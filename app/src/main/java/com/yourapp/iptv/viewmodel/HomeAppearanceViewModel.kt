@@ -3,6 +3,7 @@ package com.yourapp.iptv.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.HomeAppearance
+import com.yourapp.iptv.domain.model.HomeTheme
 import com.yourapp.iptv.domain.repository.HomeAppearanceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -18,12 +19,15 @@ class HomeAppearanceViewModel @Inject constructor(private val repository: HomeAp
     private val themeErrorState = MutableStateFlow(false)
     val themeError = themeErrorState.asStateFlow()
 
-    // Both controls share the same write gate to prevent conflicting writes to DataStore.
     val nightSaving = themeSaving
     val nightError = themeError
 
     fun toggleTheme() = saveAppearanceChange { current ->
-        current.copy(isDarkTheme = !current.isDarkTheme)
+        current.copy(theme = when (current.theme) {
+            HomeTheme.DARK_BLUE -> HomeTheme.LIGHT
+            HomeTheme.LIGHT -> HomeTheme.RED
+            HomeTheme.RED -> HomeTheme.DARK_BLUE
+        })
     }
 
     fun toggleNightMode() = saveAppearanceChange { current ->
@@ -36,7 +40,6 @@ class HomeAppearanceViewModel @Inject constructor(private val repository: HomeAp
         themeErrorState.value = false
         viewModelScope.launch {
             try {
-                // Re-read current persisted values: never discard sidebar, language or theme.
                 val current = repository.observe().first().normalized()
                 repository.save(change(current))
             } catch (error: CancellationException) {
@@ -57,7 +60,6 @@ class HomeAppearanceViewModel @Inject constructor(private val repository: HomeAp
     } }
 }
 
-// A separate editor keeps unsaved choices out of the active interface.
 data class HomeAppearanceEditorState(
     val value: HomeAppearance = HomeAppearance(), val loading: Boolean = true,
     val saving: Boolean = false, val failed: Boolean = false,

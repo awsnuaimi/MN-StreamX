@@ -13,6 +13,9 @@ on:
         type: boolean
         default: false
 
+env:
+  MN_STREAMX_UPDATE_REPOSITORY: ${{ vars.MN_STREAMX_UPDATE_REPOSITORY || github.repository }}
+
 permissions:
   contents: read
 
@@ -154,6 +157,8 @@ jobs:
     steps:
       - name: Checkout publishing script
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Download verified signed APKs
         uses: actions/download-artifact@v4
         with:
@@ -161,5 +166,5 @@ jobs:
           path: dist
       - name: Publish complete verified release
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.MN_STREAMX_UPDATE_TOKEN || github.token }}
         run: python .github/scripts/publish_update.py

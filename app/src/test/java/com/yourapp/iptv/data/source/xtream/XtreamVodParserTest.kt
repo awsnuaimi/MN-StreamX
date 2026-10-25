@@ -20,6 +20,21 @@ class XtreamVodParserTest {
         assertEquals("5", streams.single().categoryId)
     }
 
+    @Test fun errorsAndNonArrayResponsesCannotSilentlyBecomeEmptyCatalogs() {
+        for (body in listOf("{}", "null", "<html>Error</html>", "{\"message\":\"Denied\"}")) {
+            assertNotNull(runCatching { XtreamVodParser.items(StringReader(body), VodKind.MOVIE) { true } }.exceptionOrNull())
+        }
+        assertTrue(XtreamVodParser.items(StringReader("[]"), VodKind.MOVIE) { true }.isEmpty())
+    }
+
+    @Test fun titlesBelongToEveryDeclaredCategoryNotOnlyTheFirst() {
+        val item = XtreamVodParser.items(StringReader("""[{"stream_id":8,"category_id":3,"category_ids":[3,"4",null]}]"""),
+            VodKind.MOVIE) { true }.single()
+        assertTrue(item.belongsTo("3")); assertTrue(item.belongsTo("4"))
+        assertFalse(item.belongsTo("5"))
+        assertEquals(listOf("3", "4"), item.categoryIds)
+    }
+
     @Test fun parsesSeriesSeasonsAndEpisodesInNumericalOrder() {
         val item = VodItem("20", "Example", "1")
         val response = """{"info":{"plot":"Story"},"episodes":{"2":[

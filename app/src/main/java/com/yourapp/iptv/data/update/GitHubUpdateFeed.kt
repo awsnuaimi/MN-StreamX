@@ -7,28 +7,38 @@ import com.yourapp.iptv.domain.update.UpdateIssue
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.ByteArrayOutputStream
 
-internal class GitHubUpdateFeed(private val repository: String, private val http: UpdateHttp) {
+internal class GitHubUpdateFeed(
+    private val repository: String,
+    private val http: UpdateHttp,
+    private val apiBase: okhttp3.HttpUrl = "https://api.github.com/".toHttpUrl()
+) {
     suspend fun latest(installed: Long, abis: List<String>): AppUpdate? {
         if (!validRepository(repository)) throw UpdateFailure(UpdateIssue.NOT_CONFIGURED)
-        val url = "https://api.github.com/repos/$repository/releases/latest".toHttpUrl()
-        return http.get(url) { response, active ->
-            val body = response.body ?: throw UpdateFailure(UpdateIssue.INVALID_RELEASE)
-            val limit = 512 * 1024
-            if (body.contentLength() > limit) throw UpdateFailure(UpdateIssue.INVALID_RELEASE)
-            val bytes = ByteArrayOutputStream()
-            val buffer = ByteArray(8192)
-            body.byteStream().use { stream ->
-                while (true) {
-                    active()
-                    val count = stream.read(buffer)
-                    if (count < 0) break
-                    if (bytes.size() + count > limit) throw UpdateFailure(UpdateIssue.INVALID_RELEASE)
-                    bytes.write(buffer, 0, count)
+        val url = apiBase.newBuilder().addPathSegments("repos/$repository/releases/latest").build()
+        try {
+            return http.get(url) { response, active ->
+                val body = response.body ?: throw UpdateFailure(UpdateIssue.INVALID_RELEASE)
+                val limit = 512 * 1024
+                if (body.contentLength() > limit) throw UpdateFailure(UpdateIssue.INVALID_RELEASE)
+                val bytes = ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                body.byteStream().use { stream ->
+                    while (true) {
+                        active()
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        if (bytes.size() + count > limit) throw UpdateFailure(UpdateIssue.INVALID_RELEASE)
+                        bytes.write(buffer, 0, count)
+                    }
                 }
-            }
-            // A nullable selection is wrapped because UpdateHttp's response value is non-null.
-            Selection(parse(bytes.toString(Charsets.UTF_8.name()), repository, installed, abis))
-        }.update
+                Selection(parse(bytes.toString(Charsets.UTF_8.name()), repository, installed, abis))
+            }.update
+        } catch (error: UpdateFailure) {
+            if (error.issue != UpdateIssue.NO_RELEASE) throw error
+            val repoUrl = apiBase.newBuilder().addPathSegments("repos/$repository").build()
+            http.get(repoUrl, missing = UpdateIssue.SOURCE_UNAVAILABLE) { _, _ -> true }
+            throw UpdateFailure(UpdateIssue.NO_RELEASE)
+        }
     }
 
     private data class Selection(val update: AppUpdate?)

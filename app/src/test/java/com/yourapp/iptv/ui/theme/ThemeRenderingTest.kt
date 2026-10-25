@@ -51,14 +51,14 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalComposeUiApi::class)
 class ThemeRenderingTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
-    private val mode = mutableStateOf(true to false)
+    private val mode = mutableStateOf(HomeTheme.DARK_BLUE to false)
     private val language = mutableStateOf(HomeLanguage.GERMAN)
     private val channel = Channel("theme-synthetic", "MN Vorschau", streamUrl = "", group = "Test")
     private val program = Program("Programm Vorschau", 0, 60_000)
 
     private fun board(keyboard: Boolean = false) {
         compose.setContent {
-            IPTVAppTheme(mode.value.first, mode.value.second) {
+            IPTVAppTheme(isNightMode = mode.value.second, theme = mode.value.first) {
                 LocalizedResources(language.value) {
                     if (keyboard) {
                         val input = LocalInputModeManager.current
@@ -94,9 +94,9 @@ class ThemeRenderingTest {
 
     @Test fun theSameControlsAndPlayerPanelFollowEveryThemeWithoutReopening() {
         board()
-        for ((dark, night) in listOf(true to false, false to false, true to true, false to true)) {
-            compose.runOnIdle { mode.value = dark to night }
-            val c = AppThemeColors.forMode(dark, night)
+        for ((theme, night) in HomeTheme.entries.flatMap { listOf(it to false, it to true) }) {
+            compose.runOnIdle { mode.value = theme to night }
+            val c = AppThemeColors.forTheme(theme, night)
             pixel("theme-board", 3, 3, c.background)
             top("theme-button", c.surfaceContainerHigh)
             top("theme-channel", c.surfaceContainerLow)
@@ -109,7 +109,7 @@ class ThemeRenderingTest {
                 assertPixel(frame.getPixel(frame.width / 2, frame.height - 3),
                     c.surfaceContainerLowest.copy(alpha = 0.98f).compositeOver(Color.Black))
             } finally { frame.recycle() }
-            export("$dark-$night")
+            export("$theme-$night")
         }
     }
 
@@ -117,10 +117,9 @@ class ThemeRenderingTest {
         board(keyboard = true)
         compose.onNodeWithTag("theme-button", true).performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag("theme-button", true).assertIsFocused()
-        for ((dark, night) in listOf(false to false, true to false, true to true)) {
-            compose.runOnIdle { mode.value = dark to night }
-            val colors = AppThemeColors.forMode(dark, night)
-            // Material 3 draws a 10% focus state layer using the content color.
+        for ((theme, night) in HomeTheme.entries.flatMap { listOf(it to false, it to true) }) {
+            compose.runOnIdle { mode.value = theme to night }
+            val colors = AppThemeColors.forTheme(theme, night)
             val focused = colors.onPrimary.copy(alpha = 0.1f).compositeOver(colors.primary)
             top("theme-button", focused)
         }
@@ -130,7 +129,7 @@ class ThemeRenderingTest {
     @Config(qualifiers = "w1920dp-h1080dp-mdpi")
     fun arabicDirectionAndFullHdViewportKeepTheThemeAndControlsAccessible() {
         board()
-        compose.runOnIdle { language.value = HomeLanguage.ARABIC; mode.value = false to false }
+        compose.runOnIdle { language.value = HomeLanguage.ARABIC; mode.value = HomeTheme.LIGHT to false }
         compose.onNodeWithTag("theme-button", true).assertExists().assertIsEnabled()
         top("theme-channel", AppThemeColors.forMode(false).surfaceContainerLow)
         export("rtl-light")

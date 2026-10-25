@@ -3,8 +3,8 @@ package com.yourapp.iptv.ui.screen.home
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ColorScheme
 import com.yourapp.iptv.ui.theme.AppThemeColors
+import com.yourapp.iptv.domain.model.HomeTheme
 
-/** Shared TV colors. Hero scrims and card scrims have separate responsibilities. */
 internal data class HomeTvPalette(
     val background: Color,
     val sidebar: Color,
@@ -24,10 +24,10 @@ internal data class HomeTvPalette(
     val liveBadge: Color
 )
 
-/** Home artwork derives from the same roles as settings, lists, dialogs and the player. */
 internal object HomeTvPalettes {
     private val dark = from(AppThemeColors.forMode(true))
     private val light = from(AppThemeColors.forMode(false))
+    private val red = from(AppThemeColors.forTheme(HomeTheme.RED))
     private val night = from(AppThemeColors.forMode(true, true))
 
     private fun from(colors: ColorScheme): HomeTvPalette = HomeTvPalette(
@@ -40,11 +40,17 @@ internal object HomeTvPalettes {
         heroGradient = listOf(colors.primaryContainer, colors.surfaceContainerLow),
         heroOverlay = listOf(colors.background.copy(alpha = 0.95f),
             colors.background.copy(alpha = 0.7f), colors.background.copy(alpha = 0.38f)),
-        // Artwork captions stay white over their own dark scrim in every app theme.
         cardOverlay = listOf(Color.Transparent, Color.Black.copy(alpha = 0.86f)),
         cardFallbackGradient = listOf(colors.surfaceContainerHighest, colors.surfaceContainerLowest),
         liveBadge = Color(0xFFD32F2F)
     )
+
+    fun forTheme(theme: HomeTheme, isNight: Boolean = false): HomeTvPalette = when {
+        isNight -> night
+        theme == HomeTheme.RED -> red
+        theme == HomeTheme.LIGHT -> light
+        else -> dark
+    }
 
     fun forMode(isDark: Boolean, isNight: Boolean = false): HomeTvPalette = when {
         isNight -> night

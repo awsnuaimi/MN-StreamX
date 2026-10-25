@@ -22,7 +22,7 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
     onToggleNightMode: () -> Unit, nightSaving: Boolean, nightError: Boolean,
     dashboardFocus: FocusRequester? = null, modifier: Modifier = Modifier,
     organizationReady: Boolean = true) {
-    val colors = HomeTvPalettes.forMode(appearance.isDarkTheme, appearance.isNightMode)
+    val colors = HomeTvPalettes.forTheme(appearance.theme, appearance.isNightMode)
     var hasFocus by remember { mutableStateOf(false) }
     val expanded = appearance.expandedSidebar || hasFocus
     val width = if (expanded) 180.dp else 70.dp

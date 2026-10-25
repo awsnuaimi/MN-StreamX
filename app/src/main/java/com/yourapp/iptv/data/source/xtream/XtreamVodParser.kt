@@ -21,9 +21,12 @@ internal object XtreamVodParser {
             val id = obj.string(if (kind == VodKind.MOVIE) "stream_id" else "series_id")
                 ?.takeIf { it.isValidXtreamId() } ?: return@readArray null
             val poster = obj.string(if (kind == VodKind.MOVIE) "stream_icon" else "cover")
+            val categories = (listOfNotNull(obj.string("category_id")) +
+                obj.get("category_ids")?.takeIf { it.isJsonArray }?.asJsonArray?.toList().orEmpty()
+                    .filter { it.isJsonPrimitive }.map { it.asString.trim() })
+                .filter { it.isNotBlank() && it != "null" }.distinct()
             VodItem(id = id, name = obj.string("name")?.trim()?.takeIf { it.isNotBlank() } ?: id,
-                categoryId = obj.string("category_id") ?: obj.get("category_ids")?.takeIf { it.isJsonArray }
-                    ?.asJsonArray?.firstOrNull()?.takeIf { it.isJsonPrimitive }?.asString, poster = poster,
+                categoryId = categories.firstOrNull(), categoryIds = categories, poster = poster,
                 extension = XtreamVodFormat.safeExtension(obj.string("container_extension")),
                 plot = obj.string("plot"), rating = obj.string("rating"),
                 year = obj.string("releaseDate") ?: obj.string("year"))
@@ -66,7 +69,9 @@ internal object XtreamVodParser {
 
     private fun <T : Any> readArray(reader: Reader, limit: Int, active: () -> Boolean,
         parse: (JsonObject) -> T?): List<T> = JsonReader(reader).use { json ->
-        if (json.peek() != JsonToken.BEGIN_ARRAY) return@use emptyList()
+        if (json.peek() != JsonToken.BEGIN_ARRAY) {
+            throw PlaylistLoadException("أعاد الخادم بيانات غير صالحة لكتالوج الأفلام أو المسلسلات.")
+        }
         val result = ArrayList<T>()
         var count = 0
         json.beginArray()
@@ -77,6 +82,7 @@ internal object XtreamVodParser {
             if (element.isJsonObject) parse(element.asJsonObject)?.let(result::add)
         }
         json.endArray()
+        require(json.peek() == JsonToken.END_DOCUMENT) { "Unexpected data after VOD catalog" }
         result
     }
 

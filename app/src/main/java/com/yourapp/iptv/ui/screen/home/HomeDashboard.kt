@@ -48,9 +48,11 @@ internal fun HomeDashboard(
     onGuide: () -> Unit,
     onHistory: () -> Unit,
     programState: HomeProgramUiState = HomeProgramUiState(),
-    onPreviewChannel: (Channel?) -> Unit = {}
+    onPreviewChannel: (Channel?) -> Unit = {},
+    theme: com.yourapp.iptv.domain.model.HomeTheme = if (isDarkTheme)
+        com.yourapp.iptv.domain.model.HomeTheme.DARK_BLUE else com.yourapp.iptv.domain.model.HomeTheme.LIGHT
 ) {
-    val colors = HomeTvPalettes.forMode(isDarkTheme, isNightMode)
+    val colors = HomeTvPalettes.forTheme(theme, isNightMode)
     val featured = remember(selection, suggestedChannels) {
         HomeFeaturedChannels.select(selection, suggestedChannels)
     }
@@ -77,8 +79,6 @@ internal fun HomeDashboard(
         val metrics = remember(maxWidth) { HomeDashboardLayout.forWidth(maxWidth.value.toInt()) }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(metrics.sectionSpacing.dp)) {
-            // Put the cinematic cards above the Hero and actions: on 720p TVs
-            // they were previously below the visible viewport.
             if (featured.channels.isNotEmpty()) {
                 val featuredTitle = when (featured.kind) {
                     HomeFeaturedKind.RECENT -> labels.text(
@@ -106,7 +106,6 @@ internal fun HomeDashboard(
                 item(key = "history") { DashboardAction(labels.section(HomeSection.HISTORY), onHistory,
                     metrics, HomeSection.HISTORY, colors) }
             }
-            // A second row is useful only when the first is recent channels.
             if (featured.kind == HomeFeaturedKind.RECENT && selection.favorites.isNotEmpty()) {
                 val remainingFavorites = selection.favorites.filterNot { favorite ->
                     featured.channels.any { it.id == favorite.id }
@@ -131,7 +130,6 @@ internal fun DashboardWelcome(labels: HomeLabels, highlighted: Channel?, channel
         Box(Modifier.fillMaxWidth()) {
             HomeImageBackdrop(highlighted?.let(HomeArtworkSource::of) ?: HomeArtworkSource.Monogram("MN"), colors,
                 Modifier.matchParentSize(), large = true, frame = savedFrame)
-            // A compact copy area leaves half the Hero for an uncropped video frame.
             Column(Modifier.fillMaxWidth(0.52f).padding(minOf(metrics.heroPadding, 14).dp)
                 .testTag("hero-copy"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("MN StreamX", style = MaterialTheme.typography.titleSmall,
@@ -144,7 +142,6 @@ internal fun DashboardWelcome(labels: HomeLabels, highlighted: Channel?, channel
                 Text(labels.text("$channelCount قناة متاحة", "$channelCount channels available",
                     "$channelCount Sender verfügbar"),
                     style = MaterialTheme.typography.labelSmall, color = colors.muted)
-                // A fixed guide slot avoids layout jumps while optional metadata arrives.
                 Box(Modifier.fillMaxWidth().height(44.dp)) {
                     highlighted?.let { HomeNowPlaying(it, programState, labels, colors) }
                 }

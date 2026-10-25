@@ -5,8 +5,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import com.yourapp.iptv.domain.model.HomeTheme
 
-/** Every Material role is explicit, including menus, chips, dialogs and tonal surfaces. */
 internal object AppThemeColors {
     private val dark = darkColorScheme(
         primary = NeonBlue, onPrimary = Color.Black,
@@ -71,6 +71,30 @@ internal object AppThemeColors {
         surfaceContainer = Color(0xFF0A0A0A), surfaceContainerHigh = Color(0xFF141414),
         surfaceContainerHighest = Color(0xFF202020)
     )
+
+    private val red = dark.copy(
+        primary = Color(0xFFFF8A80), onPrimary = Color(0xFF390006),
+        primaryContainer = Color(0xFF552129), onPrimaryContainer = Color(0xFFFFDAD8),
+        inversePrimary = Color(0xFFB32635),
+        secondary = Color(0xFFE4B9BC), onSecondary = Color(0xFF402025),
+        secondaryContainer = Color(0xFF432027), onSecondaryContainer = Color(0xFFFFDADC),
+        background = Color(0xFF1B1114), onBackground = Color(0xFFFFF4F4),
+        surface = Color(0xFF291A1E), onSurface = Color(0xFFFFF4F4),
+        surfaceVariant = Color(0xFF3E2A30), onSurfaceVariant = Color(0xFFE2C1C6),
+        outline = Color(0xFFAA7D87), outlineVariant = Color(0xFF6B434D),
+        inverseSurface = Color(0xFFF4DEDF), inverseOnSurface = Color(0xFF30171D),
+        surfaceDim = Color(0xFF140C0F), surfaceBright = Color(0xFF442C34),
+        surfaceContainerLowest = Color(0xFF140C0F), surfaceContainerLow = Color(0xFF211519),
+        surfaceContainer = Color(0xFF291A1E), surfaceContainerHigh = Color(0xFF342127),
+        surfaceContainerHighest = Color(0xFF3E2930)
+    )
+
+    fun forTheme(theme: HomeTheme, isNight: Boolean = false): ColorScheme = when {
+        isNight -> night
+        theme == HomeTheme.RED -> red
+        theme == HomeTheme.LIGHT -> light
+        else -> dark
+    }
 
     fun favorite(colors: ColorScheme): Color = if (colors.onSurface.luminance() < 0.5f) {
         Color(0xFF855900)

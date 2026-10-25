@@ -10,4 +10,5 @@
     <string name="theme_preview_text">Text, cards and menus follow the selected theme.</string>
     <string name="theme_focus">Remote focus</string>
     <string name="theme_selection">Selected item</string>
+    <string name="theme_red">Red</string>
 </resources>

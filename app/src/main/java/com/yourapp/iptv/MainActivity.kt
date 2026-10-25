@@ -27,7 +27,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val appearance by homeAppearance.appearance.collectAsStateWithLifecycle()
             IPTVAppTheme(isDarkTheme = appearance?.isDarkTheme ?: true,
-                isNightMode = appearance?.isNightMode ?: false) {
+                isNightMode = appearance?.isNightMode ?: false,
+                theme = appearance?.theme ?: com.yourapp.iptv.domain.model.HomeTheme.DARK_BLUE) {
                 AppLanguageHost {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         AppNavGraph(startupPlayback)

@@ -2,16 +2,17 @@ package com.yourapp.iptv.domain.model
 
 enum class HomeLanguage { ARABIC, ENGLISH, GERMAN }
 enum class SidebarSide { AUTO, RIGHT, LEFT }
+enum class HomeTheme { DARK_BLUE, LIGHT, RED }
 data class HomeAppearance(
     val language: HomeLanguage = HomeLanguage.ARABIC,
     val sidebarSide: SidebarSide = SidebarSide.AUTO,
     val expandedSidebar: Boolean = false,
     val columns: Int = 3,
     val restoreBrowseSession: Boolean = true,
-    val isDarkTheme: Boolean = true,
-    /** Independent OLED/true-black night override. Never mutates the selected theme. */
+    val theme: HomeTheme = HomeTheme.DARK_BLUE,
     val isNightMode: Boolean = false
 ) {
+    val isDarkTheme: Boolean get() = theme != HomeTheme.LIGHT
     val sidebarOnRight: Boolean get() = sidebarSide == SidebarSide.RIGHT ||
         (sidebarSide == SidebarSide.AUTO && language == HomeLanguage.ARABIC)
     val isRtl: Boolean get() = language == HomeLanguage.ARABIC

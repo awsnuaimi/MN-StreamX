@@ -55,7 +55,7 @@ class HomeAppearanceDataStoreTest {
         val values = mutablePreferencesOf(stringPreferencesKey("other_setting") to "keep")
         assertTrue(HomeAppearanceCodec.decode(values).isDarkTheme)
         val saved = HomeAppearance(language = HomeLanguage.GERMAN,
-            sidebarSide = SidebarSide.RIGHT, columns = 4, isDarkTheme = false)
+            sidebarSide = SidebarSide.RIGHT, columns = 4, theme = HomeTheme.LIGHT)
         HomeAppearanceCodec.encode(values, saved)
         assertEquals(saved, HomeAppearanceCodec.decode(values))
         assertEquals("keep", values[stringPreferencesKey("other_setting")])
@@ -69,7 +69,7 @@ class HomeAppearanceDataStoreTest {
         assertFalse(HomeAppearanceCodec.decode(legacy).isNightMode)
         assertFalse(HomeAppearanceCodec.decode(legacy).isDarkTheme)
         val night = HomeAppearance(HomeLanguage.GERMAN, SidebarSide.LEFT,
-            columns = 4, isDarkTheme = false, isNightMode = true)
+            columns = 4, theme = HomeTheme.LIGHT, isNightMode = true)
         HomeAppearanceCodec.encode(legacy, night)
         assertEquals(night, HomeAppearanceCodec.decode(legacy))
         val dayAgain = night.copy(isNightMode = false)
@@ -92,4 +92,21 @@ class HomeAppearanceDataStoreTest {
         assertEquals(expected, HomeAppearanceCodec.decode(values))
         assertEquals("keep", values[stringPreferencesKey("future")])
     }
+    @Test fun redAndItsIndependentNightOverrideSurviveReopening() = runBlocking {
+        val file = temporary.root.resolve("red.preferences_pb")
+        val expected = HomeAppearance(theme = HomeTheme.RED, isNightMode = true)
+        var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try { HomeAppearanceDataStore(PreferenceDataStoreFactory.create(scope = scope) { file }).save(expected) }
+        finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try { assertEquals(expected, HomeAppearanceDataStore(PreferenceDataStoreFactory.create(scope = scope) { file }).observe().first()) }
+        finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
+    }
+    @Test fun anUnknownFutureThemeMigratesUsingTheLegacyLightPreference() {
+        val values = mutablePreferencesOf(stringPreferencesKey("color_theme") to "unknown",
+            booleanPreferencesKey("is_dark_theme") to false, booleanPreferencesKey("night_mode") to true)
+        val decoded = HomeAppearanceCodec.decode(values)
+        assertEquals(HomeTheme.LIGHT, decoded.theme); assertTrue(decoded.isNightMode)
+    }
+
 }

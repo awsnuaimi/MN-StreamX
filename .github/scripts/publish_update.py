@@ -17,7 +17,6 @@ def gh(*arguments, payload=None):
     result = subprocess.run(args, input=json.dumps(payload) if payload is not None else None,
                             text=True, capture_output=True, check=False)
     if result.returncode:
-        # Do not print credentials or a raw authenticated response in CI errors.
         raise RuntimeError("GitHub release operation failed; inspect repository permissions and release state.")
     return json.loads(result.stdout) if arguments[0] == "api" and result.stdout.strip() else None
 
@@ -63,15 +62,20 @@ def verify_assets(release, expected):
             raise ValueError("Uploaded APK size or SHA-256 digest differs from the verified build.")
 
 
-def publish(repository, commit, directory="dist"):
+def publish(repository, commit, directory="dist", source_repository=None):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}", repository):
+        raise ValueError("Invalid repository.")
+    if repository.split("/")[1] in (".", ".."):
         raise ValueError("Invalid repository.")
     version, expected = artifacts(directory)
     code = version_code(version)
     details = gh("api", f"repos/{repository}")
     if details.get("private") or details.get("visibility") != "public":
         raise ValueError("In-app downloads require public Releases. Repository visibility was not changed.")
-    # Listing avoids treating an authentication/network failure as 'no previous release'.
+    if source_repository and repository.lower() != source_repository.lower():
+        commit = details.get("default_branch")
+        if not commit:
+            raise ValueError("Initialize the public package repository with a README/default branch first.")
     pages = gh("api", "--paginate", "--slurp", f"repos/{repository}/releases?per_page=100")
     releases = [release for page in pages for release in page]
     tag = "v" + version
@@ -99,11 +103,16 @@ def publish(repository, commit, directory="dist"):
     endpoint = f"repos/{repository}/releases/{existing['id']}"
     ready = gh("api", endpoint)
     verify_assets(ready, expected)
-    # Publishing happens after all three remote SHA-256 digests have been checked.
     gh("api", "--method", "PATCH", endpoint,
        payload={"draft": False, "prerelease": False, "make_latest": "true"})
     print(f"Published MN StreamX {version}; all three APK digests verified.")
 
 
+def publish_from_environment():
+    source = os.environ["GITHUB_REPOSITORY"]
+    target = os.environ.get("MN_STREAMX_UPDATE_REPOSITORY", "").strip() or source
+    publish(target, os.environ["GITHUB_SHA"], source_repository=source)
+
+
 if __name__ == "__main__":
-    publish(os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_SHA"])
+    publish_from_environment()

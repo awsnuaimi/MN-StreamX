@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.PlaylistCacheKey
 import com.yourapp.iptv.domain.model.VodProgress
 import com.yourapp.iptv.domain.model.VodProgressEntry
-import com.yourapp.iptv.domain.model.PlaylistSource
 import com.yourapp.iptv.domain.model.VodKind
 import com.yourapp.iptv.domain.repository.SettingsRepository
 import com.yourapp.iptv.domain.repository.VodProgressRepository
@@ -53,7 +52,7 @@ class VodPlaybackViewModel @Inject constructor(
                 }
                 require(id != null && extension != null)
                 val account = settings.observeSettings().first()
-                require(account.source == PlaylistSource.XTREAM && account.hasSelectedSource())
+                require(repository.supports(account))
                 val url = repository.playbackUrl(account, mediaKind, id, extension)
                 val sourceKey = PlaylistCacheKey.of(account)
                 val resume = progress.observe(sourceKey).first()
@@ -68,7 +67,6 @@ class VodPlaybackViewModel @Inject constructor(
         }
     }
 
-    /** Safe to call from onDispose; repository enqueues on its application-owned scope. */
     fun capture(positionMs: Long, durationMs: Long, completed: Boolean = false) {
         val ready = mutable.value as? VodPlaybackState.Ready ?: return
         if (positionMs < 0 || durationMs <= 0 || (!completed && positionMs < 10_000L)) return

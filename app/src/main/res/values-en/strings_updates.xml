@@ -11,8 +11,8 @@
     <string name="update_install">Continue installation</string>
     <string name="update_cancel">Cancel update</string>
     <string name="update_confirmation_note">Android asks you to confirm installation. The first update may require allowing installation from this app.</string>
-    <string name="update_not_configured">No update source is configured in this build. Build it from the project repository on GitHub.</string>
-    <string name="update_no_release">No published release was found. The repository must be public with APK files in GitHub Releases.</string>
+    <string name="update_not_configured">No update source is configured in this build. Set MN_STREAMX_UPDATE_REPOSITORY and rebuild.</string>
+    <string name="update_no_release">The update repository is accessible but has no published stable release. A successful build or Actions artifact is not a release; enable publish_update in Actions.</string>
     <string name="update_access">The update source is inaccessible. Check that the release is public.</string>
     <string name="update_network">The update could not be downloaded. Check your connection and try again.</string>
     <string name="update_rate_limit">The update source refused the request or reached its request limit. Try again later.</string>
@@ -26,4 +26,6 @@
     <string name="update_android_unsupported">This update requires a newer Android version.</string>
     <string name="update_permission">Installation permission was not granted. Select Continue installation to try again.</string>
     <string name="update_install_unavailable">Installation settings or the package installer could not be opened on this device.</string>
+    <string name="update_source">Package source: %1$s</string>
+    <string name="update_source_unavailable">The package repository is unavailable: it may be private, moved or misconfigured. Source code can remain private with a separate public package repository.</string>
 </resources>

@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import com.yourapp.iptv.domain.model.HomeTheme
 import com.yourapp.iptv.domain.model.HomeAppearance
 import com.yourapp.iptv.domain.model.HomeLanguage
 import com.yourapp.iptv.domain.repository.HomeAppearanceRepository
@@ -42,7 +43,7 @@ class ThemeEditorTest {
         val model = HomeAppearanceSettingsViewModel(repository)
         compose.setContent {
             val saved by repository.values.collectAsState()
-            IPTVAppTheme(saved.isDarkTheme, saved.isNightMode) {
+            IPTVAppTheme(isNightMode = saved.isNightMode, theme = saved.theme) {
                 val active = MaterialTheme.colorScheme.background
                 SideEffect { background = active }
                 LocalizedResources(HomeLanguage.GERMAN) {
@@ -57,7 +58,7 @@ class ThemeEditorTest {
     }
 
     @Test fun aLightPreviewDoesNotChangeTheApplicationOrWritePreferencesUntilSave() {
-        val repository = Repository(HomeAppearance(language = HomeLanguage.GERMAN, isDarkTheme = true))
+        val repository = Repository(HomeAppearance(language = HomeLanguage.GERMAN, theme = HomeTheme.DARK_BLUE))
         editor(repository)
         choose("Hell")
         compose.onNodeWithTag("theme-preview", true).performScrollTo().assertExists()
@@ -77,7 +78,7 @@ class ThemeEditorTest {
 
     @Test fun turningNightOffRestoresTheChosenBaseThemeAndKeepsTheSavedChoice() {
         val repository = Repository(HomeAppearance(language = HomeLanguage.GERMAN,
-            isDarkTheme = false, isNightMode = true))
+            theme = HomeTheme.LIGHT, isNightMode = true))
         editor(repository)
         choose("Dunkelblau")
         compose.runOnIdle {
@@ -96,4 +97,16 @@ class ThemeEditorTest {
             assertEquals(1, returned)
         }
     }
+    @Test fun selectingRedDoesNotChangeTheApplicationUntilTheCanonicalChoiceIsSaved() {
+        val repository = Repository(HomeAppearance(language = HomeLanguage.GERMAN))
+        editor(repository)
+        choose("Rot")
+        compose.runOnIdle { assertEquals(0, repository.writes); assertEquals(HomeTheme.DARK_BLUE, repository.values.value.theme) }
+        compose.onNodeWithTag("theme-save").performClick()
+        compose.runOnIdle {
+            assertEquals(HomeTheme.RED, repository.values.value.theme)
+            assertEquals(AppThemeColors.forTheme(HomeTheme.RED).background, background)
+        }
+    }
+
 }

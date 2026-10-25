@@ -10,4 +10,5 @@
     <string name="theme_preview_text">النصوص والبطاقات والقوائم تتبع الثيم المختار.</string>
     <string name="theme_focus">تحديد بالريموت</string>
     <string name="theme_selection">العنصر المختار</string>
+    <string name="theme_red">أحمر</string>
 </resources>

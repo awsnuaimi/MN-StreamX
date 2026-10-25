@@ -15,7 +15,6 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/** Reads on OkHttp's worker; cancellation closes the socket, including an active APK body. */
 internal class UpdateHttp(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .followRedirects(false).followSslRedirects(false)
@@ -25,7 +24,7 @@ internal class UpdateHttp(
 ) {
     private data class Result<T>(val value: T? = null, val redirect: HttpUrl? = null)
 
-    suspend fun <T : Any> get(url: HttpUrl, read: (Response, () -> Unit) -> T): T {
+    suspend fun <T : Any> get(url: HttpUrl, missing: UpdateIssue = UpdateIssue.NO_RELEASE, read: (Response, () -> Unit) -> T): T {
         var next = url
         repeat(6) {
             if (!trusted(next)) throw UpdateFailure(UpdateIssue.INVALID_RELEASE)
@@ -37,7 +36,7 @@ internal class UpdateHttp(
                     Result<T>(redirect = target)
                 } else {
                     when (response.code) {
-                        404 -> throw UpdateFailure(UpdateIssue.NO_RELEASE)
+                        404 -> throw UpdateFailure(missing)
                         401 -> throw UpdateFailure(UpdateIssue.ACCESS)
                         403, 429 -> throw UpdateFailure(UpdateIssue.RATE_LIMIT)
                     }

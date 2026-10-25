@@ -50,7 +50,7 @@ class HomeAppearanceViewModelTest {
         assertTrue(viewModel.themeSaving.value)
         advanceTimeBy(21); runCurrent()
         assertEquals(1, repository.writes)
-        assertEquals(saved.copy(isDarkTheme = false), repository.values.value)
+        assertEquals(saved.copy(theme = HomeTheme.LIGHT), repository.values.value)
         assertFalse(viewModel.themeSaving.value)
         assertFalse(viewModel.themeError.value)
     }
@@ -67,7 +67,7 @@ class HomeAppearanceViewModelTest {
     @Test fun nightButtonTogglesTrueBlackWithoutChangingSavedThemeOrPreferences() = runTest(dispatcher) {
         val repository = Repository()
         val saved = HomeAppearance(HomeLanguage.GERMAN, SidebarSide.LEFT,
-            true, 4, restoreBrowseSession = false, isDarkTheme = false)
+            true, 4, restoreBrowseSession = false, theme = HomeTheme.LIGHT)
         repository.values.value = saved
         val viewModel = HomeAppearanceViewModel(repository).also { store.put("nightReader", it) }
         runCurrent()
@@ -82,7 +82,7 @@ class HomeAppearanceViewModelTest {
     }
     @Test fun nightModeErrorKeepsPreviousValueAndTheme() = runTest(dispatcher) {
         val repository = Repository().apply {
-            values.value = HomeAppearance(isDarkTheme = false)
+            values.value = HomeAppearance(theme = HomeTheme.LIGHT)
             failWrite = true
         }
         val viewModel = HomeAppearanceViewModel(repository).also { store.put("nightError", it) }
@@ -122,4 +122,15 @@ class HomeAppearanceViewModelTest {
         assertTrue(editor.uiState.value.saved)
         assertEquals(expectedAppearance, repository.values.value)
     }
+    @Test fun quickThemeCycleIncludesRedAndNeverChangesTheIndependentNightOverride() = runTest(dispatcher) {
+        val repository = Repository().apply { values.value = HomeAppearance(theme = HomeTheme.RED, isNightMode = true) }
+        val model = HomeAppearanceViewModel(repository).also { store.put("redCycle", it) }
+        runCurrent()
+        for (theme in listOf(HomeTheme.DARK_BLUE, HomeTheme.LIGHT, HomeTheme.RED)) {
+            model.toggleTheme(); advanceTimeBy(21); runCurrent()
+            assertEquals(theme, repository.values.value.theme)
+            assertTrue(repository.values.value.isNightMode)
+        }
+    }
+
 }
