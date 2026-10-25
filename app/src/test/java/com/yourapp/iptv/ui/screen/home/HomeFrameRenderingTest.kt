@@ -3,6 +3,7 @@ package com.yourapp.iptv.ui.screen.home
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.view.View
 import android.view.ViewGroup
 import android.graphics.Color as AndroidColor
@@ -21,6 +22,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.HomeLanguage
 import com.yourapp.iptv.ui.component.player.ChannelFrameStore
+import com.yourapp.iptv.ui.component.player.LiveFrameCapture
+import com.yourapp.iptv.ui.component.player.FrameCaptureResult
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -140,8 +143,11 @@ class HomeFrameRenderingTest {
     private fun savePicture() {
         val image = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888)
         image.eraseColor(AndroidColor.rgb(240, 30, 30))
-        try { runBlocking { assertTrue(ChannelFrameStore.save(context, channel, image)) } }
-        finally { image.recycle() }
+        Canvas(image).drawRect(0f, 0f, 160f, 360f,
+            Paint().apply { color = AndroidColor.rgb(25, 110, 230) })
+        try { runBlocking {
+            assertEquals(FrameCaptureResult.SAVED, LiveFrameCapture.saveCopiedFrame(context, channel, image))
+        } } finally { if (!image.isRecycled) image.recycle() }
     }
 
     private fun awaitRenderedPicture() {

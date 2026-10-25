@@ -48,6 +48,12 @@ internal object LiveFrameCapture {
         // Copy the video surface itself. Copying the app window can save controls
         // or a black hole where a separately composited SurfaceView is displayed.
         val bitmap = direct.bitmap ?: return direct.status
+        return saveCopiedFrame(context, channel, bitmap, isCurrent)
+    }
+
+    /** Owns a completed video copy, including rejection and stale-session cleanup. */
+    internal suspend fun saveCopiedFrame(context: Context, channel: Channel, bitmap: Bitmap,
+        isCurrent: () -> Boolean = { true }): FrameCaptureResult {
         try {
             if (!isCurrent()) return FrameCaptureResult.STALE_SESSION
             if (!containsPicture(bitmap)) return FrameCaptureResult.EMPTY_IMAGE
@@ -123,17 +129,19 @@ internal object LiveFrameCapture {
     }
 
     /** Reject blank or uniform surfaces without inspecting or retaining stream metadata. */
-    private fun containsPicture(bitmap: Bitmap): Boolean {
+    internal fun containsPicture(bitmap: Bitmap): Boolean {
         var bright = 0
         var varied = 0
-        var first = -1
+        // All opaque ARGB Int colors are negative, including white (-1).
+        // Initialization must have a separate state from the actual color value.
+        var first: Int? = null
         for (y in 1..7) for (x in 1..11) {
             val pixel = bitmap.getPixel(x * bitmap.width / 12, y * bitmap.height / 8)
             val r = (pixel ushr 16) and 255
             val g = (pixel ushr 8) and 255
             val b = pixel and 255
             if (r + g + b > 75) bright++
-            if (first < 0) first = pixel else if (pixel != first) varied++
+            if (first == null) first = pixel else if (pixel != first) varied++
         }
         return bright >= 6 && varied >= 6
     }
