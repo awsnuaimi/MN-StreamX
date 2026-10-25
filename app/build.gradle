@@ -121,6 +121,10 @@ android {
         jvmTarget = '17'
     }
 
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
+
     room {
         schemaDirectory("$projectDir/schemas")
     }
@@ -177,6 +181,10 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
+    testImplementation platform('androidx.compose:compose-bom:2024.09.03')
+    testImplementation 'androidx.compose.ui:ui-test-junit4'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
 // Preserve upstream native-runtime notices in every distributed APK.
 // This public text is fetched at build time, bounded and pinned, not at player startup.

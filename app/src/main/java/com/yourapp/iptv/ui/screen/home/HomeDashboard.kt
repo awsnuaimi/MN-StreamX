@@ -25,11 +25,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.yourapp.iptv.ui.component.player.ChannelFrameStore
+import androidx.compose.ui.platform.testTag
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.HomeDashboardSelection
 
@@ -101,28 +97,17 @@ internal fun HomeDashboard(
 }
 
 @Composable
-private fun DashboardWelcome(labels: HomeLabels, highlighted: Channel?, channelCount: Int,
+internal fun DashboardWelcome(labels: HomeLabels, highlighted: Channel?, channelCount: Int,
     metrics: HomeDashboardMetrics, colors: HomeTvPalette, onPlayChannel: (Channel) -> Unit) {
-    val context = LocalContext.current
-    val owner = LocalLifecycleOwner.current
-    var resumeEpoch by remember { mutableIntStateOf(0) }
-    val frameRevision by ChannelFrameStore.revision.collectAsState()
-    DisposableEffect(owner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) resumeEpoch++
-        }
-        owner.lifecycle.addObserver(observer)
-        onDispose { owner.lifecycle.removeObserver(observer) }
-    }
-    val savedFrame = remember(context, highlighted?.id, highlighted?.streamUrl, resumeEpoch, frameRevision) {
-        highlighted?.let { ChannelFrameStore.fileFor(context, it) }
-    }
+    val savedFrame = rememberChannelFrame(highlighted)
     Surface(Modifier.fillMaxWidth(), color = colors.surface,
         shape = MaterialTheme.shapes.large, border = BorderStroke(1.dp, colors.outline)) {
         Box(Modifier.fillMaxWidth()) {
-            HomeImageBackdrop(highlighted?.logoUrl, colors,
+            HomeImageBackdrop(highlighted?.let(HomeArtworkSource::of) ?: HomeArtworkSource.Monogram("MN"), colors,
                 Modifier.matchParentSize(), large = true, frame = savedFrame)
-            Column(Modifier.fillMaxWidth().padding(metrics.heroPadding.dp),
+            // Reserve the picture side even when only a logo is available. The
+            // continue action must never stretch across and cover that artwork.
+            Column(Modifier.fillMaxWidth(0.64f).padding(metrics.heroPadding.dp).testTag("hero-copy"),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("MN StreamX", style = MaterialTheme.typography.headlineMedium,
                     color = colors.accent, fontWeight = FontWeight.Bold)
@@ -138,7 +123,7 @@ private fun DashboardWelcome(labels: HomeLabels, highlighted: Channel?, channelC
                     Spacer(Modifier.height(4.dp))
                     DashboardAction(labels.text("متابعة: ${channel.name}", "Continue: ${channel.name}",
                         "Weitersehen: ${channel.name}"), { onPlayChannel(channel) }, metrics,
-                        HomeSection.LIVE, colors, Modifier.fillMaxWidth(), fullWidth = true)
+                        HomeSection.LIVE, colors, Modifier.fillMaxWidth().testTag("hero-continue"), fullWidth = true)
                 }
             }
         }
@@ -180,7 +165,7 @@ private fun DashboardAction(text: String, onClick: () -> Unit,
     val bringIntoView = remember { BringIntoViewRequester() }
     LaunchedEffect(focused) { if (focused) bringIntoView.bringIntoView() }
     val dimensions = if (fullWidth) modifier.fillMaxWidth()
-        .heightIn(min = metrics.actionHeight.dp)
+        .height(metrics.actionHeight.dp)
         else modifier.width(metrics.actionWidth.dp).height(metrics.actionHeight.dp)
     Surface(onClick = onClick,
         modifier = dimensions.bringIntoViewRequester(bringIntoView)

@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +57,7 @@ internal fun HomeCinematicChannelCard(
         animationSpec = tween(150), label = "channelFocusScale"
     )
     val group = channel.group.orEmpty()
+    val frame = rememberChannelFrame(channel)
     val description = if (group.isBlank()) {
         labels.text("قناة ${channel.name}، بث مباشر",
             "${channel.name}, live TV", "${channel.name}, Live-TV")
@@ -82,7 +84,10 @@ internal fun HomeCinematicChannelCard(
     ) {
         Box(Modifier.fillMaxSize().background(
             Brush.verticalGradient(colors.cardFallbackGradient))) {
-            ChannelArtworkLayer(artwork, channel.name, metrics, colors)
+            Box(Modifier.fillMaxWidth().fillMaxHeight(0.58f).align(Alignment.TopCenter)) {
+                ChannelArtworkLayer(artwork, channel.name, metrics, colors)
+            }
+            SavedChannelFrame(frame, Modifier.matchParentSize())
             // Only the text area receives a dark scrim; the logo stays legible.
             Box(Modifier.fillMaxWidth().fillMaxHeight(0.65f)
                 .align(Alignment.BottomCenter)
@@ -101,7 +106,7 @@ internal fun HomeCinematicChannelCard(
                     color = colors.accent, style = MaterialTheme.typography.titleMedium)
             }
             Row(
-                Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(10.dp),
+                Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(10.dp).testTag("channel-card-caption"),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -147,7 +152,8 @@ private fun ChannelArtworkLayer(
             AsyncImage(
                 model = request, contentDescription = null,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().padding(24.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp)
+                    .testTag("channel-card-logo"),
                 onError = { failed = true }
             )
         }

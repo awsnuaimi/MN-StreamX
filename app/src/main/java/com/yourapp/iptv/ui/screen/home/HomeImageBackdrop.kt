@@ -3,7 +3,7 @@ package com.yourapp.iptv.ui.screen.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import coil.compose.AsyncImage
@@ -46,14 +47,15 @@ internal fun HomeImageBackdrop(
     modifier: Modifier = Modifier, large: Boolean = false, frame: File? = null
 ) {
     val context = LocalContext.current
-    var frameFailed by remember(frame?.absolutePath, frame?.lastModified()) { mutableStateOf(false) }
+    var logoFailed by remember(source) { mutableStateOf(false) }
+    var showingFrame by remember(frame?.absolutePath, frame?.lastModified()) { mutableStateOf(false) }
     val direction = LocalLayoutDirection.current
-    val showingFrame = frame?.isFile == true && !frameFailed
     // Bright on the picture side, readable near the copy. Light theme uses white scrim.
     val scrimColor = if (colors.text == Color.White) Color.Black else Color.White
     val photoOverlay = listOf(scrimColor.copy(alpha = 0.12f),
         scrimColor.copy(alpha = 0.45f), scrimColor.copy(alpha = 0.87f))
-    val baseOverlay = if (showingFrame) photoOverlay else colors.heroOverlay
+    // A fallback logo has its own image area; it needs no opaque Hero scrim.
+    val baseOverlay = if (showingFrame) photoOverlay else listOf(Color.Transparent, Color.Transparent)
     val overlay = if (showingFrame) {
         if (direction == LayoutDirection.Rtl) baseOverlay else baseOverlay.reversed()
     } else if (direction == LayoutDirection.Rtl) baseOverlay.reversed() else baseOverlay
@@ -64,8 +66,8 @@ internal fun HomeImageBackdrop(
                 .crossfade(false).build()
         }
     }
-    Box(modifier.background(Brush.horizontalGradient(colors.heroGradient))) {
-        if (request != null) {
+    Box(modifier.testTag("hero-artwork").background(Brush.horizontalGradient(colors.heroGradient))) {
+        if (request != null && !logoFailed) {
             AsyncImage(
                 model = request, contentDescription = null,
                 contentScale = ContentScale.Fit,
@@ -74,27 +76,20 @@ internal fun HomeImageBackdrop(
                 // Logos are square artwork, never cinematic frames. Keep them
                 // contained on the image side instead of filling the whole Hero.
                 modifier = Modifier.align(Alignment.CenterEnd)
-                    .fillMaxHeight(0.72f).aspectRatio(1f).padding(8.dp)
+                    .fillMaxWidth(0.34f).aspectRatio(16f / 9f).padding(12.dp)
+                    .testTag("hero-logo"),
+                onError = { logoFailed = true }
             )
         }
-        if (source is HomeArtworkSource.Monogram) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(source.text, color = colors.accent,
+        if (source is HomeArtworkSource.Monogram || logoFailed) {
+            Box(Modifier.align(Alignment.CenterEnd).fillMaxWidth(0.34f), contentAlignment = Alignment.Center) {
+                Text((source as? HomeArtworkSource.Monogram)?.text ?: "TV", color = colors.accent,
                     style = MaterialTheme.typography.displayMedium,
                     fontWeight = FontWeight.Bold)
             }
         }
         // A captured frame fills the entire Hero. Logo remains the fallback underneath it.
-        if (showingFrame && frame != null) {
-            val capturedRequest = remember(context, frame.absolutePath, frame.lastModified()) {
-                ImageRequest.Builder(context).data(frame).size(960, 540)
-                    .memoryCacheKey("hero:${frame.absolutePath}:${frame.lastModified()}")
-                    .crossfade(200).build()
-            }
-            AsyncImage(model = capturedRequest, contentDescription = null,
-                contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize(),
-                onError = { frameFailed = true })
-        }
+        SavedChannelFrame(frame, Modifier.matchParentSize()) { showingFrame = it }
         Box(Modifier.matchParentSize().background(Brush.horizontalGradient(overlay)))
     }
 }

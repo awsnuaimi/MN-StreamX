@@ -56,17 +56,17 @@ fun PlayerSurface(
     val reportControls by rememberUpdatedState(onControllerVisibilityChanged)
     val reportStarted by rememberUpdatedState(onPlaybackStarted)
     val reportCaptionBinding by rememberUpdatedState(onCaptionBinding)
-    var renderedChannel by remember { mutableStateOf<Channel?>(null) }
+    var renderedFrame by remember { mutableStateOf<RenderedChannelFrame?>(null) }
     val audioTap = remember { CaptionAudioTap() }
     val generatedAudio = captionSettings.mode == CaptionMode.GENERATED
     val session = remember(context) {
         PlayerPlaybackSession(PlayerController(context), channel,
             onError = { id, error -> reportError(id, error) },
             onBuffering = { id, loading -> reportBuffering(id, loading) },
-            onStarted = {
+            onStarted = { selected, mediaId ->
                 Log.i("MNX.FrameCapture", "first video frame rendered")
-                renderedChannel = it
-                reportStarted(it)
+                renderedFrame = RenderedChannelFrame(selected, mediaId)
+                reportStarted(selected)
             })
     }
 
@@ -81,28 +81,29 @@ fun PlayerSurface(
     // First-frame notifications may arrive before the SurfaceView can be copied.
     // Retry only a few times while the same channel/player is visible; never open a
     // second player or keep a capture job alive after leaving this screen.
-    LaunchedEffect(channel.id, channel.streamUrl, retryToken, renderedChannel) {
-        val candidate = renderedChannel ?: return@LaunchedEffect
-        if (candidate.id != channel.id || candidate.streamUrl != channel.streamUrl) return@LaunchedEffect
+    LaunchedEffect(channel.id, channel.streamUrl, retryToken, renderedFrame, session.player) {
+        val frame = renderedFrame ?: return@LaunchedEffect
+        val player = session.player ?: return@LaunchedEffect
+        fun current() = session.player === player && frame.matches(channel, player.currentMediaItem?.mediaId)
+        if (!current()) return@LaunchedEffect
         for (attempt in 0 until FrameCapturePolicy.MAX_ATTEMPTS) {
             delay(FrameCapturePolicy.delayBeforeMs(attempt))
             if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) break
-            val currentPlayer = session.player ?: break
-            if (currentPlayer.currentMediaItem?.mediaId?.startsWith("${candidate.id}:") != true) break
+            if (!current()) break
             val playerView = handle.view
             if (playerView == null || playerView.player == null) {
                 Log.i("MNX.FrameCapture", "attempt=${attempt + 1} result=VIEW_NOT_READY")
                 continue
             }
-            if (playerView.player !== currentPlayer) break
-            val outcome = LiveFrameCapture.saveIfNeeded(context, candidate, playerView)
+            if (playerView.player !== player) break
+            val outcome = LiveFrameCapture.saveIfNeeded(context, frame.channel, playerView, ::current)
             Log.i("MNX.FrameCapture", "attempt=${attempt + 1} result=$outcome")
             if (!FrameCapturePolicy.continueAfter(outcome, attempt + 1)) break
         }
     }
 
     LaunchedEffect(channel.id, channel.streamUrl, retryToken) {
-        renderedChannel = null
+        renderedFrame = null
         session.selectChannel(channel, retryToken)
     }
     DisposableEffect(session, lifecycle, handle) {
@@ -110,6 +111,7 @@ fun PlayerSurface(
             when (event) {
                 Lifecycle.Event.ON_START -> session.start()
                 Lifecycle.Event.ON_STOP -> {
+                    renderedFrame = null
                     handle.hideControls()
                     handle.detachPlayer()
                     session.stop()

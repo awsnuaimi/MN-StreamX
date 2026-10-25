@@ -4,15 +4,12 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
-import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.PixelCopy
 import android.view.SurfaceView
 import android.view.TextureView
-import android.view.View
-import android.view.Window
 import android.view.WindowManager
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
@@ -31,12 +28,16 @@ internal object LiveFrameCapture {
     private const val TIMEOUT_MS = 2500L
     private val handler = Handler(Looper.getMainLooper())
 
-    suspend fun saveIfNeeded(context: Context, channel: Channel, playerView: PlayerView): FrameCaptureResult {
-        if (ChannelFrameStore.fileFor(context, channel) != null) return FrameCaptureResult.ALREADY_CACHED
+    suspend fun saveIfNeeded(context: Context, channel: Channel, playerView: PlayerView,
+        isCurrent: () -> Boolean = { true }): FrameCaptureResult {
+        if (!isCurrent()) return FrameCaptureResult.STALE_SESSION
+        if (ChannelFrameStore.validFileFor(context, channel) != null) return FrameCaptureResult.ALREADY_CACHED
+        if (!isCurrent()) return FrameCaptureResult.STALE_SESSION
         if (!playerView.isAttachedToWindow) return FrameCaptureResult.SURFACE_NOT_READY
         val videoView = playerView.videoSurfaceView ?: return FrameCaptureResult.SURFACE_NOT_READY
         val activity = findActivity(playerView.context)
-        if (activity?.window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE) != 0) {
+        if (FrameCapturePolicy.isProtected(activity?.window?.attributes?.flags,
+                WindowManager.LayoutParams.FLAG_SECURE)) {
             return FrameCaptureResult.PROTECTED_OR_INVALID
         }
         val direct = when (videoView) {
@@ -44,22 +45,11 @@ internal object LiveFrameCapture {
             is TextureView -> copyTexture(videoView)
             else -> CopyResult(FrameCaptureResult.SURFACE_NOT_READY)
         }
-        // A successful PixelCopy may still be a black decoder frame. In that case
-        // try the window path before deciding no usable artwork exists.
-        val directFrame = direct.bitmap?.takeIf(::containsPicture)
-        if (directFrame == null && direct.bitmap != null && !direct.bitmap.isRecycled) {
-            direct.bitmap.recycle()
-        }
-        val outcome = if (directFrame != null) CopyResult(FrameCaptureResult.SAVED, directFrame) else {
-            val fallback = activity?.window?.let { copyWindow(it, videoView) }
-            if (fallback?.bitmap != null) fallback else {
-                return if (direct.bitmap != null) FrameCaptureResult.EMPTY_IMAGE
-                    else fallback?.status ?: direct.status
-            }
-        }
-        val bitmap = outcome.bitmap ?: return outcome.status
-        if (directFrame == null) Log.i("MNX.FrameCapture", "using window fallback")
+        // Copy the video surface itself. Copying the app window can save controls
+        // or a black hole where a separately composited SurfaceView is displayed.
+        val bitmap = direct.bitmap ?: return direct.status
         try {
+            if (!isCurrent()) return FrameCaptureResult.STALE_SESSION
             if (!containsPicture(bitmap)) return FrameCaptureResult.EMPTY_IMAGE
             return if (ChannelFrameStore.save(context, channel, bitmap)) FrameCaptureResult.SAVED
                 else FrameCaptureResult.SAVE_FAILED
@@ -86,24 +76,6 @@ internal object LiveFrameCapture {
                 null
             } catch (_: OutOfMemoryError) { null }
         CopyResult(if (bitmap == null) FrameCaptureResult.COPY_FAILED else FrameCaptureResult.SAVED, bitmap)
-    }
-
-    private suspend fun copyWindow(window: Window, videoView: View): CopyResult {
-        if (!videoView.isAttachedToWindow || videoView.width <= 0 || videoView.height <= 0) {
-            return CopyResult(FrameCaptureResult.SURFACE_NOT_READY)
-        }
-        val rect = Rect()
-        if (!videoView.getGlobalVisibleRect(rect) || rect.isEmpty) {
-            return CopyResult(FrameCaptureResult.SURFACE_NOT_READY)
-        }
-        val decor = window.decorView
-        val offset = IntArray(2)
-        decor.getLocationOnScreen(offset)
-        rect.offset(-offset[0], -offset[1])
-        if (!rect.intersect(0, 0, decor.width, decor.height) || rect.isEmpty) {
-            return CopyResult(FrameCaptureResult.SURFACE_NOT_READY)
-        }
-        return requestCopy { bitmap, callback -> PixelCopy.request(window, rect, bitmap, callback, handler) }
     }
 
     private suspend fun requestCopy(request: (Bitmap, PixelCopy.OnPixelCopyFinishedListener) -> Unit): CopyResult {
