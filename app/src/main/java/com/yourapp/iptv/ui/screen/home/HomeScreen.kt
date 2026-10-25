@@ -190,7 +190,10 @@ fun HomeScreen(
                         state.isLoading && state.visibleChannels.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                         state.channels.isEmpty() -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
                             labels.section(HomeSection.REFRESH), viewModel::refresh)
-                        dashboardVisible -> Box(Modifier.weight(1f).fillMaxWidth()) { HomeDashboard(labels, dashboardData, state.channels.size,
+                        dashboardVisible -> Box(Modifier.weight(1f).fillMaxWidth()) { key(state.browseScope) {
+                            HomeProgramHost { programState, onPreview ->
+                            HomeDashboard(labels, dashboardData, state.channels.size,
+                            programState = programState, onPreviewChannel = onPreview,
                             dashboardFocus = dashboardFocus,
                             suggestedChannels = state.channels.take(5),
                             isDarkTheme = appearance.isDarkTheme,
@@ -204,7 +207,9 @@ fun HomeScreen(
                             onMovies = onMovies,
                             onSeries = onSeries,
                             onGuide = { onOpenGuide(null, null, "", false) },
-                            onHistory = onHistory) }
+                            onHistory = onHistory)
+                            }
+                        } }
                         else -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                         val categoryWidth = (maxWidth * 0.28f).coerceIn(160.dp, 220.dp)
                         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {

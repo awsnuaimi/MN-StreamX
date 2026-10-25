@@ -42,6 +42,7 @@ internal fun HomeCinematicChannelCard(
     metrics: HomeDashboardMetrics,
     colors: HomeTvPalette,
     labels: HomeLabels,
+    onFocus: (Boolean) -> Unit = {},
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -74,7 +75,8 @@ internal fun HomeCinematicChannelCard(
             .zIndex(if (focused) 1f else 0f)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .bringIntoViewRequester(bringIntoView)
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged { focused = it.isFocused; onFocus(it.isFocused) }
+            .testTag("home-channel-${channel.id}")
             .semantics { contentDescription = description },
         color = colors.surface,
         border = BorderStroke(if (focused) 3.dp else 1.dp,

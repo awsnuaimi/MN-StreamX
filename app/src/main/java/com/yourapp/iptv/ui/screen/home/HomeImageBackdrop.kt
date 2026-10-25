@@ -3,6 +3,7 @@ package com.yourapp.iptv.ui.screen.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.padding
@@ -88,8 +89,11 @@ internal fun HomeImageBackdrop(
                     fontWeight = FontWeight.Bold)
             }
         }
-        // A captured frame fills the entire Hero. Logo remains the fallback underneath it.
-        SavedChannelFrame(frame, Modifier.matchParentSize()) { showingFrame = it }
+        // Preserve the entire 16:9 frame on the picture side instead of cropping
+        // it into a very wide Hero. Alignment follows the interface direction.
+        SavedChannelFrame(frame, Modifier.align(Alignment.CenterEnd)
+            .fillMaxWidth(0.48f).fillMaxHeight(),
+            contentScale = ContentScale.Fit, alignment = Alignment.CenterEnd) { showingFrame = it }
         Box(Modifier.matchParentSize().background(Brush.horizontalGradient(overlay)))
     }
 }

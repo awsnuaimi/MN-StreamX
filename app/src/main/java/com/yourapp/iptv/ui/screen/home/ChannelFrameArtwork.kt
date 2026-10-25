@@ -2,6 +2,7 @@ package com.yourapp.iptv.ui.screen.home
 
 import android.util.Log
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +39,7 @@ internal fun rememberChannelFrame(channel: Channel?): File? {
 /** Keeps the logo visible underneath while a real cached JPEG loads, or if decoding fails. */
 @Composable
 internal fun SavedChannelFrame(frame: File?, modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop, alignment: Alignment = Alignment.Center,
     onLoaded: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val stamp = frame?.let { "${it.absolutePath}:${it.lastModified()}:${it.length()}" }
@@ -51,7 +53,7 @@ internal fun SavedChannelFrame(frame: File?, modifier: Modifier = Modifier,
             .memoryCacheKey("channel-frame:$stamp").crossfade(false).build()
     }
     AsyncImage(model = request, contentDescription = null,
-        contentScale = ContentScale.Crop,
+        contentScale = contentScale, alignment = alignment,
         modifier = modifier.testTag(if (loaded) "saved-channel-frame" else "loading-channel-frame"),
         onSuccess = { loaded = true }, onError = {
             failed = true
