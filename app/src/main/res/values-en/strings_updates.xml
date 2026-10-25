@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_title">App update</string>
+    <string name="update_installed">Installed version: %1$s</string>
+    <string name="update_action">Update app</string>
+    <string name="update_checking">Checking for a newer release…</string>
+    <string name="update_downloading">Downloading version %1$s: %2$d%%</string>
+    <string name="update_verifying">Checking the update package and its certificate…</string>
+    <string name="update_current">The installed version is up to date.</string>
+    <string name="update_ready">Version %1$s is ready to install.</string>
+    <string name="update_install">Continue installation</string>
+    <string name="update_cancel">Cancel update</string>
+    <string name="update_confirmation_note">Android asks you to confirm installation. The first update may require allowing installation from this app.</string>
+    <string name="update_not_configured">No update source is configured in this build. Build it from the project repository on GitHub.</string>
+    <string name="update_no_release">No published release was found. The repository must be public with APK files in GitHub Releases.</string>
+    <string name="update_access">The update source is inaccessible. Check that the release is public.</string>
+    <string name="update_network">The update could not be downloaded. Check your connection and try again.</string>
+    <string name="update_rate_limit">The update source refused the request or reached its request limit. Try again later.</string>
+    <string name="update_invalid_release">The release data is invalid or incomplete. Installation was not started.</string>
+    <string name="update_no_compatible">No update package is compatible with this device architecture.</string>
+    <string name="update_storage">There is insufficient space for the update, or the file could not be written.</string>
+    <string name="update_integrity">The package is incomplete or failed its integrity check. Download the update again.</string>
+    <string name="update_package_mismatch">This package does not belong to the installed MN StreamX app.</string>
+    <string name="update_signature_mismatch">The package certificate differs from the installed app. Use the same signing key.</string>
+    <string name="update_version_mismatch">The package version is inconsistent or is not newer than the installed app.</string>
+    <string name="update_android_unsupported">This update requires a newer Android version.</string>
+    <string name="update_permission">Installation permission was not granted. Select Continue installation to try again.</string>
+    <string name="update_install_unavailable">Installation settings or the package installer could not be opened on this device.</string>
+</resources>

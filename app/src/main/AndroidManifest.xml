@@ -6,6 +6,8 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- الأذونات الأساسية -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- The cloud provider consumes the player's decoded PCM, never a microphone. -->
@@ -29,6 +31,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.IPTVPlayer"
         tools:targetApi="31">
+
+        <provider
+            android:name=".update.UpdateFileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
 
         <activity
             android:name=".MainActivity"

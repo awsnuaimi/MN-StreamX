@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      publish_update:
+        description: 'Publish this signed build as a stable in-app update'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -27,6 +33,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+
+      - name: Test update publishing rules
+        run: python -m unittest discover -s .github/scripts -p 'test_*.py'
 
       - name: Unit tests and lint
         run: gradle --no-daemon testDebugUnitTest lintDebug
@@ -131,3 +140,26 @@ jobs:
           name: MN-StreamX-update-apk
           path: dist/*.apk
           if-no-files-found: error
+
+  publish:
+    name: Publish stable in-app update
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_update && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: mn-streamx-stable-update
+      cancel-in-progress: false
+    steps:
+      - name: Checkout publishing script
+        uses: actions/checkout@v4
+      - name: Download verified signed APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: MN-StreamX-update-apk
+          path: dist
+      - name: Publish complete verified release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/publish_update.py

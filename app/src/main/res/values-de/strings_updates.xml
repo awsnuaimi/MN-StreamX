@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_title">App-Update</string>
+    <string name="update_installed">Installierte Version: %1$s</string>
+    <string name="update_action">App aktualisieren</string>
+    <string name="update_checking">Neuere Version wird gesucht…</string>
+    <string name="update_downloading">Version %1$s wird heruntergeladen: %2$d%%</string>
+    <string name="update_verifying">Update-Paket und Zertifikat werden geprüft…</string>
+    <string name="update_current">Die installierte Version ist aktuell.</string>
+    <string name="update_ready">Version %1$s ist bereit zur Installation.</string>
+    <string name="update_install">Installation fortsetzen</string>
+    <string name="update_cancel">Update abbrechen</string>
+    <string name="update_confirmation_note">Android fragt nach einer Installationsbestätigung. Beim ersten Update muss die Installation aus dieser App eventuell erlaubt werden.</string>
+    <string name="update_not_configured">In dieser Version ist keine Update-Quelle eingerichtet. Bitte aus dem Projekt-Repository auf GitHub erstellen.</string>
+    <string name="update_no_release">Keine veröffentlichte Version gefunden. Das Repository muss öffentlich sein und APK-Dateien in GitHub Releases enthalten.</string>
+    <string name="update_access">Die Update-Quelle ist nicht erreichbar. Bitte prüfen, ob die Version öffentlich ist.</string>
+    <string name="update_network">Das Update konnte nicht geladen werden. Verbindung prüfen und erneut versuchen.</string>
+    <string name="update_rate_limit">Die Update-Quelle hat die Anfrage abgelehnt oder das Anfragelimit erreicht. Bitte später versuchen.</string>
+    <string name="update_invalid_release">Die Versionsdaten sind ungültig oder unvollständig. Die Installation wurde nicht gestartet.</string>
+    <string name="update_no_compatible">Für die Architektur dieses Geräts ist kein passendes Update-Paket vorhanden.</string>
+    <string name="update_storage">Nicht genügend Speicherplatz für das Update oder die Datei konnte nicht geschrieben werden.</string>
+    <string name="update_integrity">Das Paket ist unvollständig oder die Integritätsprüfung ist fehlgeschlagen. Bitte erneut herunterladen.</string>
+    <string name="update_package_mismatch">Dieses Paket gehört nicht zur installierten MN StreamX App.</string>
+    <string name="update_signature_mismatch">Das Paketzertifikat stimmt nicht mit der installierten App überein. Derselbe Signaturschlüssel ist erforderlich.</string>
+    <string name="update_version_mismatch">Die Paketversion stimmt nicht überein oder ist nicht neuer als die installierte App.</string>
+    <string name="update_android_unsupported">Dieses Update benötigt eine neuere Android-Version.</string>
+    <string name="update_permission">Die Installation wurde nicht erlaubt. Zum erneuten Versuch Installation fortsetzen auswählen.</string>
+    <string name="update_install_unavailable">Installationseinstellungen oder Paketinstallation konnten auf diesem Gerät nicht geöffnet werden.</string>
+</resources>

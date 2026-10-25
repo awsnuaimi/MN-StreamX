@@ -47,6 +47,7 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.primary)
         AppButton(stringResource(R.string.ui_home_appearance), onHomeAppearance, enabled = !state.isSaving)
         AppButton(stringResource(R.string.ui_player_title), onPlayerAppearance, enabled = !state.isSaving)
+        AppUpdateSection()
         StartupPlaybackSetting()
         StorageManagementSection()
         if (state.isLoading) {

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_title">تحديث التطبيق</string>
+    <string name="update_installed">الإصدار المثبّت: %1$s</string>
+    <string name="update_action">تحديث التطبيق</string>
+    <string name="update_checking">جارٍ البحث عن إصدار أحدث…</string>
+    <string name="update_downloading">تنزيل الإصدار %1$s: %2$d٪</string>
+    <string name="update_verifying">جارٍ فحص حزمة التحديث وتوقيعها…</string>
+    <string name="update_current">الإصدار المثبّت هو الأحدث المتاح.</string>
+    <string name="update_ready">الإصدار %1$s جاهز للتثبيت.</string>
+    <string name="update_install">متابعة التثبيت</string>
+    <string name="update_cancel">إلغاء التنزيل</string>
+    <string name="update_confirmation_note">سيطلب أندرويد تأكيد التثبيت. قد تحتاج إلى السماح بالتثبيت من هذا التطبيق في المرة الأولى.</string>
+    <string name="update_not_configured">مصدر التحديث غير مضبوط في هذه النسخة. أعد البناء من مستودع GitHub الخاص بالمشروع.</string>
+    <string name="update_no_release">لم يُعثر على إصدار منشور. يجب أن يكون المستودع عامًا وتوجد حزم APK في GitHub Releases.</string>
+    <string name="update_access">تعذر الوصول إلى مصدر التحديث. تحقق من أن الإصدار متاح للعامة.</string>
+    <string name="update_network">تعذر تنزيل التحديث. تحقق من الاتصال ثم أعد المحاولة.</string>
+    <string name="update_rate_limit">مصدر التحديث رفض الطلب أو بلغ حد الطلبات. حاول لاحقًا.</string>
+    <string name="update_invalid_release">بيانات الإصدار غير صالحة أو غير مكتملة. لم تُفتح الحزمة للتثبيت.</string>
+    <string name="update_no_compatible">لا توجد حزمة تحديث متوافقة مع معمارية هذا الجهاز.</string>
+    <string name="update_storage">لا توجد مساحة كافية لتنزيل التحديث، أو تعذرت كتابة الملف.</string>
+    <string name="update_integrity">الحزمة ناقصة أو فشل فحص سلامتها. أعد تنزيل التحديث.</string>
+    <string name="update_package_mismatch">هذه الحزمة لا تخص تطبيق MN StreamX المثبّت.</string>
+    <string name="update_signature_mismatch">توقيع الحزمة لا يطابق النسخة المثبّتة. يجب استخدام مفتاح التوقيع نفسه.</string>
+    <string name="update_version_mismatch">رقم إصدار الحزمة غير مطابق، أو ليس أحدث من النسخة المثبّتة.</string>
+    <string name="update_android_unsupported">هذا التحديث يتطلب إصدار أندرويد أحدث.</string>
+    <string name="update_permission">لم يُمنح إذن التثبيت. اضغط متابعة التثبيت للمحاولة مجددًا.</string>
+    <string name="update_install_unavailable">تعذر فتح إعدادات التثبيت أو مثبّت الحزم على هذا الجهاز.</string>
+</resources>

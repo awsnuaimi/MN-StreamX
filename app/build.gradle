@@ -23,6 +23,14 @@ if (updateVersionCode > 2100000000L) throw new GradleException('versionCode exce
 def updateVersionName = providers.gradleProperty('appVersionName').orNull ?:
     (runNumber ? "1.1.${runNumber}.${runAttempt}" : '1.1.0')
 
+// Public release repository, automatically supplied by GitHub Actions. No access token enters the APK.
+def updateRepository = providers.gradleProperty('updateRepository')
+    .orElse(providers.environmentVariable('MN_STREAMX_UPDATE_REPOSITORY'))
+    .orElse(providers.environmentVariable('GITHUB_REPOSITORY')).getOrElse('')
+if (updateRepository && !(updateRepository ==~ /[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_.-]{1,100}/)) {
+    throw new GradleException('updateRepository must be owner/repository.')
+}
+
 def stableStore = System.getenv('MN_STREAMX_KEYSTORE_FILE')
 def stablePassword = System.getenv('MN_STREAMX_KEYSTORE_PASSWORD')
 def stableAlias = System.getenv('MN_STREAMX_KEY_ALIAS')
@@ -46,6 +54,7 @@ android {
         targetSdk 35
         versionCode updateVersionCode.toInteger()
         versionName updateVersionName
+        buildConfigField 'String', 'UPDATE_REPOSITORY', '"' + updateRepository + '"'
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
@@ -108,6 +117,7 @@ android {
 
     buildFeatures {
         compose true
+        buildConfig true
     }
     composeOptions {
         kotlinCompilerExtensionVersion '1.5.14'
@@ -123,6 +133,8 @@ android {
 
     testOptions {
         unitTests.includeAndroidResources = true
+        // Robolectric's real FileProvider read test closes an Android file descriptor on JDK 17.
+        unitTests.all { jvmArgs '--add-opens=java.base/java.io=ALL-UNNAMED' }
     }
 
     room {
