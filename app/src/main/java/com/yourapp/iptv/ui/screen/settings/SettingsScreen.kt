@@ -45,7 +45,7 @@ fun SettingsScreen(
     ) {
         Text(stringResource(R.string.ui_settings_title), style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary)
-        AppButton(stringResource(R.string.ui_home_appearance), onHomeAppearance, enabled = !state.isSaving)
+        AppButton(stringResource(R.string.theme_settings_title), onHomeAppearance, enabled = !state.isSaving)
         AppButton(stringResource(R.string.ui_player_title), onPlayerAppearance, enabled = !state.isSaving)
         AppUpdateSection()
         StartupPlaybackSetting()

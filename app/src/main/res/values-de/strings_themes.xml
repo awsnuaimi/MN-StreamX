@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="theme_settings_title">App-Darstellung</string>
+    <string name="theme_choice_title">Design</string>
+    <string name="theme_dark_blue">Dunkelblau</string>
+    <string name="theme_light">Hell</string>
+    <string name="theme_night">Schwarzer Nachtmodus</string>
+    <string name="theme_night_hint">Der Nachtmodus ist unabhängig. Nach dem Ausschalten gilt wieder das gewählte Design. Änderungen werden nach dem Speichern angewendet.</string>
+    <string name="theme_preview">Farbvorschau</string>
+    <string name="theme_preview_text">Texte, Karten und Menüs verwenden das gewählte Design.</string>
+    <string name="theme_focus">Fernbedienungsfokus</string>
+    <string name="theme_selection">Ausgewähltes Element</string>
+</resources>

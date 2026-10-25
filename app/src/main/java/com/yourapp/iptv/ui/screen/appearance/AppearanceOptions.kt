@@ -22,9 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.yourapp.iptv.ui.theme.NeonBlue
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -46,9 +44,9 @@ internal fun AppearanceToggle(label: String, checked: Boolean, enabled: Boolean,
     var focused by remember { mutableStateOf(false) }
     Surface(onClick = { onChange(!checked) }, enabled = enabled,
         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).onFocusChanged { focused = it.isFocused },
-        shape = MaterialTheme.shapes.medium, color = if (focused) Color(0xFF164362) else Color(0xFF17243D),
-        contentColor = Color.White,
-        border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) NeonBlue else Color(0xFF2D3F58))) {
+        shape = MaterialTheme.shapes.medium, color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)

@@ -20,11 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Program
-import com.yourapp.iptv.ui.theme.NeonBlue
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
@@ -42,30 +40,30 @@ fun EpgProgramCard(
         modifier = modifier.fillMaxWidth().onFocusChanged {
             focused = it.isFocused
             if (it.isFocused) onSelect()
-        }, shape = MaterialTheme.shapes.medium, contentColor = Color.White,
-        color = if (focused) Color(0xFF164362) else if (live) Color(0xFF153529) else Color(0xFF17243D),
+        }, shape = MaterialTheme.shapes.medium, contentColor = MaterialTheme.colorScheme.onSurface,
+        color = if (focused) MaterialTheme.colorScheme.primaryContainer else if (live) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainer,
         border = BorderStroke(if (focused) 3.dp else 1.dp,
-            if (focused || selected) NeonBlue else Color(0xFF2D3F58))) {
+            if (focused || selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)) {
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(label, color = if (live) Color(0xFF8FE4A0) else NeonBlue,
+                Text(label, color = if (live) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.labelMedium)
-                Text(times, Modifier.weight(1f), color = NeonBlue,
+                Text(times, Modifier.weight(1f), color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.labelMedium.copy(textDirection = TextDirection.Ltr))
             }
             Text(program.title, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.titleSmall)
             if (selected) {
                 Text(program.description?.takeIf { it.isNotBlank() } ?: stringResource(R.string.player_no_description),
-                    maxLines = 3, overflow = TextOverflow.Ellipsis, color = Color(0xFFCCD9E8),
+                    maxLines = 3, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall)
             }
             if (live) {
                 LinearProgressIndicator(progress = {
                     ((now - program.startTime).toDouble() / (program.endTime - program.startTime))
                         .toFloat().coerceIn(0f, 1f)
-                }, modifier = Modifier.fillMaxWidth(), color = NeonBlue,
-                    trackColor = Color.White.copy(alpha = 0.2f))
+                }, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
             }
         }
     }

@@ -15,34 +15,32 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.PlayerAppearance
 import com.yourapp.iptv.ui.screen.player.deck.PlayerDeckIcon
 import com.yourapp.iptv.ui.screen.player.deck.DeckIcon
-import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
 internal fun PlayerAppearancePreview(value: PlayerAppearance) {
     val density = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * value.textSize.scale)) {
-        Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = value.panelShade.alpha)).padding(14.dp),
+        Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = value.panelShade.alpha)).padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(stringResource(R.string.ui_preview_title), color = NeonBlue, style = MaterialTheme.typography.labelMedium)
-            Text(stringResource(R.string.ui_preview_program), color = Color.White, style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.ui_preview_title), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.ui_preview_program), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(DeckIcon.MORE to stringResource(R.string.player_more), DeckIcon.CHANNELS to stringResource(R.string.ui_preview_channel), DeckIcon.CHANNELS to stringResource(R.string.ui_preview_channel)).forEach { (icon, label) ->
-                    Surface(Modifier.weight(1f).height(68.dp), color = Color(0xFF1D2C36), contentColor = Color.White) {
+                    Surface(Modifier.weight(1f).height(68.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface) {
                         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            PlayerDeckIcon(icon, NeonBlue, 22.dp)
+                            PlayerDeckIcon(icon, MaterialTheme.colorScheme.primary, 22.dp)
                             Text(label, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
             }
-            if (value.showNext) Text(stringResource(R.string.ui_preview_next), color = Color(0xFFCCD9E8),
+            if (value.showNext) Text(stringResource(R.string.ui_preview_next), color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium)
         }
     }

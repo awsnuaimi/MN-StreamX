@@ -19,7 +19,7 @@ internal class HomeLabels(private val language: HomeLanguage) {
         HomeSection.GUIDE -> text("دليل البرامج", "TV guide", "Programm")
         HomeSection.SEARCH -> text("البحث", "Search", "Suche")
         HomeSection.SETTINGS -> text("الإعدادات", "Settings", "Einstellungen")
-        HomeSection.APPEARANCE -> text("مظهر الرئيسية", "Home appearance", "Startansicht")
+        HomeSection.APPEARANCE -> text("مظهر التطبيق", "App appearance", "App-Darstellung")
         HomeSection.ORGANIZE -> text("تنظيم القنوات", "Organize", "Ordnen")
         HomeSection.REFRESH -> text("تحديث", "Refresh", "Aktualisieren")
     }

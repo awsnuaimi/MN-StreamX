@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
@@ -95,10 +94,10 @@ fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, Strin
 private fun VodCategoryButton(title: String, chosen: Boolean, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Surface(onClick = onClick, modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
-        color = if (chosen || focused) Color(0xFF19334A) else Color(0xFF101B30),
-        border = if (focused) BorderStroke(2.dp, Color.Cyan) else null,
+        color = if (chosen || focused) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
         shape = MaterialTheme.shapes.small) {
-        Text(title, Modifier.padding(12.dp), color = Color.White, maxLines = 3,
+        Text(title, Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onSurface, maxLines = 3,
             overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
     }
 }

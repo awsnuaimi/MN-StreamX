@@ -1,5 +1,6 @@
 package com.yourapp.iptv.ui.screen.epg
 
+import com.yourapp.iptv.ui.theme.AppThemeColors
 import androidx.compose.ui.res.stringResource
 import com.yourapp.iptv.R
 import androidx.compose.foundation.focusGroup
@@ -28,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
@@ -37,7 +37,6 @@ import com.yourapp.iptv.ui.component.channel.FavoriteButton
 import com.yourapp.iptv.ui.state.FavoriteUiState
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
-import com.yourapp.iptv.ui.theme.NeonBlue
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.platform.LocalConfiguration
@@ -69,7 +68,7 @@ fun EpgProgramPane(
             runCatching { if (index >= 0) focus.requestFocus() else playFocus.requestFocus() }
         }
     }
-    Surface(modifier, color = Color(0xFF101C32), contentColor = Color.White,
+    Surface(modifier, color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface,
         shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxSize().padding(12.dp)
             .onFocusChanged { if (it.hasFocus) onFocused() }.focusGroup(),
@@ -78,14 +77,14 @@ fun EpgProgramPane(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleLarge, color = NeonBlue)
+                        style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                     Text(stringResource(R.string.ui_epg_provider_time), style = MaterialTheme.typography.bodySmall)
                 }
                 AppButton(stringResource(R.string.ui_watch_live), onPlay, Modifier.focusRequester(playFocus))
             }
             FavoriteButton(channel.isFavorite, favorites, onToggleFavorite)
             if (epg.schedule.isStale) {
-                Text(stringResource(R.string.ui_epg_cached), color = Color(0xFFFFD180),
+                Text(stringResource(R.string.ui_epg_cached), color = AppThemeColors.warning(MaterialTheme.colorScheme),
                     style = MaterialTheme.typography.bodySmall)
             }
             if (programs.isEmpty()) {
@@ -112,7 +111,7 @@ fun EpgProgramPane(
                     }
                 }
             }
-            Text(stringResource(R.string.ui_epg_ok_hint), color = Color(0xFFBCCDE1),
+            Text(stringResource(R.string.ui_epg_ok_hint), color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelSmall)
         }
     }

@@ -1,6 +1,7 @@
 package com.yourapp.iptv.ui.screen.player
 
 import android.view.KeyEvent
+import com.yourapp.iptv.ui.theme.AppThemeColors
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextDirection
@@ -41,7 +41,6 @@ import com.yourapp.iptv.domain.model.Program
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.presentation.ProgramPresentation
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
-import com.yourapp.iptv.ui.theme.NeonBlue
 import kotlinx.coroutines.launch
 
 @Composable
@@ -55,10 +54,10 @@ internal fun PlayerProgramDetailsDialog(channelName: String, state: PlayerEpgUiS
     LaunchedEffect(Unit) { withFrameNanos { }; runCatching { focus.requestFocus() } }
     Dialog(onDismissRequest = onDismiss) {
         CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * appearance.textSize.scale)) {
-            Surface(Modifier.fillMaxWidth().fillMaxHeight(0.86f), color = Color(0xFF101C32), contentColor = Color.White,
+            Surface(Modifier.fillMaxWidth().fillMaxHeight(0.86f), color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface,
                 shape = MaterialTheme.shapes.large) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(channelName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = NeonBlue,
+                    Text(channelName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Content))
                     Surface(Modifier.weight(1f).fillMaxWidth().focusRequester(focus)
                         .onFocusChanged { focused = it.isFocused }.onPreviewKeyEvent {
@@ -74,15 +73,15 @@ internal fun PlayerProgramDetailsDialog(channelName: String, state: PlayerEpgUiS
                                 scope.launch { scroll.scrollTo((scroll.value + direction * 140).coerceIn(0, scroll.maxValue)) }
                                 true
                             } else event.action == KeyEvent.ACTION_UP
-                        }.focusable(), color = Color(0xFF101C32), contentColor = Color.White,
-                        border = BorderStroke(if (focused) 2.dp else 1.dp, if (focused) NeonBlue else Color(0xFF263658))) {
+                        }.focusable(), color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface,
+                        border = BorderStroke(if (focused) 2.dp else 1.dp, if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)) {
                         Column(Modifier.verticalScroll(scroll).padding(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             val current = state.schedule.current(state.nowMillis)
                             val next = state.schedule.next(state.nowMillis)
                             if (current != null) ProgramDetailsText(stringResource(R.string.player_current_program), current)
                             else Text(playerEpgStatus(state))
                             if (next != null) ProgramDetailsText(stringResource(R.string.player_next_program), next)
-                            if (state.schedule.isStale) Text(stringResource(R.string.player_cached), color = Color(0xFFFFD180))
+                            if (state.schedule.isStale) Text(stringResource(R.string.player_cached), color = AppThemeColors.warning(MaterialTheme.colorScheme))
                         }
                     }
                     AppButton(stringResource(R.string.player_close_details), onDismiss, Modifier.fillMaxWidth())
@@ -94,9 +93,9 @@ internal fun PlayerProgramDetailsDialog(channelName: String, state: PlayerEpgUiS
 
 @Composable
 private fun ProgramDetailsText(label: String, program: Program) {
-    Text(label, color = NeonBlue, style = MaterialTheme.typography.labelLarge)
+    Text(label, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
     Text(program.title, style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Content))
-    Text(ProgramPresentation.timeRange(program.startTime, program.endTime), color = Color(0xFFBCCDE1),
+    Text(ProgramPresentation.timeRange(program.startTime, program.endTime), color = MaterialTheme.colorScheme.onSurfaceVariant,
         style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr))
     Text(program.description?.takeIf { it.isNotBlank() } ?: stringResource(R.string.player_no_description),
         style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content))

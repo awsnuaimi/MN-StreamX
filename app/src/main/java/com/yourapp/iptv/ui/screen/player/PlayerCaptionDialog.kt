@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -46,8 +45,8 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { withFrameNanos { }; runCatching { focus.requestFocus() } }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth(0.78f).heightIn(max = 490.dp), color = Color(0xFF101C32),
-            contentColor = Color.White, shape = MaterialTheme.shapes.large) {
+        Surface(Modifier.fillMaxWidth(0.78f).heightIn(max = 490.dp), color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface, shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(stringResource(R.string.caption_title), style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.primary)

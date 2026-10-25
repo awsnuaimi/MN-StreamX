@@ -25,12 +25,12 @@ internal fun VodContinueWatching(
                 var focused by remember { mutableStateOf(false) }
                 Surface(onClick = { onPlay(entry) },
                     modifier = Modifier.width(210.dp).onFocusChanged { focused = it.isFocused },
-                    color = if (focused) Color(0xFF234B69) else Color(0xFF172B46),
-                    border = if (focused) BorderStroke(2.dp, Color.Cyan) else null,
+                    color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                    border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
                     shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Text(entry.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            color = Color.White, style = MaterialTheme.typography.labelLarge)
+                            color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
                         val fraction = (entry.positionMs.toFloat() / entry.durationMs.toFloat()).coerceIn(0f, 1f)
                         LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
                         Text(labels.position(entry.positionMs), color = Color.LightGray,

@@ -8,7 +8,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -16,7 +15,6 @@ import com.yourapp.iptv.R
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.state.*
-import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
 internal fun WatchHistoryContent(state: WatchHistoryUiState, playingId: String?, onPlay: (String, String) -> Unit,
@@ -41,7 +39,7 @@ internal fun WatchHistoryContent(state: WatchHistoryUiState, playingId: String?,
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(stringResource(R.string.history_title), Modifier.weight(1f), color = NeonBlue,
+            Text(stringResource(R.string.history_title), Modifier.weight(1f), color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.headlineSmall)
             AppButton(stringResource(R.string.history_close), onBack, Modifier.focusRequester(closeFocus))
         }
@@ -70,16 +68,16 @@ internal fun WatchHistoryContent(state: WatchHistoryUiState, playingId: String?,
                             modifier = Modifier.weight(1f).heightIn(min = 72.dp)
                                 .then(if (row.channel.id == focusedTarget) Modifier.focusRequester(entryFocus) else Modifier)
                                 .onFocusChanged { focused = it.isFocused },
-                            color = if (focused) Color(0xFF164362) else Color(0xFF17243D),
+                            color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
                             shape = MaterialTheme.shapes.medium,
-                            border = if (focused) BorderStroke(2.dp, NeonBlue) else null) {
+                            border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
                             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 ChannelLogo(row.channel.name, row.channel.logoUrl, Modifier.size(42.dp))
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(row.channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     if (row.channel.id == playingId) Text(stringResource(R.string.history_playing),
-                                        color = NeonBlue, style = MaterialTheme.typography.bodySmall)
+                                        color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
                                     else row.channel.group?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                         style = MaterialTheme.typography.bodySmall) }
                                 }

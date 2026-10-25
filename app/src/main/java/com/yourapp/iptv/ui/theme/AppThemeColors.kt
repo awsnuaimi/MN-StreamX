@@ -1,0 +1,88 @@
+package com.yourapp.iptv.ui.theme
+
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+
+/** Every Material role is explicit, including menus, chips, dialogs and tonal surfaces. */
+internal object AppThemeColors {
+    private val dark = darkColorScheme(
+        primary = NeonBlue, onPrimary = Color.Black,
+        primaryContainer = Color(0xFF164362), onPrimaryContainer = Color(0xFFE2F4FF),
+        inversePrimary = Color(0xFF005EB8),
+        secondary = Color(0xFFB6CADC), onSecondary = Color(0xFF102438),
+        secondaryContainer = Color(0xFF16344D), onSecondaryContainer = Color(0xFFE1EFFA),
+        tertiary = Color(0xFF8FE4A0), onTertiary = Color(0xFF003915),
+        tertiaryContainer = Color(0xFF153529), onTertiaryContainer = Color(0xFFD4F8DC),
+        error = Color(0xFFFFB4AB), onError = Color(0xFF690005),
+        errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
+        background = Color(0xFF101E33), onBackground = Color.White,
+        surface = Color(0xFF172B46), onSurface = Color.White,
+        surfaceVariant = Color(0xFF263B54), onSurfaceVariant = Color(0xFFBED0E2),
+        outline = Color(0xFF6886A5), outlineVariant = Color(0xFF3B5872),
+        inverseSurface = Color(0xFFE1EAF4), inverseOnSurface = Color(0xFF16283B),
+        surfaceTint = Color.Transparent, scrim = Color.Black,
+        surfaceDim = Color(0xFF0C1428), surfaceBright = Color(0xFF30465F),
+        surfaceContainerLowest = Color(0xFF0C1428), surfaceContainerLow = Color(0xFF122139),
+        surfaceContainer = Color(0xFF172B46), surfaceContainerHigh = Color(0xFF20364E),
+        surfaceContainerHighest = Color(0xFF2B425C)
+    )
+    private val light = lightColorScheme(
+        primary = Color(0xFF005EB8), onPrimary = Color.White,
+        primaryContainer = Color(0xFFDCEAF9), onPrimaryContainer = Color(0xFF12324D),
+        inversePrimary = Color(0xFF9DCAFF),
+        secondary = Color(0xFF45627B), onSecondary = Color.White,
+        secondaryContainer = Color(0xFFE4EEF9), onSecondaryContainer = Color(0xFF19334B),
+        tertiary = Color(0xFF006D37), onTertiary = Color.White,
+        tertiaryContainer = Color(0xFFD0F1DA), onTertiaryContainer = Color(0xFF123C22),
+        error = Color(0xFFBA1A1A), onError = Color.White,
+        errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
+        background = Color(0xFFF0F4F8), onBackground = Color(0xFF16283B),
+        surface = Color.White, onSurface = Color(0xFF16283B),
+        surfaceVariant = Color(0xFFE3EBF4), onSurfaceVariant = Color(0xFF52667A),
+        outline = Color(0xFF75899D), outlineVariant = Color(0xFFB3C5D6),
+        inverseSurface = Color(0xFF213244), inverseOnSurface = Color(0xFFF0F4F8),
+        surfaceTint = Color.Transparent, scrim = Color.Black,
+        surfaceDim = Color(0xFFDCE5EF), surfaceBright = Color.White,
+        surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFF5F8FC),
+        surfaceContainer = Color(0xFFEDF3F9), surfaceContainerHigh = Color(0xFFE5EDF6),
+        surfaceContainerHighest = Color(0xFFDCE7F2)
+    )
+    private val night = darkColorScheme(
+        primary = NeonBlue, onPrimary = Color.Black,
+        primaryContainer = Color(0xFF202020), onPrimaryContainer = Color.White,
+        inversePrimary = Color(0xFF005EB8),
+        secondary = Color(0xFFC4C4C4), onSecondary = Color.Black,
+        secondaryContainer = Color(0xFF181818), onSecondaryContainer = Color.White,
+        tertiary = Color(0xFF92D4A3), onTertiary = Color(0xFF052F13),
+        tertiaryContainer = Color(0xFF14251A), onTertiaryContainer = Color(0xFFD6F3DC),
+        error = Color(0xFFFF8080), onError = Color.Black,
+        errorContainer = Color(0xFF3A1010), onErrorContainer = Color(0xFFFFDAD6),
+        background = Color.Black, onBackground = Color.White,
+        surface = Color(0xFF090909), onSurface = Color.White,
+        surfaceVariant = Color(0xFF161616), onSurfaceVariant = Color(0xFFCACACA),
+        outline = Color(0xFF777777), outlineVariant = Color(0xFF414141),
+        inverseSurface = Color(0xFFE8E8E8), inverseOnSurface = Color(0xFF111111),
+        surfaceTint = Color.Transparent, scrim = Color.Black,
+        surfaceDim = Color.Black, surfaceBright = Color(0xFF202020),
+        surfaceContainerLowest = Color.Black, surfaceContainerLow = Color(0xFF050505),
+        surfaceContainer = Color(0xFF0A0A0A), surfaceContainerHigh = Color(0xFF141414),
+        surfaceContainerHighest = Color(0xFF202020)
+    )
+
+    fun favorite(colors: ColorScheme): Color = if (colors.onSurface.luminance() < 0.5f) {
+        Color(0xFF855900)
+    } else Color(0xFFFFD54F)
+
+    fun warning(colors: ColorScheme): Color = if (colors.onSurface.luminance() < 0.5f) {
+        Color(0xFF8A4F00)
+    } else Color(0xFFFFD180)
+
+    fun forMode(isDark: Boolean, isNight: Boolean = false): ColorScheme = when {
+        isNight -> night
+        isDark -> dark
+        else -> light
+    }
+}

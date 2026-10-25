@@ -31,20 +31,20 @@ internal fun PlayerDeckOverlay(channel: Channel, channels: List<Channel>, curren
         val alpha = (appearance.panelShade.alpha + 0.1f).coerceAtMost(0.98f)
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * 0.75f)
             .background(Brush.verticalGradient(0f to Color.Transparent,
-                0.06f to Color(0xFF080E19).copy(alpha = alpha),
-                0.55f to Color(0xFF080E19).copy(alpha = alpha),
-                1f to Color(0xFF080E19).copy(alpha = (alpha + 0.08f).coerceAtMost(1f))))
+                0.06f to MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = alpha),
+                0.55f to MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = alpha),
+                1f to MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = (alpha + 0.08f).coerceAtMost(1f))))
             .verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PlayerDeckInfo(inspected, if (isPreview) channels.indexOfFirst { it.id == inspected.id } + 1 else currentIndex + 1,
                 channels.size, shownEpg, appearance, if (isPreview) PlaybackTechnicalInfo() else technical, dense, isPreview)
-            if (isPreview) Text(stringResource(R.string.player_still_watching, channel.name), color = Color(0xFFBCCBD9),
+            if (isPreview) Text(stringResource(R.string.player_still_watching, channel.name), color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, style = MaterialTheme.typography.bodySmall)
             if (cardsOpen) PlayerDeckRail(channels, currentIndex, channel.id,
                 appearance, focusEpoch, focusMore, onMore, onSelect, onFocusChannel)
             if (appearance.showHints) Text(
                 stringResource(if (cardsOpen) R.string.player_cards_hint else R.string.player_watch_hint),
-                color = Color(0xFFBCCBD9), style = MaterialTheme.typography.bodySmall)
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

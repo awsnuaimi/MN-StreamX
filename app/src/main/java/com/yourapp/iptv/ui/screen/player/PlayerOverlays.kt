@@ -18,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -49,8 +48,8 @@ fun PlayerErrorOverlay(
     onRetry: () -> Unit, onChannels: () -> Unit, onBack: () -> Unit
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Surface(Modifier.padding(32.dp), color = Color(0xF0111C36),
-            shape = MaterialTheme.shapes.large, contentColor = Color.White) {
+        Surface(Modifier.padding(32.dp), color = MaterialTheme.colorScheme.surface,
+            shape = MaterialTheme.shapes.large, contentColor = MaterialTheme.colorScheme.onSurface) {
             Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(stringResource(R.string.player_error), style = MaterialTheme.typography.titleMedium)

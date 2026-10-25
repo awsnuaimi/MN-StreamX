@@ -1,6 +1,7 @@
 package com.yourapp.iptv.ui.screen.player
 
 import android.view.KeyEvent
+import com.yourapp.iptv.ui.theme.AppThemeColors
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -11,7 +12,6 @@ import com.yourapp.iptv.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,7 +26,6 @@ import com.yourapp.iptv.ui.screen.player.deck.*
 import com.yourapp.iptv.ui.state.FavoriteUiState
 import com.yourapp.iptv.ui.state.LastChannelError
 import com.yourapp.iptv.ui.state.LastChannelUiState
-import com.yourapp.iptv.ui.theme.NeonBlue
 
 internal enum class PlayerMoreAction { FAVORITE, LAST_CHANNEL, HISTORY, DETAILS, GUIDE, CHANNELS, CONTROLS, APPEARANCE, PREVIOUS, NEXT, CAPTIONS }
 
@@ -49,9 +48,9 @@ internal fun PlayerMoreDialog(channel: Channel, appearance: PlayerAppearance, fa
         CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * appearance.textSize.scale)) {
             Surface(Modifier.fillMaxWidth().heightIn(max = 480.dp)
                 .onPreviewKeyEvent { onRemoteKey(it.nativeKeyEvent, false) },
-                color = Color(0xFF101C32), contentColor = Color.White, shape = MaterialTheme.shapes.large) {
+                color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface, shape = MaterialTheme.shapes.large) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.player_more_title), color = NeonBlue, style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.player_more_title), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
                     Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                     LastChannelFeedback(lastChannel, onRetryLastChannel)
                     LazyColumn(state = list, modifier = Modifier.weight(1f, fill = false),
@@ -118,13 +117,13 @@ private fun MoreActionRow(action: PlayerMoreAction, isFavorite: Boolean, favorit
     }
     Surface(onClick = onClick, enabled = enabled,
         modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
-        shape = MaterialTheme.shapes.medium, color = if (focused) Color(0xFF164362) else Color(0xFF17243D),
-        border = if (focused) BorderStroke(2.dp, NeonBlue) else null) {
+        shape = MaterialTheme.shapes.medium, color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            PlayerDeckIcon(icon, if (!enabled) Color.Gray else if (isFavorite && action == PlayerMoreAction.FAVORITE)
-                Color(0xFFFFD54F) else NeonBlue, filled = isFavorite && action == PlayerMoreAction.FAVORITE)
-            Text(label, color = if (enabled) Color.White else Color.Gray, style = MaterialTheme.typography.bodyLarge)
+            PlayerDeckIcon(icon, if (!enabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) else if (isFavorite && action == PlayerMoreAction.FAVORITE)
+                AppThemeColors.favorite(MaterialTheme.colorScheme) else MaterialTheme.colorScheme.primary, filled = isFavorite && action == PlayerMoreAction.FAVORITE)
+            Text(label, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f), style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
@@ -143,7 +142,7 @@ private fun LastChannelFeedback(state: LastChannelUiState, retry: () -> Unit) {
         }
     }
     Text(stringResource(message), style = MaterialTheme.typography.bodySmall,
-        color = if (state.error == null) Color(0xFFB1C3D8) else MaterialTheme.colorScheme.error)
+        color = if (state.error == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
     if (state.error != null && state.error != LastChannelError.SOURCE_CHANGED)
         AppButton(stringResource(R.string.history_retry), retry)
 }

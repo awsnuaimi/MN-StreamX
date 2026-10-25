@@ -19,11 +19,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
-import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
 fun ChannelCard(channel: Channel, onClick: () -> Unit, modifier: Modifier = Modifier, showGroup: Boolean = true) {
@@ -33,9 +31,9 @@ fun ChannelCard(channel: Channel, onClick: () -> Unit, modifier: Modifier = Modi
         modifier = modifier.fillMaxWidth().heightIn(min = 92.dp)
             .onFocusChanged { focused = it.isFocused },
         shape = MaterialTheme.shapes.large,
-        color = if (focused) Color(0xFF164362) else Color(0xFF111C36),
-        contentColor = Color.White,
-        border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) NeonBlue else Color(0xFF263658))
+        color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
     ) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -46,7 +44,7 @@ fun ChannelCard(channel: Channel, onClick: () -> Unit, modifier: Modifier = Modi
                     style = MaterialTheme.typography.titleSmall)
                 if (showGroup) channel.group?.let {
                     Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = Color(0xFFBECDE4), style = MaterialTheme.typography.bodySmall)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

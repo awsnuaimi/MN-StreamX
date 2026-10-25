@@ -29,14 +29,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
 import com.yourapp.iptv.ui.component.channel.FavoriteBadge
 import com.yourapp.iptv.ui.state.EpgUiState
-import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
 fun EpgChannelList(
@@ -54,7 +52,7 @@ fun EpgChannelList(
             runCatching { selectedFocus.requestFocus() }
         }
     }
-    Surface(modifier, color = Color(0xFF101C32), contentColor = Color.White,
+    Surface(modifier, color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface,
         shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxSize().padding(8.dp)
             .onFocusChanged { if (it.hasFocus) onFocused() }.focusGroup(),
@@ -82,13 +80,13 @@ private fun EpgChannelRow(
     Surface(onClick = onActivate, modifier = modifier.fillMaxWidth().onFocusChanged {
         focused = it.isFocused
         if (it.isFocused) onSelect()
-    }, shape = MaterialTheme.shapes.medium, contentColor = Color.White,
-        color = if (focused) Color(0xFF164362) else if (selected) Color(0xFF163148) else Color(0xFF17243D),
+    }, shape = MaterialTheme.shapes.medium, contentColor = MaterialTheme.colorScheme.onSurface,
+        color = if (focused) MaterialTheme.colorScheme.primaryContainer else if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
         border = BorderStroke(if (focused) 3.dp else 1.dp,
-            if (focused || selected) NeonBlue else Color(0xFF2D3F58))) {
+            if (focused || selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(number.toString(), style = MaterialTheme.typography.labelMedium, color = NeonBlue)
+            Text(number.toString(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             ChannelLogo(channel.name, channel.logoUrl, Modifier.size(32.dp))
             FavoriteBadge(channel.isFavorite)
             Text(channel.name, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis,

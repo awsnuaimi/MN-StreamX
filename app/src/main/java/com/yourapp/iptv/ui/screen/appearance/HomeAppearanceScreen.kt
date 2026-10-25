@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -25,7 +26,7 @@ fun HomeAppearanceScreen(onBack: () -> Unit, viewModel: HomeAppearanceSettingsVi
     LaunchedEffect(state.saved) { if (state.saved) onBack() }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(stringResource(R.string.ui_home_title), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.theme_settings_title), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
             AppButton(stringResource(R.string.ui_back), onBack, enabled = !state.saving)
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -50,26 +51,7 @@ fun HomeAppearanceScreen(onBack: () -> Unit, viewModel: HomeAppearanceSettingsVi
                     viewModel.update(value.copy(expandedSidebar = it))
                 }
                 Text(if (value.sidebarOnRight) stringResource(R.string.ui_preview_right) else stringResource(R.string.ui_preview_left))
-                AppearanceToggle(
-                    when (value.language) {
-                        HomeLanguage.ARABIC -> "الثيم الداكن (الأزرق)"
-                        HomeLanguage.ENGLISH -> "Dark blue theme"
-                        HomeLanguage.GERMAN -> "Dunkelblaues Design"
-                    }, value.isDarkTheme, enabled
-                ) { viewModel.update(value.copy(isDarkTheme = it)) }
-                AppearanceToggle(
-                    when (value.language) {
-                        HomeLanguage.ARABIC -> "الوضع الليلي الأسود (مستقل عن الثيم)"
-                        HomeLanguage.ENGLISH -> "True-black night mode (independent of theme)"
-                        HomeLanguage.GERMAN -> "Schwarzer Nachtmodus (unabhängig vom Design)"
-                    }, value.isNightMode, enabled
-                ) { viewModel.update(value.copy(isNightMode = it)) }
-                Text(when (value.language) {
-                    HomeLanguage.ARABIC -> "الوضع الليلي يغيّر الخلفية إلى الأسود دون تغيير الثيم المختار."
-                    HomeLanguage.ENGLISH -> "Night mode uses a black background without changing your saved theme."
-                    HomeLanguage.GERMAN -> "Der Nachtmodus verwendet Schwarz, ohne das gewählte Design zu ändern."
-                }, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                HomeThemeOptions(value, enabled, viewModel::update)
                 AppearanceToggle(stringResource(R.string.home_session_restore), value.restoreBrowseSession, enabled) {
                     viewModel.update(value.copy(restoreBrowseSession = it))
                 }
@@ -79,7 +61,7 @@ fun HomeAppearanceScreen(onBack: () -> Unit, viewModel: HomeAppearanceSettingsVi
                 else R.string.ui_home_save_error), color = MaterialTheme.colorScheme.error)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppButton(if (state.saving) stringResource(R.string.ui_saving) else stringResource(R.string.ui_save_appearance), viewModel::save, enabled = enabled)
+            AppButton(if (state.saving) stringResource(R.string.ui_saving) else stringResource(R.string.ui_save_appearance), viewModel::save, Modifier.testTag("theme-save"), enabled = enabled)
             AppButton(stringResource(R.string.ui_reset), viewModel::reset, enabled = enabled)
         }
     }

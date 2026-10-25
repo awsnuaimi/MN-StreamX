@@ -1,5 +1,6 @@
 package com.yourapp.iptv.ui.component.channel
 
+import com.yourapp.iptv.ui.theme.AppThemeColors
 import androidx.compose.ui.res.stringResource
 import com.yourapp.iptv.R
 import androidx.compose.foundation.layout.Arrangement
@@ -8,7 +9,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -18,7 +18,7 @@ import com.yourapp.iptv.ui.state.FavoriteUiState
 @Composable
 fun FavoriteBadge(isFavorite: Boolean) {
     val description = stringResource(R.string.ui_favorite_badge)
-    if (isFavorite) Text("★", color = Color(0xFFFFD54F),
+    if (isFavorite) Text("★", color = AppThemeColors.favorite(MaterialTheme.colorScheme),
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier.semantics { contentDescription = description })
 }

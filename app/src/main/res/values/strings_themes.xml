@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="theme_settings_title">مظهر التطبيق</string>
+    <string name="theme_choice_title">الثيم</string>
+    <string name="theme_dark_blue">أزرق داكن</string>
+    <string name="theme_light">فاتح</string>
+    <string name="theme_night">الوضع الليلي الأسود</string>
+    <string name="theme_night_hint">الوضع الليلي مستقل. عند إيقافه يعود الثيم الذي اخترته. تُطبّق التغييرات بعد الحفظ.</string>
+    <string name="theme_preview">معاينة الألوان</string>
+    <string name="theme_preview_text">النصوص والبطاقات والقوائم تتبع الثيم المختار.</string>
+    <string name="theme_focus">تحديد بالريموت</string>
+    <string name="theme_selection">العنصر المختار</string>
+</resources>

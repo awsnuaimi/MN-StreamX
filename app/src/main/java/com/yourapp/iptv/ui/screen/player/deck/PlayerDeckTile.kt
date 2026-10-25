@@ -9,7 +9,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
@@ -20,14 +19,13 @@ import com.yourapp.iptv.R
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
 import com.yourapp.iptv.ui.presentation.DeckChannelItem
 import com.yourapp.iptv.ui.presentation.PlayerTileLayout
-import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
 internal fun DeckShortcutTile(icon: DeckIcon, label: String, enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {
     DeckTileSurface(enabled, false, onClick, modifier) {
         Column(Modifier.fillMaxSize().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center) {
-            PlayerDeckIcon(icon, Color.White, 30.dp)
+            PlayerDeckIcon(icon, MaterialTheme.colorScheme.onSurface, 30.dp)
             Text(label, Modifier.padding(top = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.titleSmall)
         }
@@ -47,13 +45,13 @@ internal fun DeckChannelTile(item: DeckChannelItem, playing: Boolean,
             verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth().height((18f * scale).dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(item.number.toString(), color = Color(0xFFACC4D8), style = MaterialTheme.typography.labelSmall)
-                if (playing) Text(playingLabel, Modifier.background(Color(0xFF12647B), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 4.dp), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Text(item.number.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                if (playing) Text(playingLabel, Modifier.background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 4.dp), color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelSmall)
             }
             if (showLogo) ChannelLogo(item.channel.name, item.channel.logoUrl, Modifier.width(88.dp).height(32.dp))
-            Text(item.channel.name, Modifier.fillMaxWidth().height((22f * scale).dp), color = Color.White,
+            Text(item.channel.name, Modifier.fillMaxWidth().height((22f * scale).dp), color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.labelLarge.copy(textDirection = TextDirection.Content))
         }
@@ -65,8 +63,8 @@ private fun DeckTileSurface(enabled: Boolean, playing: Boolean, onClick: () -> U
     content: @Composable () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Surface(onClick = onClick, enabled = enabled, modifier = modifier.onFocusChanged { focused = it.isFocused },
-        shape = MaterialTheme.shapes.small, contentColor = Color.White,
-        color = if (focused) Color(0xFF174860) else Color(0xFF172536),
-        border = when { focused -> BorderStroke(3.dp, NeonBlue); playing -> BorderStroke(1.dp, Color(0xFF607D92)); else -> null },
+        shape = MaterialTheme.shapes.small, contentColor = MaterialTheme.colorScheme.onSurface,
+        color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        border = when { focused -> BorderStroke(3.dp, MaterialTheme.colorScheme.primary); playing -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline); else -> null },
         content = content)
 }

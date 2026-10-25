@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="theme_settings_title">App appearance</string>
+    <string name="theme_choice_title">Theme</string>
+    <string name="theme_dark_blue">Dark blue</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_night">True-black night mode</string>
+    <string name="theme_night_hint">Night mode is independent. Turning it off restores your chosen theme. Changes apply after saving.</string>
+    <string name="theme_preview">Color preview</string>
+    <string name="theme_preview_text">Text, cards and menus follow the selected theme.</string>
+    <string name="theme_focus">Remote focus</string>
+    <string name="theme_selection">Selected item</string>
+</resources>

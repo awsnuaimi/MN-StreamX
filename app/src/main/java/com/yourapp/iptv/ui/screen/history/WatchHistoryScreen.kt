@@ -1,11 +1,11 @@
 package com.yourapp.iptv.ui.screen.history
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -33,7 +33,7 @@ internal fun WatchHistoryDialog(playingId: String?, onBack: () -> Unit, onPlay: 
     WatchHistoryLifecycle(viewModel)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth(0.90f).fillMaxHeight(0.88f), color = Color(0xFF101C32), contentColor = Color.White) {
+        Surface(Modifier.fillMaxWidth(0.90f).fillMaxHeight(0.88f), color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
             WatchHistoryContent(state, playingId, { source, id ->
                 viewModel.playbackChannel(source, id)?.let { onPlay(it, source) }
             }, viewModel::remove, viewModel::clear, viewModel::reload, onBack)

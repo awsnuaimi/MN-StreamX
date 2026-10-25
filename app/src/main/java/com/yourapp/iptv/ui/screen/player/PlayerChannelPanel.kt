@@ -43,7 +43,6 @@ import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
 import com.yourapp.iptv.ui.component.channel.FavoriteBadge
 import com.yourapp.iptv.ui.component.common.AppButton
-import com.yourapp.iptv.ui.theme.NeonBlue
 
 @Composable
 fun PlayerChannelPanel(
@@ -72,7 +71,7 @@ fun PlayerChannelPanel(
             Surface(
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
                     .widthIn(max = 460.dp).fillMaxWidth(),
-                color = Color(0xFF101C32), contentColor = Color.White
+                color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -80,7 +79,7 @@ fun PlayerChannelPanel(
                         Column(Modifier.weight(1f)) {
                             Text(stringResource(R.string.player_channels) + " · ${channels.size}", style = MaterialTheme.typography.titleLarge)
                             Text((if (favoritesOnly) "★ " + stringResource(R.string.player_favorites) + " · " else "") + (group ?: stringResource(R.string.player_all_categories)), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                color = NeonBlue, style = MaterialTheme.typography.bodyMedium)
+                                color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
                         }
                         AppButton(stringResource(R.string.player_close), onDismiss)
                     }
@@ -97,7 +96,7 @@ fun PlayerChannelPanel(
                         }
                     }
                     Text(stringResource(R.string.player_list_hint),
-                        style = MaterialTheme.typography.bodySmall, color = Color(0xFFBCCDE1))
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -112,19 +111,19 @@ private fun PlayerChannelRow(
     Surface(onClick = onClick,
         modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
         shape = MaterialTheme.shapes.medium,
-        color = if (focused) Color(0xFF164362) else if (playing) Color(0xFF163148) else Color(0xFF17243D),
-        contentColor = Color.White,
+        color = if (focused) MaterialTheme.colorScheme.primaryContainer else if (playing) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(if (focused) 3.dp else 1.dp,
-            if (focused || playing) NeonBlue else Color(0xFF2D3F58))) {
+            if (focused || playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(number.toString(), color = NeonBlue, style = MaterialTheme.typography.labelLarge)
+            Text(number.toString(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             ChannelLogo(channel.name, channel.logoUrl, Modifier.size(40.dp))
             FavoriteBadge(channel.isFavorite)
             Column(Modifier.weight(1f)) {
                 Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleMedium)
-                if (playing) Text(stringResource(R.string.player_playing), color = NeonBlue, style = MaterialTheme.typography.labelSmall)
+                if (playing) Text(stringResource(R.string.player_playing), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
             }
         }
     }
