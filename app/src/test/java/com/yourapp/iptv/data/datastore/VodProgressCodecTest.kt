@@ -25,4 +25,18 @@ class VodProgressCodecTest {
             VodProgressCodec.encode(listOf(item())).substringAfter("[").substringBeforeLast("]") + "]}"
         assertTrue(VodProgressCodec.decode(dup).isEmpty())
     }
+
+    @Test fun seriesContextRoundTripsWhileExistingRowsStillDecodeWithoutIt() {
+        val episode = item(VodKind.SERIES).copy(seriesId = "55")
+        assertEquals(listOf(episode),VodProgressCodec.decode(VodProgressCodec.encode(listOf(episode))))
+        val legacy = VodProgressCodec.encode(listOf(item(VodKind.SERIES)))
+        assertFalse(legacy.contains("series"))
+        assertNull(VodProgressCodec.decode(legacy).single().seriesId)
+    }
+    @Test fun malformedOrMovieParentIdsCannotBeRecorded() {
+        assertFalse(VodProgress.isValid(item().copy(seriesId = "55")))
+        assertFalse(VodProgress.isValid(item(VodKind.SERIES).copy(seriesId = "../55")))
+        val json = VodProgressCodec.encode(listOf(item(VodKind.SERIES))).replace("\"at\":1234","\"at\":1234,\"series\":55")
+        assertTrue(VodProgressCodec.decode(json).isEmpty())
+    }
 }

@@ -113,16 +113,19 @@ class SearchScreenTest {
     }
     @Test fun aSeriesResultOpensAnEpisodeIdRatherThanTryingToPlayTheSeriesId() {
         var played: Triple<VodKind, String, String>? = null
+        var parent: String? = null
         val item = VodItem("42", "Shared series", "1")
         val details = VodDetails(item, listOf(VodSeason(1, "One", listOf(VodEpisode("99", "Episode", 1, 1, "mkv")))))
         compose.setContent {
             IPTVAppTheme {
                 VodDetailsDialog(VodUiState(kind = VodKind.SERIES, loading = false, selected = item, details = details),
-                    item, VodLabels(HomeLanguage.GERMAN), emptyList(), {}, {}) { kind, id, ext, _ -> played = Triple(kind, id, ext) }
+                    item, VodLabels(HomeLanguage.GERMAN), emptyList(), {}, {}) { kind, id, ext, _, series ->
+                    played = Triple(kind,id,ext); parent = series
+                }
             }
         }
         compose.onNodeWithText("1. Episode").performClick()
-        compose.runOnIdle { assertEquals(Triple(VodKind.SERIES, "99", "mkv"), played) }
+        compose.runOnIdle { assertEquals(Triple(VodKind.SERIES, "99", "mkv"), played); assertEquals("42",parent) }
     }
 
     private fun export(name: String) {

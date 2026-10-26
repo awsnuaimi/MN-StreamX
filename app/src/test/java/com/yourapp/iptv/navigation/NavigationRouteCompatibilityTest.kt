@@ -10,5 +10,7 @@ class NavigationRouteCompatibilityTest {
         assertEquals("player/{channelId}?group={group}&query={query}&favoritesOnly={favoritesOnly}", Destinations.PLAYER)
         assertEquals("epg?channelId={channelId}&group={group}&query={query}&favoritesOnly={favoritesOnly}", Destinations.EPG)
         assertNotEquals(Destinations.PLAYER, Destinations.HISTORY_PLAYER)
+        assertEquals("vod-play/{kind}/{id}/{ext}?title={title}&sourceKey={sourceKey}",Destinations.VOD_PLAYER)
+        assertNotEquals(Destinations.VOD_PLAYER,Destinations.VOD_EPISODE_PLAYER)
     }
 }

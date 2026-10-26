@@ -6,6 +6,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BackupPayloadTest {
+    @Test fun portableBackupsPreserveTheOptionalSeriesParentForContinuedEpisodes() {
+        val value = backupPayload()
+        val source = PlaylistCacheKey.of(value.subscriptions.active.settings)
+        val entry = VodProgressEntry(VodKind.SERIES,"10","Episode","mp4",60000,200000,100,"55")
+        val stored = com.yourapp.iptv.data.datastore.VodProgressCodec.encode(listOf(entry))
+        val updated = value.copy(areas = value.areas + (BackupStore.VOD to mapOf("vod_$source" to BackupValue(BackupValueType.STRING,stored))))
+        val decoded = BackupPayloadCodec.decode(BackupPayloadCodec.encode(updated))
+        assertEquals(listOf(entry),com.yourapp.iptv.data.datastore.VodProgressCodec.decode(decoded.areas.getValue(BackupStore.VOD).getValue("vod_$source").text))
+    }
     @Test fun portablePayloadRoundTripsAndContainsOnlyExplicitlySupportedPreferences() {
         val value = backupPayload()
         assertEquals(value, BackupPayloadCodec.decode(BackupPayloadCodec.encode(value)))
