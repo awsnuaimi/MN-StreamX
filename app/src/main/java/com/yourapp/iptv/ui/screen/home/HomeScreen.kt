@@ -42,7 +42,10 @@ fun HomeScreen(
     onHistory: () -> Unit = {},
     onMovies: () -> Unit = {},
     onSeries: () -> Unit = {},
-    onStartupReady: (String) -> Unit = {}
+    onStartupReady: (String) -> Unit = {},
+    onSearch: () -> Unit = {},
+    openLiveRequested: Boolean = false,
+    onOpenLiveHandled: () -> Unit = {}
 ) {
     HomeSessionLifecycle(viewModel)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -72,11 +75,17 @@ fun HomeScreen(
             viewModel.onHomeReady()
         }
     }
-    var searching by rememberSaveable { mutableStateOf(false) }
     var dashboardVisible by rememberSaveable(state.browseScope, "cinematic-home-v3506") {
         mutableStateOf(true)
     }
     var launchedFromDashboard by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(openLiveRequested) {
+        if (openLiveRequested) {
+            dashboardVisible = false
+            viewModel.selectSection(false)
+            onOpenLiveHandled()
+        }
+    }
     LaunchedEffect(state.browseScope, state.needsSource, dashboardVisible) {
         quickAccessViewModel.bind(state.browseScope.takeIf { dashboardVisible && !state.needsSource })
     }
@@ -109,16 +118,11 @@ fun HomeScreen(
             withFrameNanos { }; restoreSidebarFocus()
         }
     }
-    LaunchedEffect(searching) { if (searching && state.channels.isNotEmpty()) { withFrameNanos { }; runCatching { searchFocus.requestFocus() } } }
-    BackHandler(enabled = searching) {
-        searching = false; viewModel.updateQuery(""); restoreSidebarFocus()
-    }
-    BackHandler(enabled = !searching && !dashboardVisible) {
-        dashboardVisible = true
+    BackHandler(enabled = !dashboardVisible) {
+        if (state.query.isNotBlank()) viewModel.updateQuery("") else dashboardVisible = true
         restoreSidebarFocus()
     }
     val selected = when {
-        searching -> HomeSection.SEARCH
         dashboardVisible -> HomeSection.DASHBOARD
         state.favoritesOnly -> HomeSection.FAVORITES
         else -> HomeSection.LIVE
@@ -127,11 +131,11 @@ fun HomeScreen(
         initialFocusDone = true
         viewModel.onBrowseInteraction()
         when (section) {
-            HomeSection.DASHBOARD -> { searching = false; dashboardVisible = true }
-            HomeSection.LIVE, HomeSection.FAVORITES -> { searching = false; dashboardVisible = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
+            HomeSection.DASHBOARD -> { dashboardVisible = true }
+            HomeSection.LIVE, HomeSection.FAVORITES -> { dashboardVisible = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
             HomeSection.MOVIES -> onMovies()
             HomeSection.SERIES -> onSeries()
-            HomeSection.SEARCH -> { dashboardVisible = false; searching = true }
+            HomeSection.SEARCH -> onSearch()
             HomeSection.HISTORY -> onHistory()
             HomeSection.GUIDE -> onOpenGuide(state.selectedChannelId, state.selectedGroup, state.query, state.favoritesOnly)
             HomeSection.SETTINGS -> onSettings()
@@ -169,7 +173,7 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    if (!dashboardVisible && (searching || state.query.isNotBlank())) OutlinedTextField(state.query, viewModel::updateQuery,
+                    if (!dashboardVisible) OutlinedTextField(state.query, viewModel::updateQuery,
                         label = { Text(labels.text("البحث عن قناة", "Search channels", "Sender suchen")) }, singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         modifier = Modifier.fillMaxWidth().focusRequester(searchFocus))

@@ -14,6 +14,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.yourapp.iptv.ui.screen.appearance.HomeAppearanceScreen
 import com.yourapp.iptv.ui.screen.home.HomeScreen
+import com.yourapp.iptv.ui.screen.search.SearchScreen
 import com.yourapp.iptv.ui.screen.epg.EpgScreen
 import com.yourapp.iptv.ui.screen.player.PlayerScreen
 import com.yourapp.iptv.ui.screen.organization.OrganizationScreen
@@ -34,7 +35,12 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
         composable(Destinations.HOME) { entry ->
             val returnedChannel by entry.savedStateHandle
                 .getStateFlow<String?>("lastPlayedChannelId", null).collectAsStateWithLifecycle()
+            val openLive by entry.savedStateHandle
+                .getStateFlow("openLiveFromSearch", false).collectAsStateWithLifecycle()
             HomeScreen(
+                openLiveRequested = openLive,
+                onOpenLiveHandled = { entry.savedStateHandle["openLiveFromSearch"] = false },
+                onSearch = { nav.navigate(Destinations.SEARCH) { launchSingleTop = true } },
                 onStartupReady = { sourceKey -> startup.onHomeReady(sourceKey) { id, source ->
                     if (nav.currentDestination?.route == Destinations.HOME &&
                         lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
@@ -61,6 +67,18 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
                 }
             )
         }
+        composable(Destinations.SEARCH) {
+            SearchScreen(onBack = { nav.popBackStack() },
+                onSettings = { nav.navigate(Destinations.SETTINGS) { launchSingleTop = true } },
+                onOpenLive = {
+                    nav.getBackStackEntry(Destinations.HOME).savedStateHandle["openLiveFromSearch"] = true
+                    nav.popBackStack(Destinations.HOME, false)
+                },
+                onPlayChannel = { id, source -> nav.navigate(historyPlayerRoute(id, source)) { launchSingleTop = true } },
+                onPlayVod = { kind, id, ext, title, source ->
+                    nav.navigate(vodPlaybackRoute(kind, id, ext, title, source)) { launchSingleTop = true }
+                })
+        }
         composable(Destinations.EPG, arguments = listOf(
             navArgument("channelId") { type = NavType.StringType; nullable = true; defaultValue = null },
             navArgument("group") { type = NavType.StringType; nullable = true; defaultValue = null },
@@ -81,17 +99,17 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
         composable("vod/{kind}", arguments = listOf(navArgument("kind") { type = NavType.StringType })) { entry ->
             val kind = if (entry.arguments?.getString("kind") == "series") VodKind.SERIES else VodKind.MOVIE
             VodScreen(kind, onBack = { nav.popBackStack() }, onPlay = { mediaKind, id, ext, title ->
-                val segment = if (mediaKind == VodKind.MOVIE) "movie" else "series"
-                nav.navigate("vod-play/$segment/${Uri.encode(id)}/${Uri.encode(ext)}?title=${Uri.encode(title)}") {
+                nav.navigate(vodPlaybackRoute(mediaKind, id, ext, title)) {
                     launchSingleTop = true
                 }
             })
         }
-        composable("vod-play/{kind}/{id}/{ext}?title={title}", arguments = listOf(
+        composable("vod-play/{kind}/{id}/{ext}?title={title}&sourceKey={sourceKey}", arguments = listOf(
             navArgument("kind") { type = NavType.StringType },
             navArgument("id") { type = NavType.StringType },
             navArgument("ext") { type = NavType.StringType },
-            navArgument("title") { type = NavType.StringType; defaultValue = "" }
+            navArgument("title") { type = NavType.StringType; defaultValue = "" },
+            navArgument("sourceKey") { type = NavType.StringType; nullable = true; defaultValue = null }
         )) { VodPlaybackScreen(onBack = { nav.popBackStack() }) }
         composable("organization") { OrganizationScreen(onBack = { nav.popBackStack() }) }
         composable(Destinations.HISTORY) {

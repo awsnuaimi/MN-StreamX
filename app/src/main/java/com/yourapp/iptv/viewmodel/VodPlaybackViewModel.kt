@@ -53,8 +53,10 @@ class VodPlaybackViewModel @Inject constructor(
                 require(id != null && extension != null)
                 val account = settings.observeSettings().first()
                 require(repository.supports(account))
-                val url = repository.playbackUrl(account, mediaKind, id, extension)
                 val sourceKey = PlaylistCacheKey.of(account)
+                val expectedSource = saved.get<String>("sourceKey")
+                require(expectedSource == null || expectedSource == sourceKey)
+                val url = repository.playbackUrl(account, mediaKind, id, extension)
                 val resume = progress.observe(sourceKey).first()
                 val position = VodProgress.find(resume, mediaKind, id)?.positionMs ?: 0L
                 mutable.value = VodPlaybackState.Ready(url, title, sourceKey,
