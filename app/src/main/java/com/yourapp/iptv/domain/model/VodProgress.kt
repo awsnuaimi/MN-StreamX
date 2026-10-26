@@ -8,7 +8,8 @@ data class VodProgressEntry(
     val extension: String,
     val positionMs: Long,
     val durationMs: Long,
-    val updatedAtMs: Long
+    val updatedAtMs: Long,
+    val seriesId: String? = null
 )
 
 /** Consistent resume rules for movies and individual series episodes. */
@@ -23,7 +24,8 @@ object VodProgress {
             entry.title.isNotBlank() && entry.title.length <= 150 &&
             entry.extension in setOf("mp4", "mkv", "avi", "mov", "ts", "m3u8", "webm") &&
             entry.positionMs >= 0 && entry.durationMs > 0 &&
-            entry.updatedAtMs >= 0
+            entry.updatedAtMs >= 0 && (entry.seriesId == null ||
+                (entry.kind == VodKind.SERIES && VodEpisodeOrder.validId(entry.seriesId)))
 
     fun resumable(entry: VodProgressEntry): Boolean = isValid(entry) &&
         entry.durationMs >= MIN_DURATION_MS && entry.positionMs >= MIN_RESUME_MS &&

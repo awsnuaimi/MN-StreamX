@@ -1,6 +1,8 @@
 package com.yourapp.iptv.data.source.xtream
 
 import com.yourapp.iptv.domain.model.PlaylistLoadException
+import com.yourapp.iptv.data.network.HttpResponseFailure
+import com.yourapp.iptv.data.network.ResponseLimitFailure
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
@@ -23,7 +25,7 @@ internal class XtreamHttpClient(private val client: OkHttpClient) {
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
                     if (pending.isActive) pending.resumeWithException(
-                        PlaylistLoadException("تعذر الاتصال بسيرفر Xtream. تحقق من العنوان والشبكة ثم أعد المحاولة.")
+                        PlaylistLoadException("تعذر الاتصال بسيرفر Xtream. تحقق من العنوان والشبكة ثم أعد المحاولة.",e)
                     )
                 }
 
@@ -31,9 +33,9 @@ internal class XtreamHttpClient(private val client: OkHttpClient) {
                     try {
                         val result = response.use {
                             if (it.code == 401 || it.code == 403) {
-                                throw PlaylistLoadException("رفض السيرفر الدخول. تحقق من بيانات Xtream وصلاحية الحساب.")
+                                throw PlaylistLoadException("رفض السيرفر الدخول. تحقق من بيانات Xtream وصلاحية الحساب.",HttpResponseFailure(it.code))
                             }
-                            if (!it.isSuccessful) throw PlaylistLoadException("خطأ من سيرفر Xtream (HTTP ${it.code}).")
+                            if (!it.isSuccessful) throw PlaylistLoadException("خطأ من سيرفر Xtream (HTTP ${it.code}).",HttpResponseFailure(it.code))
                             val body = it.body ?: throw PlaylistLoadException("أعاد سيرفر Xtream استجابة فارغة.")
                             if (body.contentLength() > limit) throw tooLarge()
                             val active = { pending.isActive }
@@ -44,7 +46,7 @@ internal class XtreamHttpClient(private val client: OkHttpClient) {
                         if (pending.isActive) pending.resumeWithException(
                             generateSequence<Throwable>(error) { it.cause }.take(8)
                                 .filterIsInstance<PlaylistLoadException>().firstOrNull()
-                                ?: PlaylistLoadException("تعذر قراءة بيانات Xtream. تأكد أن العنوان لسيرفر Xtream Codes.")
+                                ?: PlaylistLoadException("تعذر قراءة بيانات Xtream. تأكد أن العنوان لسيرفر Xtream Codes.",error)
                         )
                     }
                 }
@@ -66,5 +68,5 @@ internal class XtreamHttpClient(private val client: OkHttpClient) {
         override fun close() = source.close()
     }
 
-    private fun tooLarge() = PlaylistLoadException("حجم استجابة Xtream يتجاوز الحد المسموح.")
+    private fun tooLarge() = PlaylistLoadException("حجم استجابة Xtream يتجاوز الحد المسموح.",ResponseLimitFailure())
 }

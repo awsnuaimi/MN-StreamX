@@ -27,13 +27,14 @@ import com.yourapp.iptv.viewmodel.VodViewModel
 import com.yourapp.iptv.viewmodel.VodProgressViewModel
 
 @Composable
-fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, String, String) -> Unit,
+fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, String, String, String?, String?) -> Unit,
     model: VodViewModel = hiltViewModel(), appearanceModel: HomeAppearanceViewModel = hiltViewModel(),
     progressModel: VodProgressViewModel = hiltViewModel()) {
     val state by model.uiState.collectAsStateWithLifecycle()
     val progress by progressModel.entries.collectAsStateWithLifecycle()
     val appearance by appearanceModel.appearance.collectAsStateWithLifecycle()
     val language = appearance?.language ?: HomeLanguage.ARABIC
+    val source = state.sourceKey
     val labels = remember(language) { VodLabels(language) }
     val backFocus = remember { FocusRequester() }
     LaunchedEffect(kind) { model.load(kind) }
@@ -63,7 +64,8 @@ fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, Strin
                     val continued = remember(progress, kind) { progress.filter { it.kind == kind }.take(8) }
                     if (continued.isNotEmpty()) {
                         VodContinueWatching(continued, labels) { entry ->
-                            onPlay(entry.kind, entry.id, entry.extension, entry.title)
+                            if (source != null && model.uiState.value.sourceKey == source)
+                                onPlay(entry.kind, entry.id, entry.extension, entry.title, source, entry.seriesId)
                         }
                     }
                     OutlinedTextField(state.query, model::search, Modifier.fillMaxWidth(), singleLine = true,
@@ -91,9 +93,11 @@ fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, Strin
         }
         state.selected?.let { selected ->
             VodDetailsDialog(state, selected, labels, progress, onDismiss = model::close,
-                onRetry = { model.open(selected) }, onPlay = { chosenKind, id, ext, title ->
-                model.close()
-                onPlay(chosenKind, id, ext, title)
+                onRetry = { model.open(selected) }, onPlay = { chosenKind, id, ext, title, series ->
+                if (source != null && model.uiState.value.sourceKey == source) {
+                    model.close()
+                    onPlay(chosenKind, id, ext, title, source, series)
+                }
             })
         }
     }

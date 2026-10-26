@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun SearchScreen(onBack: () -> Unit, onSettings: () -> Unit, onOpenLive: () -> Unit,
-    onPlayChannel: (String, String) -> Unit, onPlayVod: (VodKind, String, String, String, String) -> Unit,
+    onPlayChannel: (String, String) -> Unit, onPlayVod: (VodKind, String, String, String, String, String?) -> Unit,
     model: SearchViewModel = hiltViewModel(), appearanceModel: HomeAppearanceViewModel = hiltViewModel(),
     progressModel: VodProgressViewModel = hiltViewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -77,11 +77,11 @@ fun SearchScreen(onBack: () -> Unit, onSettings: () -> Unit, onOpenLive: () -> U
             onVod = { kind, item -> if (source != null) model.open(kind, item, source) }
         ), restore)
         details.selected?.let { chosen ->
-            VodDetailsDialog(details, chosen, vodLabels, progress, ::close, model::retryDetails) { kind, id, ext, title ->
+            VodDetailsDialog(details, chosen, vodLabels, progress, ::close, model::retryDetails) { kind, id, ext, title, series ->
                 val expected = source
                 if (expected != null && model.state.value.sourceKey == expected) {
                     close()
-                    onPlayVod(kind, id, ext, title, expected)
+                    onPlayVod(kind, id, ext, title, expected, series)
                 }
             }
         }

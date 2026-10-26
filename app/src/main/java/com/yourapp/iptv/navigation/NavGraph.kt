@@ -26,6 +26,7 @@ import com.yourapp.iptv.ui.screen.vod.VodScreen
 import com.yourapp.iptv.ui.screen.vod.VodPlaybackScreen
 import com.yourapp.iptv.domain.model.VodKind
 import com.yourapp.iptv.ui.screen.backup.BackupScreen
+import com.yourapp.iptv.ui.screen.diagnostics.DiagnosticsScreen
 
 @Composable
 fun AppNavGraph(startup: StartupPlaybackViewModel) {
@@ -76,8 +77,8 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
                     nav.popBackStack(Destinations.HOME, false)
                 },
                 onPlayChannel = { id, source -> nav.navigate(historyPlayerRoute(id, source)) { launchSingleTop = true } },
-                onPlayVod = { kind, id, ext, title, source ->
-                    nav.navigate(vodPlaybackRoute(kind, id, ext, title, source)) { launchSingleTop = true }
+                onPlayVod = { kind, id, ext, title, source, series ->
+                    nav.navigate(vodPlaybackRoute(kind, id, ext, title, source, series)) { launchSingleTop = true }
                 })
         }
         composable(Destinations.EPG, arguments = listOf(
@@ -99,19 +100,22 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
         }
         composable("vod/{kind}", arguments = listOf(navArgument("kind") { type = NavType.StringType })) { entry ->
             val kind = if (entry.arguments?.getString("kind") == "series") VodKind.SERIES else VodKind.MOVIE
-            VodScreen(kind, onBack = { nav.popBackStack() }, onPlay = { mediaKind, id, ext, title ->
-                nav.navigate(vodPlaybackRoute(mediaKind, id, ext, title)) {
+            VodScreen(kind, onBack = { nav.popBackStack() }, onPlay = { mediaKind, id, ext, title, source, series ->
+                nav.navigate(vodPlaybackRoute(mediaKind, id, ext, title, source, series)) {
                     launchSingleTop = true
                 }
             })
         }
-        composable("vod-play/{kind}/{id}/{ext}?title={title}&sourceKey={sourceKey}", arguments = listOf(
+        for (route in listOf(Destinations.VOD_PLAYER,Destinations.VOD_EPISODE_PLAYER)) {
+        composable(route, arguments = listOf(
             navArgument("kind") { type = NavType.StringType },
             navArgument("id") { type = NavType.StringType },
             navArgument("ext") { type = NavType.StringType },
             navArgument("title") { type = NavType.StringType; defaultValue = "" },
-            navArgument("sourceKey") { type = NavType.StringType; nullable = true; defaultValue = null }
+            navArgument("sourceKey") { type = NavType.StringType; nullable = true; defaultValue = null },
+            navArgument("seriesId") { type = NavType.StringType; nullable = true; defaultValue = null }
         )) { VodPlaybackScreen(onBack = { nav.popBackStack() }) }
+        }
         composable("organization") { OrganizationScreen(onBack = { nav.popBackStack() }) }
         composable(Destinations.HISTORY) {
             WatchHistoryScreen(onBack = { nav.popBackStack() }, onPlay = { id, source ->
@@ -128,10 +132,12 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
                 onPlayerAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
                 onSubscriptions = { nav.navigate(Destinations.SUBSCRIPTIONS) { launchSingleTop = true } },
                 onBackup = { nav.navigate(Destinations.BACKUP) { launchSingleTop = true } },
+                onDiagnostics = { nav.navigate(Destinations.DIAGNOSTICS) { launchSingleTop = true } },
                 onBack = { nav.popBackStack() }
             )
         }
         composable(Destinations.BACKUP) { BackupScreen(onBack = { nav.popBackStack() }) }
+        composable(Destinations.DIAGNOSTICS) { DiagnosticsScreen(onBack = { nav.popBackStack() }) }
         composable(Destinations.SUBSCRIPTIONS) {
             SubscriptionsScreen(onBack = { nav.popBackStack() }, onUsed = {
                 nav.navigate(Destinations.HOME) {

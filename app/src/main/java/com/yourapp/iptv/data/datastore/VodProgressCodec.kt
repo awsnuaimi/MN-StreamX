@@ -23,6 +23,7 @@ internal object VodProgressCodec {
                 addProperty("pos", entry.positionMs)
                 addProperty("dur", entry.durationMs)
                 addProperty("at", entry.updatedAtMs)
+                entry.seriesId?.let { addProperty("series", it) }
             })
         } })
     }.toString().also { require(it.length <= MAX_JSON) }
@@ -40,7 +41,10 @@ internal object VodProgressCodec {
                 val entry = VodProgressEntry(
                     kind, obj.get("id").asString, obj.get("title").asString,
                     obj.get("ext").asString, obj.get("pos").asLong,
-                    obj.get("dur").asLong, obj.get("at").asLong
+                    obj.get("dur").asLong, obj.get("at").asLong,
+                    obj.get("series")?.takeUnless { it.isJsonNull }?.let {
+                        require(it.isJsonPrimitive && it.asJsonPrimitive.isString); it.asString
+                    }
                 )
                 require(VodProgress.resumable(entry))
                 entry

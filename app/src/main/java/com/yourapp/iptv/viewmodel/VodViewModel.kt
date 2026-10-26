@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.yourapp.iptv.data.diagnostics.DiagnosticFailures
+import com.yourapp.iptv.domain.diagnostics.DiagnosticArea
 
 data class VodUiState(
     val kind: VodKind = VodKind.MOVIE,
@@ -30,7 +32,8 @@ data class VodUiState(
     val selected: VodItem? = null,
     val details: VodDetails? = null,
     val detailLoading: Boolean = false,
-    val detailError: Boolean = false
+    val detailError: Boolean = false,
+    val sourceKey: String? = null
 ) {
     val visible: List<VodItem> get() = catalog.items.filter { item ->
         (categoryId == null || item.belongsTo(categoryId)) &&
@@ -66,7 +69,7 @@ class VodViewModel @Inject constructor(
                     cancelSelection()
                     val current = ++generation
                     account = source
-                    mutable.value = VodUiState(kind = kind)
+                    mutable.value = VodUiState(kind = kind, sourceKey = PlaylistCacheKey.of(source))
                     if (!repository.supports(source)) {
                         mutable.value = mutable.value.copy(loading = false, unavailable = true)
                         return@collectLatest
@@ -78,7 +81,8 @@ class VodViewModel @Inject constructor(
                         mutable.value = mutable.value.copy(loading = false, catalog = catalog)
                         if (catalog.categoryScoped) catalog.categories.firstOrNull()?.let { filter(it.id) }
                     } catch (error: CancellationException) { throw error }
-                    catch (_: Exception) {
+                    catch (error: Exception) {
+                        DiagnosticFailures.record(if (kind == VodKind.MOVIE) DiagnosticArea.MOVIE_CATALOG else DiagnosticArea.SERIES_CATALOG,error,PlaylistCacheKey.of(source))
                         if (current == generation) mutable.value = mutable.value.copy(loading = false, error = true)
                     }
                 }
@@ -111,7 +115,8 @@ class VodViewModel @Inject constructor(
                         catalog = mutable.value.catalog.copy(items = items))
                 }
             } catch (error: CancellationException) { throw error }
-            catch (_: Exception) {
+            catch (error: Exception) {
+                DiagnosticFailures.record(if (state.kind == VodKind.MOVIE) DiagnosticArea.MOVIE_CATALOG else DiagnosticArea.SERIES_CATALOG,error,PlaylistCacheKey.of(source))
                 if (current == generation && request == categoryRequest) {
                     mutable.value = mutable.value.copy(categoryLoading = false, categoryError = true)
                 }
@@ -136,7 +141,8 @@ class VodViewModel @Inject constructor(
                     mutable.value = mutable.value.copy(details = details, detailLoading = false)
                 }
             } catch (error: CancellationException) { throw error }
-            catch (_: Exception) {
+            catch (error: Exception) {
+                DiagnosticFailures.record(DiagnosticArea.DETAILS,error,PlaylistCacheKey.of(source))
                 if (current == generation && request == detailRequest) {
                     mutable.value = mutable.value.copy(detailLoading = false, detailError = true,
                         details = VodDetails(item))

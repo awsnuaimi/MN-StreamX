@@ -5,6 +5,8 @@ import com.yourapp.iptv.domain.repository.UnifiedSearchRepository
 import com.yourapp.iptv.domain.search.*
 import com.yourapp.iptv.ui.state.SearchVodState
 import kotlinx.coroutines.*
+import com.yourapp.iptv.data.diagnostics.DiagnosticFailures
+import com.yourapp.iptv.domain.diagnostics.DiagnosticArea
 
 /** Holds one kind's immutable index; category scans retain only matching rows. */
 internal class SearchVodController(
@@ -65,7 +67,8 @@ internal class SearchVodController(
                         categoriesTotal = result.categories.size, indexLimited = result.index.limited))
                     search()
                 } catch (e: CancellationException) { throw e }
-                catch (_: Exception) {
+                catch (error: Exception) {
+                    DiagnosticFailures.record(if (kind == VodKind.MOVIE) DiagnosticArea.MOVIE_CATALOG else DiagnosticArea.SERIES_CATALOG,error,PlaylistCacheKey.of(account))
                     if (generation == binding) emit(state.copy(loading = false, error = true))
                 }
             }
@@ -114,7 +117,8 @@ internal class SearchVodController(
                             more = state.more || matches.more || combined.size >= SearchIndex.RESULT_LIMIT))
                         if (state.more) break
                     } catch (e: CancellationException) { throw e }
-                    catch (_: Exception) {
+                    catch (error: Exception) {
+                        DiagnosticFailures.record(if (kind == VodKind.MOVIE) DiagnosticArea.MOVIE_CATALOG else DiagnosticArea.SERIES_CATALOG,error,PlaylistCacheKey.of(account))
                         if (generation != binding || token != request) return@launch
                         failed.add(category.id)
                         emit(state.copy(categoriesFailed = failed.size))

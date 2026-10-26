@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.yourapp.iptv.domain.diagnostics.*
 
 @HiltViewModel
 class AppUpdateViewModel @Inject constructor(private val repository: AppUpdateRepository) : ViewModel() {
@@ -48,6 +49,7 @@ class AppUpdateViewModel @Inject constructor(private val repository: AppUpdateRe
                     phase = AppUpdatePhase.READY, update = update, file = file, percent = 100, requestInstall = true, installRequestId = ticket)
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
+                if (ticket == generation) DiagnosticJournal.record(DiagnosticArea.UPDATE,DiagnosticIssue.UPDATE,update = (error as? UpdateFailure)?.issue ?: UpdateIssue.NETWORK)
                 if (ticket == generation) mutable.value = AppUpdateUiState(
                     issue = (error as? UpdateFailure)?.issue ?: UpdateIssue.NETWORK)
             }
@@ -67,6 +69,7 @@ class AppUpdateViewModel @Inject constructor(private val repository: AppUpdateRe
                 if (ticket == generation) mutable.update { it.copy(phase = AppUpdatePhase.READY, requestInstall = true, installRequestId = ticket) }
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
+                if (ticket == generation) DiagnosticJournal.record(DiagnosticArea.UPDATE,DiagnosticIssue.UPDATE,update = (error as? UpdateFailure)?.issue ?: UpdateIssue.INTEGRITY)
                 if (ticket == generation) mutable.value = AppUpdateUiState(
                     issue = (error as? UpdateFailure)?.issue ?: UpdateIssue.INTEGRITY)
             }
@@ -74,7 +77,10 @@ class AppUpdateViewModel @Inject constructor(private val repository: AppUpdateRe
     }
 
     fun consumeInstallRequest() { mutable.update { it.copy(requestInstall = false) } }
-    fun installBlocked(issue: UpdateIssue) { mutable.update { it.copy(issue = issue, requestInstall = false) } }
+    fun installBlocked(issue: UpdateIssue) {
+        DiagnosticJournal.record(DiagnosticArea.UPDATE,DiagnosticIssue.UPDATE,update = issue)
+        mutable.update { it.copy(issue = issue, requestInstall = false) }
+    }
 
     fun cancel() {
         generation++

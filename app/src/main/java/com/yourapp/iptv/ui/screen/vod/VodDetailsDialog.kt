@@ -13,7 +13,7 @@ import com.yourapp.iptv.viewmodel.VodUiState
 
 @Composable
 internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLabels,
-    progress: List<VodProgressEntry>, onDismiss: () -> Unit, onRetry: () -> Unit, onPlay: (VodKind, String, String, String) -> Unit) {
+    progress: List<VodProgressEntry>, onDismiss: () -> Unit, onRetry: () -> Unit, onPlay: (VodKind, String, String, String, String?) -> Unit) {
     val item = state.details?.item ?: chosen
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp)) {
@@ -30,7 +30,7 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
                         Text("${labels.resume()}: ${labels.position(saved.positionMs)}",
                             style = MaterialTheme.typography.bodyMedium)
                     }
-                    Button(onClick = { onPlay(VodKind.MOVIE, item.id, item.extension, item.name) }) {
+                    Button(onClick = { onPlay(VodKind.MOVIE, item.id, item.extension, item.name, null) }) {
                         Text(labels.play())
                     }
                 } else {
@@ -47,7 +47,7 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
                             }
                             items(season.episodes, key = { "${season.number}-${it.id}" }) { episode ->
                                 OutlinedButton(onClick = {
-                                    onPlay(VodKind.SERIES, episode.id, episode.extension, episode.name)
+                                    onPlay(VodKind.SERIES, episode.id, episode.extension, episode.name, chosen.id)
                                 }, modifier = Modifier.fillMaxWidth()) {
                                     val position = VodProgress.find(progress, VodKind.SERIES, episode.id)
                                     Text(buildString {

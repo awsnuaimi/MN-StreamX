@@ -94,6 +94,7 @@ internal class PlayerPlaybackSession(
 
             override fun onPlayerError(error: PlaybackException) {
                 if (!isCurrent()) return
+                com.yourapp.iptv.player.PlaybackDiagnostics.record(error)
                 onBuffering(selected.id, false)
                 onError(selected.id, "تعذر تشغيل القناة (${error.errorCodeName}).")
             }

@@ -23,7 +23,8 @@ fun SettingsScreen(
     onPlayerAppearance: () -> Unit = {},
     onHomeAppearance: () -> Unit = {},
     onSubscriptions: () -> Unit = {},
-    onBackup: () -> Unit = {}
+    onBackup: () -> Unit = {},
+    onDiagnostics: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -40,6 +41,7 @@ fun SettingsScreen(
         AppButton(stringResource(R.string.ui_player_title), onPlayerAppearance)
         AppUpdateSection()
         AppButton(stringResource(R.string.backup_title), onBackup)
+        AppButton(stringResource(R.string.diagnostics_title), onDiagnostics)
         StartupPlaybackSetting()
         StorageManagementSection()
         if (onBack != null) AppButton(stringResource(R.string.ui_back), onBack)
