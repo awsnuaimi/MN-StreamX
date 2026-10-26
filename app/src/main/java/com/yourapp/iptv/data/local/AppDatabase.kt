@@ -7,18 +7,21 @@ import androidx.room.RoomDatabase
 import com.yourapp.iptv.data.local.dao.ChannelDao
 import com.yourapp.iptv.data.local.dao.EpgDao
 import com.yourapp.iptv.data.local.dao.FavoriteDao
+import com.yourapp.iptv.data.local.dao.ScopedFavoriteDao
 import com.yourapp.iptv.data.local.entity.ChannelEntity
 import com.yourapp.iptv.data.local.entity.FavoriteEntity
+import com.yourapp.iptv.data.local.entity.ScopedFavoriteEntity
 import com.yourapp.iptv.data.local.entity.ProgramEntity
 
 @Database(
-    entities = [ChannelEntity::class, FavoriteEntity::class, ProgramEntity::class],
-    version = 1,
+    entities = [ChannelEntity::class, FavoriteEntity::class, ProgramEntity::class, ScopedFavoriteEntity::class],
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun channelDao(): ChannelDao
     abstract fun favoriteDao(): FavoriteDao
+    abstract fun scopedFavoriteDao(): ScopedFavoriteDao
     abstract fun epgDao(): EpgDao
 
     companion object {
@@ -31,7 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "iptv_database"
-                ).build().also { INSTANCE = it }
+                ).addMigrations(subscriptionDatabaseMigration).build().also { INSTANCE = it }
             }
         }
     }

@@ -47,8 +47,11 @@ class PlayerViewModel @Inject constructor(
     private var favoriteIds: Set<String>? = null
     private var rebuildJob: Job? = null
     private var original = PlaybackQueue.empty()
-    private val favoriteController = FavoriteController(viewModelScope, favorites) {
+    private val favoriteController = FavoriteController(viewModelScope, favorites, onReset = { favoriteIds = null }) {
         favoriteIds = it
+        state.update { current -> current.copy(detachedChannel = current.detachedChannel?.let { channel ->
+            channel.copy(isFavorite = channel.id in it)
+        }) }
         rebuildQueue()
     }
     val favoriteState = favoriteController.uiState
@@ -70,6 +73,7 @@ class PlayerViewModel @Inject constructor(
                 catch (error: CancellationException) { throw error }
                 catch (_: Exception) { null }
                 historyRecorder.bind(source)
+                favoriteController.bind(historyRecorder.sourceKey)
                 lastChannel.bind(historyRecorder.sourceKey)
                 val expected = savedStateHandle.get<String>("sourceKey")
                 if (expected != null && expected != historyRecorder.sourceKey) {
@@ -79,7 +83,8 @@ class PlayerViewModel @Inject constructor(
                 val id = savedStateHandle.get<String>("channelId")
                 val selected = try {
                     if (id == null) null else LoadTimings.measure(LoadTimings.Stage.CHANNEL_LOOKUP) {
-                        channels.getPlaybackChannel(id)
+                        if (source == null) channels.getPlaybackChannel(id)
+                        else channels.getPlaybackChannel(source, id)
                     }
                 } catch (error: CancellationException) { throw error }
                 catch (_: Exception) { null } // Full-list recovery remains available.
@@ -87,7 +92,7 @@ class PlayerViewModel @Inject constructor(
                     val marked = favoriteIds?.let { selected.copy(isFavorite = selected.id in it) } ?: selected
                     state.update { it.copy(detachedChannel = marked, isLoading = false, errorMessage = null) }
                 }
-                organizer.setChannels(channels.getChannels())
+                organizer.setChannels(if (source == null) channels.getChannels() else channels.getCachedChannels(source).orEmpty())
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {

@@ -69,6 +69,16 @@ class AppThemeColorsTest {
         }
     }
 
+    @Test fun redUsesANeutralCharcoalCanvasAndAVividRedAccentWithoutChangingNight() {
+        val c = AppThemeColors.forTheme(HomeTheme.RED)
+        assertTrue(c.primary.red > 0.95f && c.primary.green < 0.25f && c.primary.blue < 0.25f)
+        for (surface in listOf(c.background, c.surface, c.surfaceVariant, c.secondaryContainer,
+            c.surfaceContainerLowest, c.surfaceContainerLow, c.surfaceContainerHighest)) {
+            assertEquals(surface.red, surface.green, 0f); assertEquals(surface.green, surface.blue, 0f)
+        }
+        assertSame(AppThemeColors.forTheme(HomeTheme.DARK_BLUE, true), AppThemeColors.forTheme(HomeTheme.RED, true))
+    }
+
     private fun contrast(first: Color, second: Color): Float {
         val a = first.luminance()
         val b = second.luminance()

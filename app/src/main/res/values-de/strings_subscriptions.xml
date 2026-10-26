@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_title">Abos verwalten</string>
+    <string name="subscription_hint">Anbieterkonten unter einem Namen speichern und das gewünschte Konto verwenden. Favoriten und Verlauf bleiben je Konto getrennt.</string>
+    <string name="subscription_active">Aktuell verwendet</string>
+    <string name="subscription_current">Aktuelles Abo: %1$s</string>
+    <string name="subscription_use">Verwenden</string>
+    <string name="subscription_edit">Bearbeiten</string>
+    <string name="subscription_remove">Entfernen</string>
+    <string name="subscription_add">Abo hinzufügen</string>
+    <string name="subscription_new">Neues Abo — das aktuelle Konto bleibt bis zum Speichern aktiv</string>
+    <string name="subscription_editing">Abo-Daten</string>
+    <string name="subscription_name">Abo-Name</string>
+    <string name="subscription_default">Bisheriges Abo</string>
+    <string name="subscription_cancel_edit">Zum aktuellen Abo zurückkehren</string>
+    <string name="subscription_save_use">Speichern und verwenden</string>
+    <string name="subscription_remove_title">Gespeichertes Abo entfernen?</string>
+    <string name="subscription_remove_note">Das Konto wird aus der gespeicherten Liste entfernt; ungespeicherte Änderungen daran werden verworfen. Der Vertrag beim Anbieter wird nicht gekündigt.</string>
+    <string name="subscription_discard_title">Ungespeicherte Änderungen verwerfen?</string>
+    <string name="subscription_discard_note">Es gibt ungespeicherte Änderungen. Beim Fortfahren werden sie verworfen.</string>
+    <string name="subscription_continue">Fortfahren</string>
+    <string name="subscription_cancel">Abbrechen</string>
+    <string name="subscription_name_error">Einen Abo-Namen mit bis zu 40 Zeichen eingeben.</string>
+    <string name="subscription_duplicate">Dieses Anbieterkonto ist bereits gespeichert. Bitte das vorhandene Abo bearbeiten.</string>
+    <string name="subscription_limit">Es können bis zu 16 Abos gespeichert werden.</string>
+    <string name="subscription_missing">Das Abo ist nicht mehr verfügbar. Einstellungen neu laden.</string>
+    <string name="subscription_active_delete">Vor dem Entfernen des aktuellen Kontos zu einem anderen Abo wechseln.</string>
+    <string name="subscription_invalid">Abo-Daten sind ungültig oder überschreiten die erlaubte Länge.</string>
+</resources>

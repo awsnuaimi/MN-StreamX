@@ -11,14 +11,17 @@ internal class FakeFavoriteRepository(initial: Set<String> = emptySet()) : Favor
     var failRead = false
     var failWrite = false
     var writes = 0
-    override fun observeFavoriteIds() = flow {
+    override fun observeFavoriteIds(sourceKey: String?) = flow {
         if (failRead) error("private-read-details")
         ids.collect { emit(it) }
     }
-    override suspend fun toggleFavorite(channelId: String) {
+    override suspend fun toggleFavorite(channelId: String, sourceKey: String?) {
         writes++
         delay(10)
         if (failWrite) error("private-write-details")
         ids.value = if (channelId in ids.value) ids.value - channelId else ids.value + channelId
+    }
+    override suspend fun setFavorite(channelId: String, selected: Boolean, sourceKey: String?) {
+        ids.value = if (selected) ids.value + channelId else ids.value - channelId
     }
 }

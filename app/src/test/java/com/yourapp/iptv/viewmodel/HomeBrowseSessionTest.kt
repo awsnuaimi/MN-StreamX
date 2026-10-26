@@ -96,8 +96,9 @@ class HomeBrowseSessionTest {
     @Test fun savedFavoritesWaitForCurrentFavoriteIdsWithoutBlockingTheCatalog() = runTest(dispatcher) {
         val ids = CompletableDeferred<Set<String>>()
         val favorites = object : FavoriteRepository {
-            override fun observeFavoriteIds(): Flow<Set<String>> = flow { emit(ids.await()) }
-            override suspend fun toggleFavorite(channelId: String) = Unit
+            override fun observeFavoriteIds(sourceKey: String?): Flow<Set<String>> = flow { emit(ids.await()) }
+            override suspend fun toggleFavorite(channelId: String, sourceKey: String?) = Unit
+            override suspend fun setFavorite(channelId: String, selected: Boolean, sourceKey: String?) = Unit
         }
         sessions.result.complete(HomeBrowseSession(favoritesOnly = true, focusedChannelId = "id-40"))
         val model = model(favorites); model.configureHomeSession(true); runCurrent()
@@ -110,8 +111,9 @@ class HomeBrowseSessionTest {
 
     @Test fun unavailableFavoritesFallBackToBrowsableChannels() = runTest(dispatcher) {
         val favorites = object : FavoriteRepository {
-            override fun observeFavoriteIds(): Flow<Set<String>> = flow { error("Read unavailable") }
-            override suspend fun toggleFavorite(channelId: String) = Unit
+            override fun observeFavoriteIds(sourceKey: String?): Flow<Set<String>> = flow { error("Read unavailable") }
+            override suspend fun toggleFavorite(channelId: String, sourceKey: String?) = Unit
+            override suspend fun setFavorite(channelId: String, selected: Boolean, sourceKey: String?) = Unit
         }
         sessions.result.complete(HomeBrowseSession(favoritesOnly = true, focusedChannelId = "id-40"))
         val model = model(favorites); model.configureHomeSession(true); runCurrent()

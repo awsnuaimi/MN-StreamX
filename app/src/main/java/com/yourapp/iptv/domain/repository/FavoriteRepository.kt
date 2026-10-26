@@ -3,6 +3,7 @@ package com.yourapp.iptv.domain.repository
 import kotlinx.coroutines.flow.Flow
 
 interface FavoriteRepository {
-    fun observeFavoriteIds(): Flow<Set<String>>
-    suspend fun toggleFavorite(channelId: String)
+    fun observeFavoriteIds(sourceKey: String? = null): Flow<Set<String>>
+    suspend fun toggleFavorite(channelId: String, sourceKey: String? = null)
+    suspend fun setFavorite(channelId: String, selected: Boolean, sourceKey: String? = null)
 }

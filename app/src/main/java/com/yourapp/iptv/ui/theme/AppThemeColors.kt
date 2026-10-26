@@ -73,20 +73,20 @@ internal object AppThemeColors {
     )
 
     private val red = dark.copy(
-        primary = Color(0xFFFF8A80), onPrimary = Color(0xFF390006),
-        primaryContainer = Color(0xFF552129), onPrimaryContainer = Color(0xFFFFDAD8),
-        inversePrimary = Color(0xFFB32635),
-        secondary = Color(0xFFE4B9BC), onSecondary = Color(0xFF402025),
-        secondaryContainer = Color(0xFF432027), onSecondaryContainer = Color(0xFFFFDADC),
-        background = Color(0xFF1B1114), onBackground = Color(0xFFFFF4F4),
-        surface = Color(0xFF291A1E), onSurface = Color(0xFFFFF4F4),
-        surfaceVariant = Color(0xFF3E2A30), onSurfaceVariant = Color(0xFFE2C1C6),
-        outline = Color(0xFFAA7D87), outlineVariant = Color(0xFF6B434D),
-        inverseSurface = Color(0xFFF4DEDF), inverseOnSurface = Color(0xFF30171D),
-        surfaceDim = Color(0xFF140C0F), surfaceBright = Color(0xFF442C34),
-        surfaceContainerLowest = Color(0xFF140C0F), surfaceContainerLow = Color(0xFF211519),
-        surfaceContainer = Color(0xFF291A1E), surfaceContainerHigh = Color(0xFF342127),
-        surfaceContainerHighest = Color(0xFF3E2930)
+        primary = Color(0xFFFF3535), onPrimary = Color.Black,
+        primaryContainer = Color(0xFF3B1616), onPrimaryContainer = Color(0xFFFFE8E8),
+        inversePrimary = Color(0xFFB71C1C),
+        secondary = Color(0xFFD0D0D0), onSecondary = Color(0xFF151515),
+        secondaryContainer = Color(0xFF1E1E1E), onSecondaryContainer = Color(0xFFF5F5F5),
+        background = Color(0xFF101010), onBackground = Color(0xFFF5F5F5),
+        surface = Color(0xFF191919), onSurface = Color(0xFFF5F5F5),
+        surfaceVariant = Color(0xFF282828), onSurfaceVariant = Color(0xFFCCCCCC),
+        outline = Color(0xFF888888), outlineVariant = Color(0xFF494949),
+        inverseSurface = Color(0xFFEAEAEA), inverseOnSurface = Color(0xFF181818),
+        surfaceDim = Color(0xFF0A0A0A), surfaceBright = Color(0xFF303030),
+        surfaceContainerLowest = Color(0xFF0A0A0A), surfaceContainerLow = Color(0xFF151515),
+        surfaceContainer = Color(0xFF191919), surfaceContainerHigh = Color(0xFF222222),
+        surfaceContainerHighest = Color(0xFF2C2C2C)
     )
 
     fun forTheme(theme: HomeTheme, isNight: Boolean = false): ColorScheme = when {

@@ -8,6 +8,7 @@ import com.yourapp.iptv.data.repository.PlaylistRepositoryImpl
 import com.yourapp.iptv.data.repository.FileHomeStartupRepository
 import com.yourapp.iptv.domain.repository.HomeStartupRepository
 import com.yourapp.iptv.domain.repository.SettingsRepository
+import com.yourapp.iptv.domain.repository.FavoriteRepository
 import com.yourapp.iptv.domain.repository.OrganizationRepository
 import java.io.File
 import com.yourapp.iptv.data.source.m3u.M3uDataSource
@@ -26,12 +27,12 @@ import javax.inject.Singleton
 object RepositoryModule {
     @Provides
     @Singleton
-    fun provideChannels(database: AppDatabase, @ApplicationContext context: Context): ChannelRepository = ChannelRepositoryImpl(
+    fun provideChannels(database: AppDatabase, @ApplicationContext context: Context, favorites: FavoriteRepository): ChannelRepository = ChannelRepositoryImpl(
         m3uDataSource = M3uDataSource(),
         xtreamDataSource = XtreamDataSource(),
         channelDao = database.channelDao(),
         favoriteDao = database.favoriteDao(),
-        snapshot = ChannelSnapshotDataStore(context)
+        snapshot = ChannelSnapshotDataStore(context), favorites = favorites
     )
 
     @Provides

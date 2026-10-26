@@ -18,6 +18,7 @@ import com.yourapp.iptv.ui.screen.epg.EpgScreen
 import com.yourapp.iptv.ui.screen.player.PlayerScreen
 import com.yourapp.iptv.ui.screen.organization.OrganizationScreen
 import com.yourapp.iptv.ui.screen.settings.SettingsScreen
+import com.yourapp.iptv.ui.screen.settings.SubscriptionsScreen
 import com.yourapp.iptv.ui.screen.appearance.PlayerAppearanceScreen
 import com.yourapp.iptv.ui.screen.history.WatchHistoryScreen
 import com.yourapp.iptv.ui.screen.vod.VodScreen
@@ -106,14 +107,17 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
             SettingsScreen(
                 onHomeAppearance = { nav.navigate("home_appearance") { launchSingleTop = true } },
                 onPlayerAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
-                onSettingsSaved = {
-                    nav.navigate(Destinations.HOME) {
-                        popUpTo(Destinations.HOME) { inclusive = true }
-                        launchSingleTop = true
-                    }
-                },
+                onSubscriptions = { nav.navigate(Destinations.SUBSCRIPTIONS) { launchSingleTop = true } },
                 onBack = { nav.popBackStack() }
             )
+        }
+        composable(Destinations.SUBSCRIPTIONS) {
+            SubscriptionsScreen(onBack = { nav.popBackStack() }, onUsed = {
+                nav.navigate(Destinations.HOME) {
+                    popUpTo(Destinations.HOME) { inclusive = true }
+                    launchSingleTop = true
+                }
+            })
         }
         for (playerDestination in listOf(Destinations.PLAYER, Destinations.HISTORY_PLAYER)) {
         composable(playerDestination, arguments = listOf(

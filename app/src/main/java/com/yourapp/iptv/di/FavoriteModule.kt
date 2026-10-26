@@ -3,6 +3,7 @@ package com.yourapp.iptv.di
 import com.yourapp.iptv.data.local.AppDatabase
 import com.yourapp.iptv.data.repository.FavoriteRepositoryImpl
 import com.yourapp.iptv.domain.repository.FavoriteRepository
+import com.yourapp.iptv.domain.repository.SubscriptionRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -14,6 +15,6 @@ import javax.inject.Singleton
 object FavoriteModule {
     @Provides
     @Singleton
-    fun provideFavorites(database: AppDatabase): FavoriteRepository =
-        FavoriteRepositoryImpl(database.favoriteDao())
+    fun provideFavorites(database: AppDatabase, subscriptions: SubscriptionRepository): FavoriteRepository =
+        FavoriteRepositoryImpl(database.scopedFavoriteDao(), subscriptions)
 }

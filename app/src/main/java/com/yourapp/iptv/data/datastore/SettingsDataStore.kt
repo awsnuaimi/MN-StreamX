@@ -1,53 +1,59 @@
 package com.yourapp.iptv.data.datastore
 
 import android.content.Context
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import com.yourapp.iptv.domain.model.AppSettings
-import com.yourapp.iptv.domain.model.PlaylistSource
-import com.yourapp.iptv.domain.repository.SettingsRepository
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import com.yourapp.iptv.data.subscription.*
+import com.yourapp.iptv.domain.model.*
+import com.yourapp.iptv.domain.repository.SubscriptionRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.withContext
+import java.io.IOException
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
-class SettingsDataStore(context: Context) : SettingsRepository {
-    private val store = context.applicationContext.settingsDataStore
+/** One preferences transaction owns the encrypted accounts and active account together. */
+class SettingsDataStore internal constructor(
+    private val store: DataStore<Preferences>, private val cipher: SubscriptionCipher
+) : SubscriptionRepository {
+    constructor(context: Context) : this(context.applicationContext.settingsDataStore, KeystoreSubscriptionCipher())
+    private val accounts = stringPreferencesKey("subscriptions_encrypted_v1")
 
-    private companion object {
-        val M3U = stringPreferencesKey("m3u_url")
-        val SERVER = stringPreferencesKey("xtream_server")
-        val USERNAME = stringPreferencesKey("xtream_username")
-        val PASSWORD = stringPreferencesKey("xtream_password")
-        val EPG = stringPreferencesKey("epg_url")
-        val SOURCE = stringPreferencesKey("playlist_source")
+    override fun observeSubscriptions(): Flow<Subscriptions> = flow {
+        // Complete legacy encryption before exposing settings to any consumer or profile switch.
+        store.edit { if (it[accounts] == null) write(it, LegacySettingsCodec.read(it)) }
+        emitAll(store.data.map(::read).distinctUntilChanged())
+    }.flowOn(Dispatchers.IO)
+
+    override fun observeSettings(): Flow<AppSettings> = observeSubscriptions().map { it.active.settings }.distinctUntilChanged()
+
+    override suspend fun saveSettings(settings: AppSettings) { modify { old ->
+        SubscriptionChanges.save(old, old.activeId, old.active.name, settings)
+    } }
+    override suspend fun saveSubscription(id: String?, name: String, settings: AppSettings) = modify {
+        SubscriptionChanges.save(it, id, name, settings)
     }
+    override suspend fun activateSubscription(id: String) = modify { SubscriptionChanges.activate(it, id) }
+    override suspend fun removeSubscription(id: String) = modify { SubscriptionChanges.remove(it, id) }
 
-    override fun observeSettings(): Flow<AppSettings> = store.data.map { values ->
-        AppSettings(
-            m3uUrl = values[M3U].orEmpty(),
-            xtreamServer = values[SERVER].orEmpty(),
-            xtreamUsername = values[USERNAME].orEmpty(),
-            xtreamPassword = values[PASSWORD].orEmpty(),
-            epgUrl = values[EPG].orEmpty(),
-            source = values[SOURCE]?.let { saved ->
-                PlaylistSource.entries.firstOrNull { it.name == saved }
-            } ?: if (values[M3U].isNullOrBlank() && !values[SERVER].isNullOrBlank()) {
-                PlaylistSource.XTREAM
-            } else PlaylistSource.M3U
-        )
-    }
-
-    override suspend fun saveSettings(settings: AppSettings) {
+    private suspend fun modify(change: (Subscriptions) -> Subscriptions): Subscriptions = withContext(Dispatchers.IO) {
+        var committed: Subscriptions? = null
         store.edit { values ->
-            values[M3U] = settings.m3uUrl
-            values[SERVER] = settings.xtreamServer
-            values[USERNAME] = settings.xtreamUsername
-            values[PASSWORD] = settings.xtreamPassword
-            values[EPG] = settings.epgUrl
-            values[SOURCE] = settings.source.name
+            val old = if (values[accounts] == null) LegacySettingsCodec.read(values) else read(values)
+            val next = change(old)
+            if (next != old || values[accounts] == null) write(values, next)
+            committed = next
         }
+        requireNotNull(committed)
+    }
+    private fun read(values: Preferences): Subscriptions = try {
+        SubscriptionCodec.decode(cipher.decrypt(requireNotNull(values[accounts])))
+    } catch (_: Exception) { throw IOException("Cannot read saved subscriptions") }
+    private fun write(values: MutablePreferences, value: Subscriptions) {
+        values[accounts] = cipher.encrypt(SubscriptionCodec.encode(value))
+        LegacySettingsCodec.remove(values)
     }
 
     fun getM3uUrl(): Flow<String?> = observeSettings().map { it.m3uUrl }
@@ -55,24 +61,14 @@ class SettingsDataStore(context: Context) : SettingsRepository {
     fun getXtreamData(): Flow<Triple<String?, String?, String?>> = observeSettings().map {
         Triple(it.xtreamServer, it.xtreamUsername, it.xtreamPassword)
     }
-
-    suspend fun saveM3uUrl(url: String) {
-        store.edit { it[M3U] = url }
-    }
-
-    suspend fun saveEpgUrl(url: String) {
-        store.edit { it[EPG] = url }
-    }
-
-    suspend fun saveXtreamData(server: String, username: String, password: String) {
-        store.edit {
-            it[SERVER] = server
-            it[USERNAME] = username
-            it[PASSWORD] = password
-        }
-    }
-
-    suspend fun clearAll() {
-        store.edit { it.clear() }
-    }
+    suspend fun saveM3uUrl(url: String) = modify { old -> old.copy(entries = old.entries.map {
+        if (it.id == old.activeId) it.copy(settings = it.settings.copy(m3uUrl = url)) else it
+    }) }
+    suspend fun saveEpgUrl(url: String) = modify { old -> old.copy(entries = old.entries.map {
+        if (it.id == old.activeId) it.copy(settings = it.settings.copy(epgUrl = url)) else it
+    }) }
+    suspend fun saveXtreamData(server: String, username: String, password: String) = modify { old -> old.copy(entries = old.entries.map {
+        if (it.id == old.activeId) it.copy(settings = it.settings.copy(xtreamServer = server, xtreamUsername = username, xtreamPassword = password)) else it
+    }) }
+    suspend fun clearAll() { store.edit { it.clear() } }
 }

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_title">إدارة الاشتراكات</string>
+    <string name="subscription_hint">احفظ حساباتك بأسماء، ثم استخدم الاشتراك المطلوب. لكل حساب مفضلة وسجل مشاهدة مستقلان.</string>
+    <string name="subscription_active">الاشتراك المستخدم حاليًا</string>
+    <string name="subscription_current">الاشتراك الحالي: %1$s</string>
+    <string name="subscription_use">استخدام</string>
+    <string name="subscription_edit">تعديل</string>
+    <string name="subscription_remove">حذف</string>
+    <string name="subscription_add">إضافة اشتراك</string>
+    <string name="subscription_new">اشتراك جديد — لن يتغير الحساب الحالي حتى الحفظ</string>
+    <string name="subscription_editing">بيانات الاشتراك</string>
+    <string name="subscription_name">اسم الاشتراك</string>
+    <string name="subscription_default">الاشتراك الأساسي</string>
+    <string name="subscription_cancel_edit">العودة إلى بيانات الاشتراك الحالي</string>
+    <string name="subscription_save_use">حفظ واستخدام</string>
+    <string name="subscription_remove_title">حذف الاشتراك المحفوظ؟</string>
+    <string name="subscription_remove_note">ستُزال بيانات هذا الحساب من قائمة الاشتراكات، وتُهمل أي تعديلات غير محفوظة تخصه. لن يُلغى اشتراكك لدى المزوّد.</string>
+    <string name="subscription_discard_title">تجاهل التعديلات غير المحفوظة؟</string>
+    <string name="subscription_discard_note">توجد تعديلات لم تحفظها. المتابعة ستتجاهلها.</string>
+    <string name="subscription_continue">متابعة</string>
+    <string name="subscription_cancel">إلغاء</string>
+    <string name="subscription_name_error">أدخل اسمًا للاشتراك لا يتجاوز 40 حرفًا.</string>
+    <string name="subscription_duplicate">هذا الحساب محفوظ بالفعل. عدّل الاشتراك الموجود بدل إضافته مرة أخرى.</string>
+    <string name="subscription_limit">يمكن حفظ 16 اشتراكًا كحد أقصى.</string>
+    <string name="subscription_missing">الاشتراك لم يعد متاحًا. أعد تحميل الإعدادات.</string>
+    <string name="subscription_active_delete">بدّل إلى اشتراك آخر قبل حذف الاشتراك الحالي.</string>
+    <string name="subscription_invalid">بيانات الاشتراك غير صالحة أو أطول من المسموح.</string>
+</resources>

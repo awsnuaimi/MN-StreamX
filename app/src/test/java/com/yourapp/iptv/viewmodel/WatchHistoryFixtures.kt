@@ -50,6 +50,8 @@ internal class HistoryChannels : ChannelRepository {
         if (fail) throw IOException("Current channel data unavailable")
         return customLookup?.invoke(source, ids) ?: rows.filter { it.id in ids }
     }
+    override suspend fun getCachedChannels(source: AppSettings): List<Channel> { allReads++; return rows }
+    override suspend fun getPlaybackChannel(source: AppSettings, id: String) = rows.firstOrNull { it.id == id }
     override suspend fun getPlaybackChannel(id: String) = rows.firstOrNull { it.id == id }
     override suspend fun getChannels(): List<Channel> { allReads++; return rows }
     override suspend fun getChannel(id: String) = error("Unexpected unrelated lookup")

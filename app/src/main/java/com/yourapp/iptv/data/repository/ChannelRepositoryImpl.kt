@@ -15,6 +15,8 @@ import com.yourapp.iptv.domain.model.AppSettings
 import com.yourapp.iptv.domain.model.PlaylistCacheKey
 import com.yourapp.iptv.domain.model.PlaylistSource
 import com.yourapp.iptv.domain.repository.ChannelRepository
+import com.yourapp.iptv.domain.repository.FavoriteRepository
+import kotlinx.coroutines.flow.first
 import com.yourapp.iptv.util.LoadTimings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -28,7 +30,8 @@ class ChannelRepositoryImpl(
     private val xtreamDataSource: XtreamDataSource,
     private val channelDao: ChannelDao,
     private val favoriteDao: FavoriteDao,
-    private val snapshot: ChannelSnapshotStore = ChannelSnapshotStore.Disabled
+    private val snapshot: ChannelSnapshotStore = ChannelSnapshotStore.Disabled,
+    private val favorites: FavoriteRepository? = null
 ) : ChannelRepository {
     private val importLock = Mutex()
     private val snapshotLock = Mutex()
@@ -59,10 +62,14 @@ class ChannelRepositoryImpl(
     }
 
     private suspend fun readChannelsLocked(): List<Channel> {
-        val favorites = favoriteDao.getAllFavorites().map { it.channelId }.toSet()
+        val favoriteIds = favorites?.observeFavoriteIds(snapshot.read())?.first()
+            ?: favoriteDao.getAllFavorites().map { it.channelId }.toSet()
         val base = memory ?: channelDao.getAllChannels().map { it.toDomain() }
-        return ChannelFavorites.apply(base, favorites).also { memory = it }
+        return ChannelFavorites.apply(base, favoriteIds).also { memory = it }
     }
+
+    override suspend fun getPlaybackChannel(source: AppSettings, id: String): Channel? =
+        getPlaybackChannels(source, setOf(id)).firstOrNull()
 
     override suspend fun getPlaybackChannel(id: String): Channel? = withContext(Dispatchers.IO) {
         snapshotLock.withLock {
@@ -80,11 +87,13 @@ class ChannelRepositoryImpl(
     override suspend fun getFavorites(): List<Channel> = getChannels().filter { it.isFavorite }
 
     override suspend fun addFavorite(channel: Channel) = withContext(Dispatchers.IO) {
-        favoriteDao.addFavorite(FavoriteEntity(channel.id))
+        if (favorites != null) favorites.setFavorite(channel.id, true, snapshot.read())
+        else favoriteDao.addFavorite(FavoriteEntity(channel.id))
     }
 
     override suspend fun removeFavorite(channel: Channel) = withContext(Dispatchers.IO) {
-        favoriteDao.removeFavorite(channel.id)
+        if (favorites != null) favorites.setFavorite(channel.id, false, snapshot.read())
+        else favoriteDao.removeFavorite(channel.id)
     }
 
     override suspend fun loadFromM3u(url: String): List<Channel> = importLock.withLock {

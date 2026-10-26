@@ -3,7 +3,9 @@ package com.yourapp.iptv.viewmodel
 import com.yourapp.iptv.ui.state.SettingsIssue
 import com.yourapp.iptv.domain.model.AppSettings
 import com.yourapp.iptv.domain.model.PlaylistSource
-import com.yourapp.iptv.domain.repository.SettingsRepository
+import com.yourapp.iptv.domain.repository.SubscriptionRepository
+import com.yourapp.iptv.domain.model.Subscription
+import com.yourapp.iptv.domain.model.Subscriptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -153,7 +155,7 @@ class SettingsViewModelTest {
         }
     }
 
-    private class FakeSettings(var value: AppSettings = AppSettings()) : SettingsRepository {
+    private class FakeSettings(var value: AppSettings = AppSettings()) : SubscriptionRepository {
         var saves = 0
         var failRead = false
         var failSave = false
@@ -162,6 +164,20 @@ class SettingsViewModelTest {
             if (failRead) throw IOException("Synthetic read failure")
             emit(value)
         }
+        override fun observeSubscriptions(): Flow<Subscriptions> = flow {
+            delay(50)
+            if (failRead) throw IOException("Synthetic read failure")
+            emit(Subscriptions(listOf(Subscription(Subscriptions.DEFAULT_ID, "", value)), Subscriptions.DEFAULT_ID))
+        }
+        override suspend fun saveSubscription(id: String?, name: String, settings: AppSettings): Subscriptions {
+            saveSettings(settings)
+            return Subscriptions(listOf(Subscription(Subscriptions.DEFAULT_ID, name, value)), Subscriptions.DEFAULT_ID)
+        }
+        override suspend fun activateSubscription(id: String): Subscriptions {
+            require(id == Subscriptions.DEFAULT_ID)
+            return Subscriptions(listOf(Subscription(Subscriptions.DEFAULT_ID, "", value)), Subscriptions.DEFAULT_ID)
+        }
+        override suspend fun removeSubscription(id: String): Subscriptions { throw IllegalArgumentException("Active account") }
         override suspend fun saveSettings(settings: AppSettings) {
             delay(50)
             if (failSave) throw IOException("Synthetic write failure")

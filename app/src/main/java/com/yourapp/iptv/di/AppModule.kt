@@ -4,6 +4,7 @@ import android.content.Context
 import com.yourapp.iptv.data.datastore.SettingsDataStore
 import com.yourapp.iptv.data.local.AppDatabase
 import com.yourapp.iptv.domain.repository.SettingsRepository
+import com.yourapp.iptv.domain.repository.SubscriptionRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,6 +33,9 @@ object AppModule {
 
     @Provides
     fun provideSettingsRepository(store: SettingsDataStore): SettingsRepository = store
+
+    @Provides
+    fun provideSubscriptionRepository(store: SettingsDataStore): SubscriptionRepository = store
 
     @Provides
     @Singleton

@@ -1,55 +1,80 @@
 package com.yourapp.iptv.data.repository
 
-import com.yourapp.iptv.data.local.dao.FavoriteDao
+import android.app.Application
+import androidx.room.Room
+import com.yourapp.iptv.data.local.AppDatabase
 import com.yourapp.iptv.data.local.entity.FavoriteEntity
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collect
+import com.yourapp.iptv.domain.model.*
+import com.yourapp.iptv.testing.FakeSubscriptions
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
+import org.junit.*
 import org.junit.Assert.*
-import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.SQLiteMode
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
+@SQLiteMode(SQLiteMode.Mode.NATIVE)
 class FavoriteRepositoryTest {
-    @Test fun repeatedToggleReadsStoredStateAndNewRepositorySeesExistingFavorites() = runTest {
-        val dao = Favorites()
-        val first = FavoriteRepositoryImpl(dao)
-        first.toggleFavorite("a")
-        assertEquals(setOf("a"), FavoriteRepositoryImpl(dao).observeFavoriteIds().first())
-        first.toggleFavorite("a")
-        assertTrue(first.observeFavoriteIds().first().isEmpty())
+    private lateinit var database: AppDatabase
+    private lateinit var accounts: FakeSubscriptions
+    private lateinit var repository: FavoriteRepositoryImpl
+    private lateinit var first: String
+    @Before fun setup() {
+        database = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), AppDatabase::class.java)
+            .allowMainThreadQueries().build()
+        accounts = FakeSubscriptions()
+        repository = FavoriteRepositoryImpl(database.scopedFavoriteDao(), accounts)
+        first = PlaylistCacheKey.of(accounts.catalog.value.active.settings)
+    }
+    @After fun cleanup() { database.close() }
+
+    @Test fun repeatedToggleReadsStoredStateAndNewRepositorySeesExistingFavorites() = runBlocking {
+        repository.toggleFavorite("a", first)
+        val reopened = FavoriteRepositoryImpl(database.scopedFavoriteDao(), accounts)
+        assertEquals(setOf("a"), reopened.observeFavoriteIds(first).first())
+        repository.toggleFavorite("a", first)
+        assertTrue(repository.observeFavoriteIds(first).first().isEmpty())
     }
 
-    @Test fun observerIgnoresDuplicateIdsAndOrderOnlyChanges() = runTest {
-        val dao = Favorites()
-        val emissions = mutableListOf<Set<String>>()
-        val repository = FavoriteRepositoryImpl(dao)
-        backgroundScope.launch { repository.observeFavoriteIds().collect { emissions += it } }
-        runCurrent()
-        dao.ids.value = listOf("a", "b", "a")
-        runCurrent()
-        dao.ids.value = listOf("b", "a")
-        runCurrent()
-        assertEquals(listOf(emptySet<String>(), setOf("a", "b")), emissions)
+    @Test fun repeatedSetIsIdempotentAndDoesNotCreateDuplicateRows() = runBlocking {
+        repeat(3) { repository.setFavorite("a", true, first) }
+        assertEquals(setOf("a"), repository.observeFavoriteIds(first).first())
+        repeat(2) { repository.setFavorite("a", false, first) }
+        assertTrue(repository.observeFavoriteIds(first).first().isEmpty())
     }
 
-    @Test fun blankIdsAreRejectedBeforeWriting() = runTest {
-        val dao = Favorites()
-        try { FavoriteRepositoryImpl(dao).toggleFavorite(" "); fail("Expected rejection") }
-        catch (_: IllegalArgumentException) { assertTrue(dao.ids.value.isEmpty()) }
+    @Test fun blankIdsAndMissingSourcesAreRejectedBeforeWriting() = runBlocking {
+        assertTrue(runCatching { repository.toggleFavorite(" ", first) }.isFailure)
+        assertTrue(runCatching { repository.toggleFavorite("a", null) }.isFailure)
+        assertTrue(runCatching { repository.toggleFavorite("a", "f".repeat(64)) }.isFailure)
+        assertTrue(repository.observeFavoriteIds(first).first().isEmpty())
     }
 
-    private class Favorites : FavoriteDao {
-        val ids = MutableStateFlow<List<String>>(emptyList())
-        override fun observeFavoriteIds() = ids
-        override suspend fun isFavorite(channelId: String) = channelId in ids.value
-        override suspend fun getAllFavorites() = ids.value.map(::FavoriteEntity)
-        override suspend fun addFavorite(favorite: FavoriteEntity) {
-            ids.value = (ids.value + favorite.channelId).distinct()
-        }
-        override suspend fun removeFavorite(channelId: String) { ids.value = ids.value - channelId }
+    @Test fun identicalChannelIdsRemainSeparateAcrossSubscriptionsAndSwitchingRestoresThem() = runBlocking {
+        repository.toggleFavorite("shared", first)
+        accounts.saveSubscription(null, "Second", FakeSubscriptions.account("B"))
+        val second = PlaylistCacheKey.of(accounts.catalog.value.active.settings)
+        assertTrue(repository.observeFavoriteIds(second).first().isEmpty())
+        repository.toggleFavorite("other", second)
+        assertEquals(setOf("shared"), repository.observeFavoriteIds(first).first())
+        assertEquals(setOf("other"), repository.observeFavoriteIds(second).first())
+        accounts.activateSubscription(Subscriptions.DEFAULT_ID)
+        assertEquals(setOf("shared"), repository.observeFavoriteIds(first).first())
+    }
+
+    @Test fun legacyFavoritesBelongOnlyToTheOriginalSubscriptionEvenIfAnotherIsActivatedFirst() = runBlocking {
+        database.favoriteDao().addFavorite(FavoriteEntity("legacy"))
+        accounts.saveSubscription(null, "Second", FakeSubscriptions.account("B"))
+        val second = PlaylistCacheKey.of(accounts.catalog.value.active.settings)
+        assertTrue(repository.observeFavoriteIds(second).first().isEmpty())
+        assertEquals(setOf("legacy"), repository.observeFavoriteIds(first).first())
+        assertTrue(database.favoriteDao().getAllFavorites().isEmpty())
+        repository.toggleFavorite("legacy", first)
+        assertTrue(repository.observeFavoriteIds(first).first().isEmpty())
     }
 }

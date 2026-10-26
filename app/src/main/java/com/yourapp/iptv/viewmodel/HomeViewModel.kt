@@ -68,7 +68,7 @@ class HomeViewModel @Inject constructor(
     private var browseDraft: HomeBrowseSession? = null
     private var restoreSequence = 0L
     private val session = HomeSessionController(viewModelScope, browseSessions, ::onSessionLoaded)
-    private val favoriteController = FavoriteController(viewModelScope, favorites) {
+    private val favoriteController = FavoriteController(viewModelScope, favorites, onReset = { favoriteIds = null }) {
         favoriteIds = it
         filterChannels()
     }
@@ -199,6 +199,7 @@ class HomeViewModel @Inject constructor(
                     refreshing = false
                     state.value = HomeUiState(isLoading = source.hasSelectedSource(),
                         needsSource = !source.hasSelectedSource(), browseScope = PlaylistCacheKey.of(source))
+                    favoriteController.bind(state.value.browseScope.takeIf { source.hasSelectedSource() })
                     session.open(state.value.browseScope.takeIf { source.hasSelectedSource() })
                     if (source.hasSelectedSource()) load(source)
                 }
@@ -209,6 +210,7 @@ class HomeViewModel @Inject constructor(
                 loadJob?.cancel()
                 organizer.clearChannels()
                 activeSource = null
+                favoriteController.bind(null)
                 pendingBrowse = null
                 session.open(null)
                 refreshing = false

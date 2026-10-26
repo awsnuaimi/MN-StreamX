@@ -7,6 +7,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.di.DefaultDispatcher
 import com.yourapp.iptv.domain.model.Channel
+import com.yourapp.iptv.domain.model.PlaylistCacheKey
+import com.yourapp.iptv.domain.repository.SettingsRepository
+import kotlinx.coroutines.flow.first
 import com.yourapp.iptv.domain.model.ChannelFavorites
 import com.yourapp.iptv.domain.model.PlaybackQueue
 import com.yourapp.iptv.domain.repository.ChannelRepository
@@ -29,7 +32,8 @@ class EpgViewModel @Inject constructor(
     private val channels: ChannelRepository,
     @DefaultDispatcher private val background: CoroutineDispatcher,
     favorites: FavoriteRepository,
-    organization: OrganizationRepository = OrganizationRepository.Disabled
+    organization: OrganizationRepository = OrganizationRepository.Disabled,
+    private val settings: SettingsRepository? = null
 ) : ViewModel() {
     private val state = MutableStateFlow(EpgUiState(
         selectedGroup = saved["group"], query = saved.get<String>("query").orEmpty(),
@@ -42,7 +46,7 @@ class EpgViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var filterJob: Job? = null
     private var favoriteIds: Set<String>? = null
-    private val favoriteController = FavoriteController(viewModelScope, favorites) {
+    private val favoriteController = FavoriteController(viewModelScope, favorites, onReset = { favoriteIds = null }) {
         favoriteIds = it
         filterChannels(showLoading = false)
     }
@@ -72,7 +76,9 @@ class EpgViewModel @Inject constructor(
             isFiltering = false, errorMessage = null) }
         loadJob = viewModelScope.launch {
             try {
-                val stored = channels.getChannels()
+                val account = settings?.observeSettings()?.first()
+                favoriteController.bind(account?.takeIf { it.hasSelectedSource() }?.let(PlaylistCacheKey::of))
+                val stored = if (account == null) channels.getChannels() else channels.getCachedChannels(account).orEmpty()
                 organizer.setChannels(stored)
             } catch (error: CancellationException) {
                 throw error

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_title">Manage subscriptions</string>
+    <string name="subscription_hint">Save named provider accounts, then choose the account to use. Favorites and history stay separate for each account.</string>
+    <string name="subscription_active">Currently in use</string>
+    <string name="subscription_current">Current subscription: %1$s</string>
+    <string name="subscription_use">Use</string>
+    <string name="subscription_edit">Edit</string>
+    <string name="subscription_remove">Remove</string>
+    <string name="subscription_add">Add subscription</string>
+    <string name="subscription_new">New subscription — the current account stays active until saving</string>
+    <string name="subscription_editing">Subscription details</string>
+    <string name="subscription_name">Subscription name</string>
+    <string name="subscription_default">Original subscription</string>
+    <string name="subscription_cancel_edit">Return to the current subscription</string>
+    <string name="subscription_save_use">Save and use</string>
+    <string name="subscription_remove_title">Remove saved subscription?</string>
+    <string name="subscription_remove_note">This account will be removed from the saved list, along with any unsaved edits to it. Your subscription with the provider is not cancelled.</string>
+    <string name="subscription_discard_title">Discard unsaved changes?</string>
+    <string name="subscription_discard_note">You have unsaved changes. Continuing will discard them.</string>
+    <string name="subscription_continue">Continue</string>
+    <string name="subscription_cancel">Cancel</string>
+    <string name="subscription_name_error">Enter a subscription name of up to 40 characters.</string>
+    <string name="subscription_duplicate">This provider account is already saved. Edit the existing subscription instead.</string>
+    <string name="subscription_limit">Up to 16 subscriptions can be saved.</string>
+    <string name="subscription_missing">The subscription is no longer available. Reload settings.</string>
+    <string name="subscription_active_delete">Switch to another subscription before removing the active account.</string>
+    <string name="subscription_invalid">Subscription data is invalid or exceeds the allowed length.</string>
+</resources>
