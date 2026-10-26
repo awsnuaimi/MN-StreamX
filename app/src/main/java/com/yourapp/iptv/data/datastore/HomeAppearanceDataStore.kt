@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.data.backup.editAppData
+
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
@@ -11,7 +13,7 @@ import kotlinx.coroutines.flow.map
 internal val Context.homeAppearanceStore by preferencesDataStore(name = "home_appearance")
 class HomeAppearanceDataStore(private val store: DataStore<Preferences>) : HomeAppearanceRepository {
     override fun observe() = store.data.map(HomeAppearanceCodec::decode)
-    override suspend fun save(value: HomeAppearance) { store.edit { HomeAppearanceCodec.encode(it, value) } }
+    override suspend fun save(value: HomeAppearance) { store.editAppData { HomeAppearanceCodec.encode(it, value) } }
 }
 
 internal object HomeAppearanceCodec {
@@ -41,7 +43,7 @@ internal object HomeAppearanceCodec {
         values[columns] = value.columns
         values[restore] = value.restoreBrowseSession
         values[theme] = value.theme.name
-        values[darkTheme] = value.isDarkTheme // Keep legacy readers compatible.
+        values[darkTheme] = value.isDarkTheme
         values[nightMode] = value.isNightMode
     }
     private inline fun <reified T> read(values: Preferences, key: Preferences.Key<T>): T? = values.asMap()[key] as? T

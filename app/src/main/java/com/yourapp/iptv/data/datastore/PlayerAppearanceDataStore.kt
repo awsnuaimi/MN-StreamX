@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.data.backup.editAppData
+
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -14,6 +16,6 @@ internal val Context.playerAppearanceStore by preferencesDataStore(name = "playe
 class PlayerAppearanceDataStore(private val store: DataStore<Preferences>) : PlayerAppearanceRepository {
     override fun observe() = store.data.map(PlayerAppearanceCodec::decode)
     override suspend fun save(appearance: PlayerAppearance) {
-        store.edit { PlayerAppearanceCodec.encode(it, appearance) }
+        store.editAppData { PlayerAppearanceCodec.encode(it, appearance) }
     }
 }

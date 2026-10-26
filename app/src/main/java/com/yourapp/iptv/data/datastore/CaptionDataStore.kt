@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.data.backup.editAppData
+
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
@@ -12,7 +14,7 @@ import kotlinx.coroutines.flow.map
 internal val Context.captionStore by preferencesDataStore(name = "player_captions")
 class CaptionDataStore(private val store: DataStore<Preferences>) : CaptionRepository {
     override fun observe() = store.data.map(CaptionCodec::decode).distinctUntilChanged()
-    override suspend fun save(value: CaptionSettings) { store.edit { CaptionCodec.encode(it, value.normalized()) } }
+    override suspend fun save(value: CaptionSettings) { store.editAppData { CaptionCodec.encode(it, value.normalized()) } }
 }
 internal object CaptionCodec {
     private val mode = stringPreferencesKey("mode")

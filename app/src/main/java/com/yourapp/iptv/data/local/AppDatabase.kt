@@ -8,6 +8,7 @@ import com.yourapp.iptv.data.local.dao.ChannelDao
 import com.yourapp.iptv.data.local.dao.EpgDao
 import com.yourapp.iptv.data.local.dao.FavoriteDao
 import com.yourapp.iptv.data.local.dao.ScopedFavoriteDao
+import com.yourapp.iptv.data.local.dao.BackupDao
 import com.yourapp.iptv.data.local.entity.ChannelEntity
 import com.yourapp.iptv.data.local.entity.FavoriteEntity
 import com.yourapp.iptv.data.local.entity.ScopedFavoriteEntity
@@ -22,6 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun channelDao(): ChannelDao
     abstract fun favoriteDao(): FavoriteDao
     abstract fun scopedFavoriteDao(): ScopedFavoriteDao
+    abstract fun backupDao(): BackupDao
     abstract fun epgDao(): EpgDao
 
     companion object {

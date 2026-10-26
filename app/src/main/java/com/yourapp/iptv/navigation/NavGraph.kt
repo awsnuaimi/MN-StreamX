@@ -25,6 +25,7 @@ import com.yourapp.iptv.ui.screen.history.WatchHistoryScreen
 import com.yourapp.iptv.ui.screen.vod.VodScreen
 import com.yourapp.iptv.ui.screen.vod.VodPlaybackScreen
 import com.yourapp.iptv.domain.model.VodKind
+import com.yourapp.iptv.ui.screen.backup.BackupScreen
 
 @Composable
 fun AppNavGraph(startup: StartupPlaybackViewModel) {
@@ -126,9 +127,11 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
                 onHomeAppearance = { nav.navigate("home_appearance") { launchSingleTop = true } },
                 onPlayerAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
                 onSubscriptions = { nav.navigate(Destinations.SUBSCRIPTIONS) { launchSingleTop = true } },
+                onBackup = { nav.navigate(Destinations.BACKUP) { launchSingleTop = true } },
                 onBack = { nav.popBackStack() }
             )
         }
+        composable(Destinations.BACKUP) { BackupScreen(onBack = { nav.popBackStack() }) }
         composable(Destinations.SUBSCRIPTIONS) {
             SubscriptionsScreen(onBack = { nav.popBackStack() }, onUsed = {
                 nav.navigate(Destinations.HOME) {

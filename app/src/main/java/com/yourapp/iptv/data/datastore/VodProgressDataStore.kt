@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.data.backup.editAppData
+
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
@@ -23,7 +25,6 @@ internal val Context.vodProgressStore by preferencesDataStore(
     name = "vod_progress", corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
 )
 
-/** Stores only hashed playlist provenance and bounded VOD timestamps. No stream URLs or credentials. */
 class VodProgressDataStore(
     private val store: DataStore<Preferences>,
     private val settings: SettingsRepository,
@@ -37,7 +38,7 @@ class VodProgressDataStore(
             for (command in pending) {
                 try { apply(command) }
                 catch (error: CancellationException) { throw error }
-                catch (_: Exception) { /* A transient disk error must not crash video playback. */ }
+                catch (_: Exception) { }
             }
         }
     }
@@ -55,7 +56,7 @@ class VodProgressDataStore(
     private suspend fun apply(command: Command) {
         val source = settings.observeSettings().first()
         if (!source.hasSelectedSource() || PlaylistCacheKey.of(source) != command.source) return
-        store.edit { preferences ->
+        store.editAppData { preferences ->
             val itemKey = key(command.source)
             val previous = VodProgressCodec.decode(preferences[itemKey])
             val updated = VodProgress.record(previous, command.entry, command.completed)

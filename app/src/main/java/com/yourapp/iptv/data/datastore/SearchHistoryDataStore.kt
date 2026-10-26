@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.data.backup.editAppData
+
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
@@ -26,7 +28,7 @@ class SearchHistoryDataStore(private val store: DataStore<Preferences>) : Search
         val clean = SearchText.query(query)
         val normalized = SearchText.normalized(clean)
         if (normalized.isBlank()) return
-        store.edit { values ->
+        store.editAppData { values ->
             val previous = decode(values[key(sourceKey)])
             val rows = (listOf(clean) + previous.filterNot { SearchText.normalized(it) == normalized }).take(LIMIT)
             val timestamp = values.asMap().filter { it.key.name.startsWith(PREFIX) }.values
@@ -40,7 +42,7 @@ class SearchHistoryDataStore(private val store: DataStore<Preferences>) : Search
 
     override suspend fun clear(sourceKey: String) {
         require(validKey(sourceKey))
-        store.edit { it.remove(key(sourceKey)) }
+        store.editAppData { it.remove(key(sourceKey)) }
     }
 
     private fun key(source: String) = stringPreferencesKey(PREFIX + source)

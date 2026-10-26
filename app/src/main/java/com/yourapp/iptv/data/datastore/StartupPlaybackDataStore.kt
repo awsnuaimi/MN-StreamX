@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.data.backup.editAppData
+
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
@@ -17,7 +19,7 @@ class StartupPlaybackDataStore(private val store: DataStore<Preferences>) : Star
         values.asMap()[enabledKey] as? Boolean ?: false
     }.distinctUntilChanged()
 
-    override suspend fun save(enabled: Boolean) { store.edit { it[enabledKey] = enabled } }
+    override suspend fun save(enabled: Boolean) { store.editAppData { it[enabledKey] = enabled } }
 
     private companion object {
         val enabledKey = booleanPreferencesKey("resume_last_channel")

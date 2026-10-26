@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.data.backup.editAppData
+
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
@@ -30,7 +32,7 @@ class OrganizationDataStore(private val store: DataStore<Preferences>, private v
     }
     override suspend fun save(value: OrganizationConfig) {
         if (OrganizationNames.sourceKey(settings.observeSettings().first()) != value.sourceKey) throw IOException("Organization source changed")
-        store.edit { values ->
+        store.editAppData { values ->
             val current = OrganizationCodec.decode(values[key(value.sourceKey)], value.sourceKey)
             if (current.revision != value.revision) throw IOException("Organization was changed by another editor")
             values[key(value.sourceKey)] = OrganizationCodec.encode(value.copy(revision = current.revision + 1))

@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.data.backup.editAppData
+
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
@@ -15,7 +17,6 @@ import java.io.IOException
 internal val Context.watchHistoryStore by preferencesDataStore(name = "watch_history",
     corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() })
 
-/** One application-owned queue orders first-frame events, removals and clear operations. */
 class WatchHistoryDataStore(private val store: DataStore<Preferences>, private val settings: SettingsRepository,
     scope: CoroutineScope) : WatchHistoryRepository {
     private data class Command(val source: String, val entry: WatchHistoryEntry? = null,
@@ -59,7 +60,7 @@ class WatchHistoryDataStore(private val store: DataStore<Preferences>, private v
         val source = settings.observeSettings().first()
         if (!source.hasSelectedSource() || PlaylistCacheKey.of(source) != command.source)
             throw IOException("History source changed")
-        store.edit { values ->
+        store.editAppData { values ->
             val key = key(command.source)
             val previous = WatchHistoryCodec.decode(values[key])
             val rows = when {

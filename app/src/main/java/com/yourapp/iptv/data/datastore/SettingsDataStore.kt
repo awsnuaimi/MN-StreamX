@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.data.backup.editAppData
+
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
@@ -12,9 +14,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import java.io.IOException
 
-private val Context.settingsDataStore by preferencesDataStore(name = "settings")
+internal val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
-/** One preferences transaction owns the encrypted accounts and active account together. */
 class SettingsDataStore internal constructor(
     private val store: DataStore<Preferences>, private val cipher: SubscriptionCipher
 ) : SubscriptionRepository {
@@ -22,8 +23,7 @@ class SettingsDataStore internal constructor(
     private val accounts = stringPreferencesKey("subscriptions_encrypted_v1")
 
     override fun observeSubscriptions(): Flow<Subscriptions> = flow {
-        // Complete legacy encryption before exposing settings to any consumer or profile switch.
-        store.edit { if (it[accounts] == null) write(it, LegacySettingsCodec.read(it)) }
+        store.editAppData { if (it[accounts] == null) write(it, LegacySettingsCodec.read(it)) }
         emitAll(store.data.map(::read).distinctUntilChanged())
     }.flowOn(Dispatchers.IO)
 
@@ -40,7 +40,7 @@ class SettingsDataStore internal constructor(
 
     private suspend fun modify(change: (Subscriptions) -> Subscriptions): Subscriptions = withContext(Dispatchers.IO) {
         var committed: Subscriptions? = null
-        store.edit { values ->
+        store.editAppData { values ->
             val old = if (values[accounts] == null) LegacySettingsCodec.read(values) else read(values)
             val next = change(old)
             if (next != old || values[accounts] == null) write(values, next)
@@ -70,5 +70,5 @@ class SettingsDataStore internal constructor(
     suspend fun saveXtreamData(server: String, username: String, password: String) = modify { old -> old.copy(entries = old.entries.map {
         if (it.id == old.activeId) it.copy(settings = it.settings.copy(xtreamServer = server, xtreamUsername = username, xtreamPassword = password)) else it
     }) }
-    suspend fun clearAll() { store.edit { it.clear() } }
+    suspend fun clearAll() { store.editAppData { it.clear() } }
 }
