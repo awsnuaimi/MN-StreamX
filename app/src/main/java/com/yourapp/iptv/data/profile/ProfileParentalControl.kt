@@ -26,13 +26,18 @@ internal class ProfileParentalControl(private val device: ParentalControl, priva
         // A device grant read during a profile transition is never a grant for the new identity.
         val changing = before !== people || people.switching
         val rules = if (current.id == UserProfiles.DEFAULT_ID) raw.rules else current.rules
-        return raw.copy(profileId = current.id,unlocked = raw.unlocked && !changing,ready = raw.ready && people.ready && !changing,
+        return raw.copy(profileId = current.id,unlocked = raw.unlocked && !changing && people.ready && !people.failed && !raw.storageError,
+            ready = raw.ready && people.ready && !changing,
+            storageFailure = if (raw.storageError) raw.storageFailure else people.storageFailure,
             storageError = raw.storageError || people.failed || (current.kind == ProfileKind.CHILD && !raw.configured),
             rules = if (current.kind == ProfileKind.CHILD) rules.copy(sections = rules.sections + ParentalSection.SETTINGS) else rules,
             profileLocked = people.catalog.entries.size > 1 && current.kind == ProfileKind.ADULT && raw.configured,
             epoch = raw.epoch + people.epoch)
     }
-    override suspend fun initialize() { device.initialize();profiles.initialize() }
+    override suspend fun initialize() {
+        if (device.state.value.storageError || profiles.state.value.failed) device.lock()
+        device.initialize();profiles.initialize()
+    }
     override fun foreground() = device.foreground()
     override fun background() = device.background()
     override fun lock() = device.lock()

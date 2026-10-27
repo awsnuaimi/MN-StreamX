@@ -22,6 +22,8 @@ import com.yourapp.iptv.domain.model.HomeLanguage
 import com.yourapp.iptv.domain.parental.ParentalState
 import com.yourapp.iptv.domain.parental.ParentalRenderSession
 import com.yourapp.iptv.ui.component.common.AppButton
+import com.yourapp.iptv.ui.component.common.secureStorageMessage
+import com.yourapp.iptv.ui.screen.recovery.AppResetAction
 import com.yourapp.iptv.viewmodel.ParentalViewModel
 import kotlinx.coroutines.delay
 
@@ -49,9 +51,10 @@ fun ParentalSessionHost(model: ParentalViewModel, language: HomeLanguage, conten
         Box(Modifier.fillMaxSize(),contentAlignment = Alignment.Center) {
             if (!access.ready || (!access.storageError && !contentReady)) CircularProgressIndicator()
             else Column(horizontalAlignment = Alignment.CenterHorizontally,verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(labels.text("تعذر قراءة الحماية. يبقى المحتوى مقفولًا.","Protection could not be read. Content stays locked.",
-                    "Schutz konnte nicht gelesen werden. Inhalte bleiben gesperrt."))
+                Text(secureStorageMessage(access.storageFailure,language))
+                Text(labels.text("يبقى المحتوى مقفولًا.","Content stays locked.","Inhalte bleiben gesperrt."))
                 AppButton(labels.text("إعادة المحاولة","Retry","Erneut versuchen"),model::retryStorage)
+                AppResetAction(access.storageFailure,language)
             }
         }
         return

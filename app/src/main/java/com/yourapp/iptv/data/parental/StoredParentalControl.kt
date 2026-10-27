@@ -1,6 +1,7 @@
 package com.yourapp.iptv.data.parental
 
 import com.yourapp.iptv.domain.parental.*
+import com.yourapp.iptv.data.security.storageFailure as diagnoseStorageFailure
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,8 +44,10 @@ internal class StoredParentalControl(private val storage: ParentalStorage, priva
             record = loaded; deadline = loaded?.deadline ?: 0
             publish(unlocked = false)
         } catch (error: CancellationException) { throw error }
-        catch (_: Exception) { synchronized(gate) {
-            mutable.value = ParentalState(ready = true,configured = true,storageError = true,epoch = state.value.epoch + 1)
+        catch (error: Exception) { synchronized(gate) {
+            generation++
+            mutable.value = ParentalState(ready = true,configured = true,storageError = true,
+                storageFailure = diagnoseStorageFailure(error),epoch = state.value.epoch + 1)
         } }
     } }
 
@@ -87,7 +90,7 @@ internal class StoredParentalControl(private val storage: ParentalStorage, priva
         try { rules.validate() } catch (_: IllegalArgumentException) { return@withLock ParentalResult.INVALID_RULES }
         try { commit(ParentalRecord(old.salt,old.hash,rules),token,unlock = false) }
         catch (error: CancellationException) { throw error }
-        catch (_: Exception) { storageFailure(); ParentalResult.STORAGE_ERROR }
+        catch (error: Exception) { storageFailure(error); ParentalResult.STORAGE_ERROR }
     } }
 
     private suspend fun operation(pin: CharArray, action: suspend (Long) -> ParentalResult): ParentalResult = try {
@@ -97,7 +100,7 @@ internal class StoredParentalControl(private val storage: ParentalStorage, priva
             if (!active(token)) return@withLock ParentalResult.DENIED
             try { action(token) }
             catch (error: CancellationException) { throw error }
-            catch (_: Exception) { storageFailure(); ParentalResult.STORAGE_ERROR }
+            catch (error: Exception) { storageFailure(error); ParentalResult.STORAGE_ERROR }
         } }
     } finally { pin.fill('\u0000') }
 
@@ -120,9 +123,10 @@ internal class StoredParentalControl(private val storage: ParentalStorage, priva
         if (granted) ParentalResult.OK else ParentalResult.DENIED
     }
     private fun usable() = state.value.ready && !state.value.storageError
-    private fun storageFailure() = synchronized(gate) {
+    private fun storageFailure(error: Exception) = synchronized(gate) {
         generation++
-        mutable.value = state.value.copy(storageError = true,unlocked = false,epoch = state.value.epoch + 1)
+        mutable.value = state.value.copy(storageError = true,storageFailure = diagnoseStorageFailure(error),
+            unlocked = false,epoch = state.value.epoch + 1)
     }
     private fun active(token: Long) = synchronized(gate) { foreground && generation == token }
     private fun publish(unlocked: Boolean) = synchronized(gate) {

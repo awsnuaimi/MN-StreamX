@@ -4,6 +4,7 @@ import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.parental.ParentalRules
 import com.yourapp.iptv.domain.parental.ParentalSection
 import java.util.UUID
+import com.yourapp.iptv.domain.security.SecureStorageFailure
 
 enum class ProfileKind { ADULT, CHILD }
 
@@ -38,7 +39,8 @@ data class UserProfiles(val entries: List<UserProfile> = listOf(UserProfile(DEFA
 }
 
 data class ProfilesState(val ready: Boolean = false, val failed: Boolean = false,
-    val switching: Boolean = false, val catalog: UserProfiles = UserProfiles(), val epoch: Long = 0)
+    val switching: Boolean = false, val catalog: UserProfiles = UserProfiles(), val epoch: Long = 0,
+    val storageFailure: SecureStorageFailure? = null)
 
 enum class ProfileResult { OK, PIN_REQUIRED, PIN_SETUP_REQUIRED, LIMIT, INVALID, NOT_FOUND, ACTIVE_PROFILE, STORAGE, DENIED }
 

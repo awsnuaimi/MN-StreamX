@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.repository.SubscriptionRepository
+import com.yourapp.iptv.domain.security.SecureStorageException
 import com.yourapp.iptv.ui.state.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -22,14 +23,15 @@ class SettingsViewModel @Inject constructor(private val repository: Subscription
 
     fun loadSavedSettings() {
         if (state.value.isSaving || loadJob?.isActive == true) return
-        state.update { it.copy(isLoading = true, loadFailed = false, issue = null, pending = null) }
+        state.update { it.copy(isLoading = true, loadFailed = false, issue = null, pending = null,storageFailure = null) }
         loadJob = viewModelScope.launch {
             try {
                 catalog = repository.observeSubscriptions().first()
                 editDraft(requireNotNull(catalog).active)
             } catch (error: CancellationException) { throw error }
-            catch (_: Exception) {
-                state.update { it.copy(isLoading = false, loadFailed = true, issue = SettingsIssue.READ_FAILED) }
+            catch (error: Exception) {
+                state.update { it.copy(isLoading = false, loadFailed = true, issue = SettingsIssue.READ_FAILED,
+                    storageFailure = (error as? SecureStorageException)?.problem) }
             }
         }
     }
@@ -101,7 +103,9 @@ class SettingsViewModel @Inject constructor(private val repository: Subscription
                 if (navigate) state.update { it.copy(isSaved = true) }
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
-                state.update { it.copy(isSaving = false, issue = SettingsValidation.issue(error)) }
+                val failure = (error as? SecureStorageException)?.problem
+                state.update { it.copy(isSaving = false,issue = SettingsValidation.issue(error),
+                    loadFailed = failure != null,storageFailure = failure) }
             }
         }
     }

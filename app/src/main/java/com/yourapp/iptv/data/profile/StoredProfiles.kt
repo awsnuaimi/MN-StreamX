@@ -5,6 +5,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.yourapp.iptv.data.backup.AppDataGate
+import com.yourapp.iptv.data.security.*
+import com.yourapp.iptv.domain.security.SecureStorageException
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.parental.*
 import com.yourapp.iptv.domain.profile.*
@@ -29,25 +31,30 @@ internal class StoredProfiles(private val store: DataStore<Preferences>, private
     private val mutations = Mutex()
     private val initialization = Mutex()
     private var observer: Job? = null
+    @Volatile private var observation = 0L
     private class Refused(val result: ProfileResult) : Exception("Profile operation refused")
 
     override suspend fun initialize() = withContext(Dispatchers.IO) { initialization.withLock {
         pin.initialize()
         if (observer?.isActive != true || state.value.failed) {
-            observer?.cancel();mutable.update { it.copy(ready = false,failed = false) }
+            val ticket = ++observation
+            observer?.cancel();mutable.update { it.copy(ready = false,failed = false,storageFailure = null) }
             observer = scope.launch {
                 try { store.data.collect { prefs ->
                     val next = decode(prefs)
-                    mutable.update { old -> old.copy(ready = true,failed = false,catalog = next,
-                        epoch = old.epoch + if (!old.ready || old.failed || old.catalog.activeId != next.activeId) 1 else 0) }
+                    mutable.update { old -> if (ticket != observation || old.failed) old
+                        else old.copy(ready = true,storageFailure = null,catalog = next,
+                            epoch = old.epoch + if (!old.ready || old.catalog.activeId != next.activeId) 1 else 0) }
                 } } catch (error: CancellationException) { throw error }
-                catch (_: Exception) { mutable.update { it.copy(ready = true,failed = true,switching = false,epoch = it.epoch + 1) } }
+                catch (error: Exception) { storageFailed(error,ticket) }
             }
         }
         state.first { it.ready }
         if (!state.value.failed) scope.launch { mutations.withLock {
             try { AppDataGate.write { clean(decode(store.data.first())) } }
-            catch (error: CancellationException) { throw error } catch (_: Exception) { }
+            catch (error: CancellationException) { throw error }
+            catch (error: SecureStorageException) { storageFailed(error) }
+            catch (_: Exception) { }
         } }
     };Unit }
 
@@ -79,6 +86,7 @@ internal class StoredProfiles(private val store: DataStore<Preferences>, private
     }
     override suspend fun select(id: String): ProfileResult = withContext(Dispatchers.IO) { mutations.withLock {
         try { AppDataGate.write {
+            if (!state.value.ready || state.value.failed) throw Refused(ProfileResult.STORAGE)
             val before = decode(store.data.first())
             val target = before.entries.firstOrNull { it.id == id } ?: throw Refused(ProfileResult.NOT_FOUND)
             if (id == before.activeId) return@write ProfileResult.OK
@@ -99,7 +107,7 @@ internal class StoredProfiles(private val store: DataStore<Preferences>, private
             }
         } } catch (error: CancellationException) { throw error }
         catch (error: Refused) { error.result }
-        catch (_: Exception) { ProfileResult.STORAGE }
+        catch (error: Exception) { storageFailed(error);ProfileResult.STORAGE }
     } }
     override suspend fun saveRules(id: String, value: ParentalRules) = mutate(admin = true) { before ->
         if (before.activeId != id) throw Refused(ProfileResult.DENIED)
@@ -135,7 +143,7 @@ internal class StoredProfiles(private val store: DataStore<Preferences>, private
             } } catch (error: CancellationException) { throw error }
             catch (error: Refused) { error.result }
             catch (_: IllegalArgumentException) { ProfileResult.INVALID }
-            catch (_: Exception) { ProfileResult.STORAGE }
+            catch (error: Exception) { storageFailed(error);ProfileResult.STORAGE }
         }
     }
     private suspend fun clean(catalog: UserProfiles) {
@@ -146,11 +154,22 @@ internal class StoredProfiles(private val store: DataStore<Preferences>, private
         if (removed.isNotEmpty()) persist(catalog.copy(retired = catalog.retired - removed,revision = catalog.revision + 1))
     }
     private suspend fun persist(value: UserProfiles) {
-        val encoded = cipher.encrypt(ProfileCodec.encode(value))
-        store.updateData { it.toMutablePreferences().apply { this[PROFILE_RECORD] = encoded } }
+        val plain = ProfileCodec.encode(value)
+        store.updateData { prefs ->
+            val encoded = if (prefs[PROFILE_RECORD] == null) cipher.encryptNew(plain) else cipher.encrypt(plain)
+            prefs.toMutablePreferences().apply { this[PROFILE_RECORD] = encoded }
+        }
         val seen = withTimeout(10_000) { state.first { it.failed || it.catalog == value } }
         if (seen.failed) throw IOException("Profile record could not be read")
     }
-    private fun decode(prefs: Preferences) = ProfileCodec.decode(prefs[PROFILE_RECORD]?.let(cipher::decrypt))
+    private fun decode(prefs: Preferences): UserProfiles {
+        val plain = prefs[PROFILE_RECORD]?.let(cipher::decrypt)
+        return decodeSecureRecord { ProfileCodec.decode(plain) }
+    }
+    private fun storageFailed(error: Exception, ticket: Long? = null) { mutable.update {
+        if (ticket != null && ticket != observation) it
+        else it.copy(ready = true,failed = true,switching = false,
+            storageFailure = it.storageFailure ?: storageFailure(error),epoch = it.epoch + 1)
+    } }
     private fun requireName(value: String) { require(value.isNotBlank() && value.length <= 32 && value.none(Char::isISOControl)) }
 }

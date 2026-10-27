@@ -58,7 +58,10 @@ internal class BackupStorage(
         values[BackupStore.SETTINGS] = settings
         if (BackupStore.PROFILES in stores) {
             val merged = BackupProfileMerge.merge(people(before),saved.profiles,options.settings)
-            values[BackupStore.PROFILES] = mutablePreferencesOf(PROFILE_RECORD to profileCipher.encrypt(ProfileCodec.encode(merged)))
+            val plain = ProfileCodec.encode(merged)
+            val encrypted = if (before.stores[BackupStore.PROFILES]?.get(PROFILE_RECORD) == null)
+                profileCipher.encryptNew(plain) else profileCipher.encrypt(plain)
+            values[BackupStore.PROFILES] = mutablePreferencesOf(PROFILE_RECORD to encrypted)
         }
         return BackupSnapshot(values, (before.favorites + saved.favorites).distinct(), before.legacyFavorites)
     }

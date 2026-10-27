@@ -7,12 +7,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.yourapp.iptv.data.subscription.*
+import com.yourapp.iptv.data.security.decodeSecureRecord
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.repository.SubscriptionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
-import java.io.IOException
 
 internal val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
@@ -48,11 +48,14 @@ class SettingsDataStore internal constructor(
         }
         requireNotNull(committed)
     }
-    private fun read(values: Preferences): Subscriptions = try {
-        SubscriptionCodec.decode(cipher.decrypt(requireNotNull(values[accounts])))
-    } catch (_: Exception) { throw IOException("Cannot read saved subscriptions") }
+    private fun read(values: Preferences): Subscriptions {
+        val record = decodeSecureRecord { requireNotNull(values[accounts]) }
+        val plain = cipher.decrypt(record)
+        return decodeSecureRecord { SubscriptionCodec.decode(plain) }
+    }
     private fun write(values: MutablePreferences, value: Subscriptions) {
-        values[accounts] = cipher.encrypt(SubscriptionCodec.encode(value))
+        val plain = SubscriptionCodec.encode(value)
+        values[accounts] = if (values[accounts] == null) cipher.encryptNew(plain) else cipher.encrypt(plain)
         LegacySettingsCodec.remove(values)
     }
 

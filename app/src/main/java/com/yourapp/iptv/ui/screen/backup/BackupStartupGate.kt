@@ -9,10 +9,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.yourapp.iptv.domain.model.*
+import com.yourapp.iptv.domain.security.SecureStorageFailure
+import com.yourapp.iptv.ui.screen.recovery.AppResetAction
 
 @Composable
 internal fun BackupStartupGate(state: BackupMaintenance, language: HomeLanguage, onRetry: () -> Unit,
-    content: @Composable () -> Unit) {
+    storageFailure: SecureStorageFailure? = null, content: @Composable () -> Unit) {
     val labels = BackupLabels(language)
     if (state == BackupMaintenance.READY || state == BackupMaintenance.RESTORING) {
         content()
@@ -35,6 +37,7 @@ internal fun BackupStartupGate(state: BackupMaintenance, language: HomeLanguage,
             } else {
                 Text(labels.error(BackupProblem.RECOVERY))
                 Button(onClick = onRetry) { Text(labels.retry()) }
+                AppResetAction(storageFailure,language)
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.yourapp.iptv.domain.parental
 
+import com.yourapp.iptv.domain.security.SecureStorageFailure
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.AppSettings
 import com.yourapp.iptv.domain.model.VodKind
@@ -24,7 +25,8 @@ data class ParentalState(
     val ready: Boolean = false, val configured: Boolean = false,
     val unlocked: Boolean = false, val storageError: Boolean = false,
     val rules: ParentalRules = ParentalRules(), val epoch: Long = 0,
-    val profileLocked: Boolean = false, val profileId: String = "default"
+    val profileLocked: Boolean = false, val profileId: String = "default",
+    val storageFailure: SecureStorageFailure? = null
 ) {
     val restricted: Boolean get() = configured && !unlocked
     val contentRestricted: Boolean get() = restricted &&

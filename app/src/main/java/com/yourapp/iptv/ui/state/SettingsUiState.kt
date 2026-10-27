@@ -2,6 +2,7 @@ package com.yourapp.iptv.ui.state
 
 import com.yourapp.iptv.domain.model.AppSettings
 import com.yourapp.iptv.domain.model.Subscription
+import com.yourapp.iptv.domain.security.SecureStorageFailure
 
 sealed interface SubscriptionAction {
     data object New : SubscriptionAction
@@ -38,7 +39,8 @@ data class SettingsUiState(
     val editingSubscriptionId: String? = null,
     val subscriptionName: String = "",
     val dirty: Boolean = false,
-    val pending: SubscriptionAction? = null
+    val pending: SubscriptionAction? = null,
+    val storageFailure: SecureStorageFailure? = null
 ) {
     val errorMessage: String? get() = issue?.fallbackMessage
     val enabled: Boolean get() = !isLoading && !isSaving && !loadFailed

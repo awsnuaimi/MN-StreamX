@@ -6,12 +6,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.R
 import com.yourapp.iptv.domain.model.Subscription
+import com.yourapp.iptv.domain.model.HomeLanguage
 import com.yourapp.iptv.domain.model.Subscriptions
 import com.yourapp.iptv.ui.component.common.AppButton
+import com.yourapp.iptv.ui.component.common.secureStorageMessage
+import com.yourapp.iptv.ui.screen.recovery.AppResetAction
 import com.yourapp.iptv.ui.state.*
 import com.yourapp.iptv.viewmodel.SettingsViewModel
 
@@ -57,7 +61,15 @@ internal fun SubscriptionSettings(state: SettingsUiState, model: SettingsViewMod
         if (state.editingSubscriptionId != state.activeSubscriptionId) AppButton(stringResource(R.string.subscription_cancel_edit),
             { model.request(SubscriptionAction.Edit(state.activeSubscriptionId)) }, enabled = state.enabled)
     }
-    state.issue?.let { Text(stringResource(issueText(it)), color = MaterialTheme.colorScheme.error) }
+    if (state.storageFailure != null) {
+        val language = when (LocalConfiguration.current.locales[0].language) {
+            "de" -> HomeLanguage.GERMAN
+            "en" -> HomeLanguage.ENGLISH
+            else -> HomeLanguage.ARABIC
+        }
+        Text(secureStorageMessage(state.storageFailure,language),color = MaterialTheme.colorScheme.error)
+        AppResetAction(state.storageFailure,language)
+    } else state.issue?.let { Text(stringResource(issueText(it)), color = MaterialTheme.colorScheme.error) }
     if (state.loadFailed) AppButton(stringResource(R.string.ui_settings_reload), model::loadSavedSettings)
     else AppButton(stringResource(if (state.isSaving) R.string.ui_saving else R.string.subscription_save_use), model::saveSettings,
         Modifier.fillMaxWidth().testTag("subscription-save"), enabled = state.enabled)
