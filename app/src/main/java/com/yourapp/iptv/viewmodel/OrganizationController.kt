@@ -43,7 +43,9 @@ internal class OrganizationController(
 
     fun clearChannels() {
         channels = null
-        job?.cancel()
+        job?.cancel();job = null
+        cachedSource = null;cachedConfig = null;cachedResult = null
+        signaledFailure = null
     }
 
     fun setChannels(value: List<Channel>) {

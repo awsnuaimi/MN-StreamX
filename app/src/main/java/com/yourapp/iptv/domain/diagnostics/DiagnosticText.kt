@@ -79,6 +79,8 @@ class DiagnosticText(private val language: HomeLanguage) {
         DiagnosticIssue.PLAYBACK -> text("أبلغ المشغّل عن عطل؛ راجع الرمز الفني","Player reported a failure; inspect the technical code","Der Player meldet einen Fehler; technischen Code prüfen")
         DiagnosticIssue.DECODER -> text("مشكلة في مفكّك الترميز أو توافق الصيغة؛ راجع الرمز والذاكرة المتاحة","Decoder or format compatibility problem; inspect the code and available memory","Decoder- oder Formatproblem; Code und verfügbaren Speicher prüfen")
         DiagnosticIssue.UPDATE -> text("تعذر إكمال تحديث التطبيق؛ راجع رمز الحالة","App update could not complete; inspect the issue code","App-Update konnte nicht abgeschlossen werden; Fehlercode prüfen")
+        DiagnosticIssue.HISTORY_WRITE -> text("تعذّر حفظ سجل المشاهدة في التخزين المحلي", "Watch history could not be saved to local storage", "Der Wiedergabeverlauf konnte nicht lokal gespeichert werden")
+        DiagnosticIssue.HISTORY_QUEUE -> text("تعذّر قبول سجل مشاهدة إضافي؛ طابور الحفظ ممتلئ أو غير متاح", "Another watch event could not be accepted; the write queue is full or unavailable", "Ein weiterer Verlaufseintrag konnte nicht angenommen werden; die Schreibwarteschlange ist voll oder nicht verfügbar")
         DiagnosticIssue.INTERNAL -> text("تعذر إكمال العملية داخل التطبيق","The app could not complete the operation","Die App konnte den Vorgang nicht abschließen")
         DiagnosticIssue.CANCELLED -> text("أُلغي الفحص أو تغيّر المصدر","Checks cancelled or source changed","Prüfung abgebrochen oder Quelle gewechselt")
     }

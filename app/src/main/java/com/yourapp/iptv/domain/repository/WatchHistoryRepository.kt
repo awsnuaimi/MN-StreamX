@@ -6,7 +6,9 @@ import kotlinx.coroutines.flow.flowOf
 
 interface WatchHistoryRepository {
     fun observe(sourceKey: String): Flow<List<WatchHistoryEntry>>
-    /** Enqueue synchronously in event order; disk work never delays playback. */
+    /** Enqueue synchronously in event order; disk work never delays playback.
+     * Consecutive records may be compacted to the visible history limit. Under overload, optional
+     * events for an additional source may be rejected; explicit edits must report failure. */
     fun recordStarted(sourceKey: String, entry: WatchHistoryEntry)
     suspend fun remove(sourceKey: String, channelId: String)
     suspend fun clear(sourceKey: String)

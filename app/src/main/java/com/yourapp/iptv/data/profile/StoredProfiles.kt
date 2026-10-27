@@ -41,10 +41,7 @@ internal class StoredProfiles(private val store: DataStore<Preferences>, private
             observer?.cancel();mutable.update { it.copy(ready = false,failed = false,storageFailure = null) }
             observer = scope.launch {
                 try { store.data.collect { prefs ->
-                    val next = decode(prefs)
-                    mutable.update { old -> if (ticket != observation || old.failed) old
-                        else old.copy(ready = true,storageFailure = null,catalog = next,
-                            epoch = old.epoch + if (!old.ready || old.catalog.activeId != next.activeId) 1 else 0) }
+                    observeRecord(prefs,ticket)
                 } } catch (error: CancellationException) { throw error }
                 catch (error: Exception) { storageFailed(error,ticket) }
             }
@@ -154,20 +151,50 @@ internal class StoredProfiles(private val store: DataStore<Preferences>, private
         if (removed.isNotEmpty()) persist(catalog.copy(retired = catalog.retired - removed,revision = catalog.revision + 1))
     }
     private suspend fun persist(value: UserProfiles) {
-        val plain = ProfileCodec.encode(value)
-        store.updateData { prefs ->
-            val encoded = if (prefs[PROFILE_RECORD] == null) cipher.encryptNew(plain) else cipher.encrypt(plain)
-            prefs.toMutablePreferences().apply { this[PROFILE_RECORD] = encoded }
+        try {
+            val plain = ProfileCodec.encode(value)
+            val committed = store.updateData { prefs ->
+                val encoded = if (prefs[PROFILE_RECORD] == null) cipher.encryptNew(plain) else cipher.encrypt(plain)
+                prefs.toMutablePreferences().apply { this[PROFILE_RECORD] = encoded }
+            }
+            // updateData returns only after durable commit. Verify its actual encrypted result,
+            // then publish before our caller releases AppDataGate; no observer scheduling dependency.
+            val verified = decode(committed)
+            if (verified != value || !publish(verified)) throw IOException("Profile record could not be published")
+        } catch (error: CancellationException) { throw error }
+        catch (error: Exception) {
+            // Fail closed before select() removes its switching mask and before the gate opens.
+            storageFailed(error);throw error
         }
-        val seen = withTimeout(10_000) { state.first { it.failed || it.catalog == value } }
-        if (seen.failed) throw IOException("Profile record could not be read")
+    }
+    private suspend fun observeRecord(prefs: Preferences, ticket: Long) {
+        // Decryption may be slow. Never hold the application transaction gate while decoding
+        // an observer snapshot: the writer must be able to commit and publish independently.
+        var failure: Exception? = null
+        val next = try { decode(prefs) }
+            catch (error: CancellationException) { throw error }
+            catch (error: Exception) { failure = error;null }
+        AppDataGate.write {
+            if (ticket != observation || state.value.failed) return@write
+            // Compare the record, not its revision: backup rollback may legitimately restore
+            // a lower revision. A stale success OR failure must not replace a newer commit.
+            if (store.data.first()[PROFILE_RECORD] != prefs[PROFILE_RECORD]) return@write
+            val error = failure
+            if (error != null) storageFailed(error,ticket) else publish(requireNotNull(next),ticket)
+        }
+    }
+    private fun publish(next: UserProfiles, ticket: Long? = null): Boolean {
+        mutable.update { old -> if ((ticket != null && ticket != observation) || old.failed) old
+            else old.copy(ready = true,storageFailure = null,catalog = next,
+                epoch = old.epoch + if (!old.ready || old.catalog.activeId != next.activeId) 1 else 0) }
+        return state.value.let { it.ready && !it.failed && it.catalog == next }
     }
     private fun decode(prefs: Preferences): UserProfiles {
         val plain = prefs[PROFILE_RECORD]?.let(cipher::decrypt)
         return decodeSecureRecord { ProfileCodec.decode(plain) }
     }
     private fun storageFailed(error: Exception, ticket: Long? = null) { mutable.update {
-        if (ticket != null && ticket != observation) it
+        if ((ticket != null && ticket != observation) || it.failed) it
         else it.copy(ready = true,failed = true,switching = false,
             storageFailure = it.storageFailure ?: storageFailure(error),epoch = it.epoch + 1)
     } }

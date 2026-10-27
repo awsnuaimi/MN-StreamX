@@ -7,10 +7,9 @@ import com.yourapp.iptv.domain.repository.OrganizationRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.PlaylistLoadException
-import com.yourapp.iptv.domain.model.PlaylistSource
+import com.yourapp.iptv.domain.model.Channel
+import com.yourapp.iptv.domain.model.HomeStartupSnapshot
 import com.yourapp.iptv.domain.model.AppSettings
-import com.yourapp.iptv.domain.model.PlaylistCacheKey
-import com.yourapp.iptv.domain.model.HomeStartupPolicy
 import com.yourapp.iptv.domain.model.HomeBrowseSession
 import com.yourapp.iptv.domain.model.HomeGridPosition
 import com.yourapp.iptv.domain.model.HomeGridRestore
@@ -45,29 +44,21 @@ import com.yourapp.iptv.domain.parental.ParentalProjection
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val settings: SettingsRepository,
-    private val playlists: PlaylistRepository,
+    playlists: PlaylistRepository,
     @DefaultDispatcher private val background: CoroutineDispatcher,
     favorites: FavoriteRepository,
     organization: OrganizationRepository = OrganizationRepository.Disabled,
-    private val startup: HomeStartupRepository = HomeStartupRepository.Disabled,
+    startup: HomeStartupRepository = HomeStartupRepository.Disabled,
     browseSessions: HomeSessionRepository = HomeSessionRepository.Disabled,
     private val parental: ParentalControl = ParentalControl.Disabled
 ) : ViewModel() {
     private val state = MutableStateFlow(HomeUiState())
     val uiState = state.asStateFlow()
-    private var loadJob: Job? = null
     private var settingsJob: Job? = null
     private var filterJob: Job? = null
-    private var persistJob: Job? = null
-    private var pendingRefresh: AppSettings? = null
-    private var refreshedAtMillis = 0L
-    private var restoring = false
     private var catalogTree = OrganizationTree()
     private val openedAtNanos = System.nanoTime()
     private var reportedReady = false
-    private var activeSource: AppSettings? = null
-    private var generation = 0L
-    private var refreshing = false
     private var favoriteIds: Set<String>? = null
     private var pendingBrowse: HomeBrowseSession? = null
     private var browseDraft: HomeBrowseSession? = null
@@ -80,6 +71,21 @@ class HomeViewModel @Inject constructor(
     val favoriteState = favoriteController.uiState
     private val organizer: OrganizationController = OrganizationController(viewModelScope, organization, background, ::onCatalogChanged)
 
+    private val catalogLoader: HomeCatalogController = HomeCatalogController(viewModelScope,playlists,startup,background,
+        object : HomeCatalogController.Target {
+            override val hasChannels get() = state.value.channels.isNotEmpty()
+            override fun loading() { state.update { it.copy(isLoading = it.channels.isEmpty(),
+                isRefreshing = true,errorMessage = null) } }
+            override fun restore(snapshot: HomeStartupSnapshot) = organizer.restore(snapshot.config,snapshot.catalog)
+            override fun channels(value: List<Channel>, refreshing: Boolean) {
+                state.update { it.copy(isRefreshing = refreshing) }
+                organizer.setChannels(value)
+            }
+            override fun failed(error: Exception) { state.update { it.copy(isLoading = false,isRefreshing = false,
+                errorMessage = (error as? PlaylistLoadException)?.message
+                    ?: "تعذر تحميل القنوات. تحقق من الشبكة والإعدادات ثم أعد المحاولة.") } }
+        })
+
     private fun onCatalogChanged(value: OrganizedChannels) {
         val result = ParentalProjection.prune(value,parental.state.value)
         catalogTree = result.tree
@@ -87,19 +93,11 @@ class HomeViewModel @Inject constructor(
             groups = if (result.tree.enabled) result.tree.folders.map { f -> FolderFilter.of(f.id) }
                 else result.channels.mapNotNull { c -> c.group }.distinct().sorted(),
             selectedGroup = result.resolveFilter(it.selectedGroup), organization = result.tree,
-            needsSource = false, isRefreshing = refreshing,
+            needsSource = false, isRefreshing = catalogLoader.isRefreshing,
             isLoading = if (result.channels.isEmpty()) false else it.isLoading) }
         filterChannels()
-        val source = activeSource ?: return
         val config = organizer.currentConfig() ?: return
-        if (restoring) return
-        val verifiedAt = refreshedAtMillis
-        persistJob?.cancel()
-        persistJob = viewModelScope.launch(background) {
-            try { startup.save(source, config, result, verifiedAt) }
-            catch (error: CancellationException) { throw error }
-            catch (_: Exception) { /* Room remains authoritative; a cache write cannot break playback. */ }
-        }
+        catalogLoader.save(config,result)
     }
 
     fun retryFavorites() = favoriteController.retry()
@@ -161,11 +159,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refresh() {
-        if (loadJob?.isActive == true) return
-        pendingRefresh = null
-        val source = activeSource
-        if (source == null) observeSource()
-        else if (source.hasSelectedSource()) load(source, useStartup = false)
+        if (!catalogLoader.refresh()) observeSource()
     }
 
     /** Called after the catalog has actually been drawn, never after an arbitrary timeout. */
@@ -174,124 +168,28 @@ class HomeViewModel @Inject constructor(
             reportedReady = true
             LoadTimings.recordSince(LoadTimings.Stage.HOME_READY, openedAtNanos)
         }
-        val source = pendingRefresh ?: return
-        val token = generation
-        val opening = loadJob
-        viewModelScope.launch {
-            opening?.join()
-            if (generation == token && pendingRefresh == source) {
-                pendingRefresh = null
-                load(source, useStartup = false)
-            }
-        }
+        catalogLoader.onHomeReady()
+    }
+
+    private fun resetSource(source: AppSettings?, error: String? = null) {
+        filterJob?.cancel();filterJob = null
+        organizer.clearChannels()
+        catalogTree = OrganizationTree();pendingBrowse = null;browseDraft = null
+        val selected = source?.hasSelectedSource() == true
+        state.value = HomeUiState(isLoading = selected,needsSource = source != null && !selected,
+            browseScope = source?.let(ProfileScope::of).orEmpty(),errorMessage = error)
+        val key = state.value.browseScope.takeIf { selected }
+        favoriteController.bind(key);session.open(key)
+        catalogLoader.bind(source)
     }
 
     private fun observeSource() {
         settingsJob?.cancel()
         settingsJob = viewModelScope.launch {
             try {
-                settings.observeSettings().distinctUntilChangedBy(ProfileScope::of).collect { source ->
-                    generation++
-                    loadJob?.cancel()
-                    filterJob?.cancel()
-                    persistJob?.cancel()
-                    pendingRefresh = null
-                    refreshedAtMillis = 0L
-                    catalogTree = OrganizationTree()
-                    pendingBrowse = null
-                    browseDraft = null
-                    organizer.clearChannels()
-                    activeSource = source
-                    refreshing = false
-                    state.value = HomeUiState(isLoading = source.hasSelectedSource(),
-                        needsSource = !source.hasSelectedSource(), browseScope = ProfileScope.of(source))
-                    favoriteController.bind(state.value.browseScope.takeIf { source.hasSelectedSource() })
-                    session.open(state.value.browseScope.takeIf { source.hasSelectedSource() })
-                    if (source.hasSelectedSource()) load(source)
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                generation++
-                loadJob?.cancel()
-                organizer.clearChannels()
-                activeSource = null
-                favoriteController.bind(null)
-                pendingBrowse = null
-                session.open(null)
-                refreshing = false
-                state.update { it.copy(isLoading = false, isRefreshing = false,
-                    errorMessage = "تعذر قراءة إعدادات مصدر القنوات. أعد المحاولة.") }
-            }
-        }
-    }
-
-    private fun load(source: AppSettings, useStartup: Boolean = true) {
-        val token = ++generation
-        refreshing = true
-        state.update { it.copy(isLoading = it.channels.isEmpty(), isRefreshing = true, errorMessage = null) }
-        loadJob = viewModelScope.launch {
-            try {
-                if (state.value.channels.isEmpty()) {
-                    if (useStartup) {
-                        val saved = try { startup.restore(source) }
-                        catch (error: CancellationException) { throw error }
-                        catch (_: Exception) { null }
-                        currentCoroutineContext().ensureActive()
-                        if (generation != token) return@launch
-                        if (saved != null) {
-                            refreshedAtMillis = saved.refreshedAtMillis
-                            refreshing = false
-                            restoring = true
-                            val adopted = try { organizer.restore(saved.config, saved.catalog) }
-                                finally { restoring = false }
-                            if (adopted) {
-                                pendingRefresh = source.takeIf {
-                                    HomeStartupPolicy.needsRefresh(refreshedAtMillis, System.currentTimeMillis())
-                                }
-                                return@launch
-                            }
-                            refreshedAtMillis = 0L
-                            refreshing = true
-                        }
-                    }
-                    // Cache failure is a miss; it must not prevent a network retry.
-                    val cached = try { playlists.cachedPlaylist(source) }
-                    catch (error: CancellationException) { throw error }
-                    catch (_: Exception) { null }
-                    currentCoroutineContext().ensureActive()
-                    if (generation != token) return@launch
-                    cached?.channels?.takeIf { it.isNotEmpty() }?.let(organizer::setChannels)
-                }
-                val channels = LoadTimings.measure(LoadTimings.Stage.REFRESH) {
-                    withContext(background) {
-                        when (source.source) {
-                            PlaylistSource.M3U -> playlists.loadPlaylist(source.m3uUrl)
-                            PlaylistSource.XTREAM -> playlists.loadXtream(
-                                source.xtreamServer, source.xtreamUsername, source.xtreamPassword)
-                        }.channels
-                    }
-                }
-                currentCoroutineContext().ensureActive()
-                if (generation != token) return@launch
-                refreshedAtMillis = System.currentTimeMillis()
-                refreshing = false
-                state.update { it.copy(isRefreshing = false) }
-                organizer.setChannels(channels)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                if (generation != token) return@launch
-                refreshing = false
-                state.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        errorMessage = (error as? PlaylistLoadException)?.message
-                            ?: "تعذر تحميل القنوات. تحقق من الشبكة والإعدادات ثم أعد المحاولة."
-                    )
-                }
-            }
+                settings.observeSettings().distinctUntilChangedBy(ProfileScope::of).collect { resetSource(it) }
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { resetSource(null,"تعذر قراءة إعدادات مصدر القنوات. أعد المحاولة.") }
         }
     }
 
@@ -373,6 +271,8 @@ class HomeViewModel @Inject constructor(
                     PlaybackQueue.filterChannels(matching, group),
                     if (all) topology else topology.withCounts(matching), restored?.session)
             }
+            currentCoroutineContext().ensureActive()
+            if (state.value.browseScope != snapshot.browseScope) return@launch
             val (marked, visible, tree, restored) = result
             if (restored != null) { pendingBrowse = null; browseDraft = restored }
             state.update { current ->

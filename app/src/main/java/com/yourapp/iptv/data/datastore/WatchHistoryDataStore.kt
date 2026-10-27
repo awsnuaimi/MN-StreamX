@@ -3,6 +3,7 @@ package com.yourapp.iptv.data.datastore
 import com.yourapp.iptv.domain.profile.ProfileScope
 import com.yourapp.iptv.domain.repository.ProfileRepository
 import com.yourapp.iptv.data.backup.editAppData
+import com.yourapp.iptv.domain.diagnostics.*
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -12,7 +13,6 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.repository.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import java.io.IOException
 
@@ -21,17 +21,8 @@ internal val Context.watchHistoryStore by preferencesDataStore(name = "watch_his
 
 class WatchHistoryDataStore(private val store: DataStore<Preferences>, private val settings: SettingsRepository,
     scope: CoroutineScope, private val profiles: ProfileRepository = ProfileRepository.Disabled) : WatchHistoryRepository {
-    private data class Command(val source: String, val entry: WatchHistoryEntry? = null,
-        val remove: String? = null, val clear: Boolean = false, val reply: CompletableDeferred<Unit>? = null)
-    private val commands = Channel<Command>(Channel.UNLIMITED)
-
-    init { scope.launch {
-        for (command in commands) {
-            try { apply(command); command.reply?.complete(Unit) }
-            catch (error: CancellationException) { command.reply?.completeExceptionally(error); throw error }
-            catch (error: Exception) { command.reply?.completeExceptionally(error) }
-        }
-    } }
+    private val writer = WatchHistoryWriter(scope,::apply)
+    private class OwnerChanged : IOException("History owner changed")
 
     override fun observe(sourceKey: String): Flow<List<WatchHistoryEntry>> {
         require(validKey(sourceKey))
@@ -41,37 +32,42 @@ class WatchHistoryDataStore(private val store: DataStore<Preferences>, private v
 
     override fun recordStarted(sourceKey: String, entry: WatchHistoryEntry) {
         if (!validKey(sourceKey) || entry.channelId.isBlank() || entry.channelId.length > 512 || entry.watchedAtMillis < 0) return
-        commands.trySend(Command(sourceKey, entry = entry))
+        if (!writer.record(sourceKey,entry)) report(sourceKey,DiagnosticIssue.HISTORY_QUEUE)
     }
 
     override suspend fun remove(sourceKey: String, channelId: String) {
         require(channelId.isNotBlank() && channelId.length <= 512)
-        submit(Command(sourceKey, remove = channelId))
+        submit(sourceKey,channelId)
     }
 
-    override suspend fun clear(sourceKey: String) = submit(Command(sourceKey, clear = true))
+    override suspend fun clear(sourceKey: String) = submit(sourceKey,null)
 
-    private suspend fun submit(command: Command) {
-        require(validKey(command.source))
-        val reply = CompletableDeferred<Unit>()
-        commands.send(command.copy(reply = reply))
-        reply.await()
+    private suspend fun submit(source: String, remove: String?) {
+        require(validKey(source))
+        writer.edit(source,remove)
     }
-
-    private suspend fun apply(command: Command) {
-        val source = settings.observeSettings().first()
-        if (!source.hasSelectedSource() || PlaylistCacheKey.of(source) != ProfileScope.source(command.source))
-            throw IOException("History source changed")
-        store.editAppData { values ->
-            check(ProfileScope.belongs(command.source,profiles.state.value))
-            val key = key(command.source)
-            val previous = WatchHistoryCodec.decode(values[key])
-            val rows = when {
-                command.clear -> emptyList()
-                command.remove != null -> previous.filterNot { it.channelId == command.remove }
-                command.entry != null -> WatchHistory.record(previous, command.entry)
-                else -> previous
+    private suspend fun apply(command: HistoryWrite) {
+        when (command) {
+            is HistoryWrite.Edit -> update(command.source) { rows ->
+                if (command.remove == null) emptyList() else rows.filterNot { it.channelId == command.remove }
             }
+            is HistoryWrite.Records -> for ((source,records) in command.batch.entries()) {
+                try { update(source,records::apply) }
+                catch (error: CancellationException) { throw error }
+                catch (_: OwnerChanged) { /* Stale source or retired profile: intentionally discarded. */ }
+                catch (_: Exception) { report(source,DiagnosticIssue.HISTORY_WRITE) }
+            }
+        }
+    }
+    private suspend fun update(sourceKey: String, change: (List<WatchHistoryEntry>) -> List<WatchHistoryEntry>) {
+        val source = settings.observeSettings().first()
+        if (!source.hasSelectedSource() || PlaylistCacheKey.of(source) != ProfileScope.source(sourceKey))
+            throw OwnerChanged()
+        store.editAppData { values ->
+            if (!ProfileScope.belongs(sourceKey,profiles.state.value)) throw OwnerChanged()
+            val key = key(sourceKey)
+            val previous = WatchHistoryCodec.decode(values[key])
+            val rows = change(previous)
             if (rows.isEmpty()) values.remove(key)
             else {
                 val now = System.currentTimeMillis()
@@ -80,11 +76,14 @@ class WatchHistoryDataStore(private val store: DataStore<Preferences>, private v
                 if (rows != previous) values[key] = WatchHistoryCodec.encode(rows, updated)
             }
             values.asMap().filter { it.key.name.startsWith("history_") &&
-                ProfileScope.profile(it.key.name.removePrefix("history_")) == ProfileScope.profile(command.source) }.entries
+                ProfileScope.profile(it.key.name.removePrefix("history_")) == ProfileScope.profile(sourceKey) }.entries
                 .sortedByDescending { WatchHistoryCodec.updated(it.value as? String ?: "") }
                 .drop(32).forEach { values.remove(stringPreferencesKey(it.key.name)) }
         }
     }
+
+    private fun report(source: String, issue: DiagnosticIssue) =
+        DiagnosticJournal.record(DiagnosticArea.SYSTEM,issue,ProfileScope.source(source))
 
     private fun validKey(value: String) = ProfileScope.valid(value)
     private fun key(source: String) = stringPreferencesKey("history_$source")
