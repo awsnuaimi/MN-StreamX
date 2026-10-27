@@ -12,12 +12,14 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import com.yourapp.iptv.data.parental.ProtectedSearchHistory
+import com.yourapp.iptv.domain.parental.ParentalControl
 
 @Module @InstallIn(SingletonComponent::class)
 object SearchModule {
     @Provides @Singleton
     fun provideSearch(impl: UnifiedSearchRepositoryImpl): UnifiedSearchRepository = impl
     @Provides @Singleton
-    fun provideSearchHistory(@ApplicationContext context: Context): SearchHistoryRepository =
-        SearchHistoryDataStore(context.applicationContext.searchHistoryStore)
+    fun provideSearchHistory(@ApplicationContext context: Context, parental: ParentalControl): SearchHistoryRepository =
+        ProtectedSearchHistory(SearchHistoryDataStore(context.applicationContext.searchHistoryStore),parental)
 }

@@ -26,6 +26,9 @@ import com.yourapp.iptv.viewmodel.HomeViewModel
 import com.yourapp.iptv.viewmodel.HomeAppearanceViewModel
 import com.yourapp.iptv.viewmodel.HomeQuickAccessViewModel
 import com.yourapp.iptv.domain.model.HomeDashboardSelection
+import com.yourapp.iptv.domain.parental.ParentalSection
+import com.yourapp.iptv.ui.screen.parental.LocalParentalSession
+import com.yourapp.iptv.ui.screen.parental.ParentalHomeControl
 
 @Composable
 fun HomeScreen(
@@ -48,6 +51,8 @@ fun HomeScreen(
     onOpenLiveHandled: () -> Unit = {}
 ) {
     HomeSessionLifecycle(viewModel)
+    val parental = LocalParentalSession.current
+    val liveLocked = !parental.state.allows(ParentalSection.LIVE)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
     val quickAccess by quickAccessViewModel.uiState.collectAsStateWithLifecycle()
@@ -132,7 +137,10 @@ fun HomeScreen(
         viewModel.onBrowseInteraction()
         when (section) {
             HomeSection.DASHBOARD -> { dashboardVisible = true }
-            HomeSection.LIVE, HomeSection.FAVORITES -> { dashboardVisible = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
+            HomeSection.LIVE, HomeSection.FAVORITES -> {
+                if (liveLocked) parental.model?.requestPin()
+                else { dashboardVisible = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
+            }
             HomeSection.MOVIES -> onMovies()
             HomeSection.SERIES -> onSeries()
             HomeSection.SEARCH -> onSearch()
@@ -163,6 +171,7 @@ fun HomeScreen(
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 Column(Modifier.weight(1f).fillMaxHeight().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ParentalHomeControl()
                     if (!dashboardVisible) {
                         Column(Modifier.fillMaxWidth()) {
                             Text(labels.section(selected), style = MaterialTheme.typography.headlineSmall,
@@ -186,7 +195,7 @@ fun HomeScreen(
                         state.needsSource -> HomeMessage(labels.text("أدخل مصدر القنوات من الإعدادات.", "Add a source in settings.", "Quelle in Einstellungen hinzufügen."),
                             labels.section(HomeSection.SETTINGS), onSettings)
                         state.isLoading && state.visibleChannels.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                        state.channels.isEmpty() -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
+                        state.channels.isEmpty() && !liveLocked -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
                             labels.section(HomeSection.REFRESH), viewModel::refresh)
                         dashboardVisible -> Box(Modifier.weight(1f).fillMaxWidth()) { key(state.browseScope) {
                             HomeProgramHost { programState, onPreview ->

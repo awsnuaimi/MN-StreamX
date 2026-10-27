@@ -14,6 +14,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.yourapp.iptv.ui.screen.parental.LocalParentalSession
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -39,10 +42,14 @@ internal fun AppUpdateSection(viewModel: AppUpdateViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val installer = remember(context) { UpdateInstaller(context.applicationContext) }
-    val install = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    val protection = LocalParentalSession.current.model
+    var external by remember { mutableStateOf<Long?>(null) }
+    val install = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        protection?.finishExternal(external); external = null
+    }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (runCatching { installer.allowed() }.getOrDefault(false)) viewModel.installAgain()
-        else viewModel.installBlocked(UpdateIssue.INSTALL_PERMISSION)
+        else { viewModel.installBlocked(UpdateIssue.INSTALL_PERMISSION); protection?.finishExternal(external); external = null }
     }
     DisposableEffect(owner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
@@ -56,9 +63,12 @@ internal fun AppUpdateSection(viewModel: AppUpdateViewModel = hiltViewModel()) {
         viewModel.consumeInstallRequest()
         val file = state.file ?: return@LaunchedEffect
         try {
+            external = protection?.beginExternal(external)
             if (installer.allowed()) install.launch(installer.installIntent(file))
             else permission.launch(installer.permissionIntent())
-        } catch (_: RuntimeException) { viewModel.installBlocked(UpdateIssue.INSTALL_UNAVAILABLE) }
+        } catch (_: RuntimeException) {
+            protection?.finishExternal(external); external = null; viewModel.installBlocked(UpdateIssue.INSTALL_UNAVAILABLE)
+        }
     }
     AppUpdateCard(state, viewModel::updateApp, viewModel::cancel, viewModel::installAgain)
 }

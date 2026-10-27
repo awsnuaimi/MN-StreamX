@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import com.yourapp.iptv.domain.parental.ParentalControl
+import com.yourapp.iptv.domain.parental.ParentalProjection
 
 @HiltViewModel
 class EpgViewModel @Inject constructor(
@@ -33,7 +35,8 @@ class EpgViewModel @Inject constructor(
     @DefaultDispatcher private val background: CoroutineDispatcher,
     favorites: FavoriteRepository,
     organization: OrganizationRepository = OrganizationRepository.Disabled,
-    private val settings: SettingsRepository? = null
+    private val settings: SettingsRepository? = null,
+    private val parental: ParentalControl = ParentalControl.Disabled
 ) : ViewModel() {
     private val state = MutableStateFlow(EpgUiState(
         selectedGroup = saved["group"], query = saved.get<String>("query").orEmpty(),
@@ -51,7 +54,8 @@ class EpgViewModel @Inject constructor(
         filterChannels(showLoading = false)
     }
     val favoriteState = favoriteController.uiState
-    private val organizer = OrganizationController(viewModelScope, organization, background) { result ->
+    private val organizer = OrganizationController(viewModelScope, organization, background) { value ->
+        val result = ParentalProjection.prune(value,parental.state.value)
         available = result.channels; loaded = true
         val group = result.resolveFilter(state.value.selectedGroup)
         saved["group"] = group

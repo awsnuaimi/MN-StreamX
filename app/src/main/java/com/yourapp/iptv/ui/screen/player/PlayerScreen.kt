@@ -62,6 +62,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     epgViewModel: PlayerEpgViewModel, appearanceViewModel: PlayerAppearanceViewModel,
     onAppearance: () -> Unit, onGuide: (String?, String?, String, Boolean) -> Unit,
     previewViewModel: PlayerEpgViewModel, onOpenHistoryChannel: (String, String) -> Unit) {
+    val parental = com.yourapp.iptv.ui.screen.parental.LocalParentalSession.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteState.collectAsStateWithLifecycle()
     val epg by epgViewModel.uiState.collectAsStateWithLifecycle()
@@ -250,7 +251,11 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                         if (!viewModel.selectHistoryChannel(target.channel, target.sourceKey))
                             onOpenHistoryChannel(target.channel.id, target.sourceKey)
                     }
-                    PlayerMoreAction.CAPTIONS -> panels = panels.captions()
+                    PlayerMoreAction.CAPTIONS -> {
+                        if (parental.state.allows(com.yourapp.iptv.domain.parental.ParentalSection.SETTINGS))
+                            panels = panels.captions()
+                        else { panels = panels.watching(); parental.model?.requestPin() }
+                    }
                     PlayerMoreAction.HISTORY -> panels = panels.history()
                     PlayerMoreAction.DETAILS -> panels = panels.details()
                     PlayerMoreAction.CHANNELS -> openChannels()

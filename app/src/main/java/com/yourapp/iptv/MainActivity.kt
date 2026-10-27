@@ -24,20 +24,32 @@ import com.yourapp.iptv.domain.model.BackupMaintenance
 import com.yourapp.iptv.domain.model.HomeLanguage
 import com.yourapp.iptv.ui.screen.backup.BackupStartupGate
 import com.yourapp.iptv.viewmodel.BackupStartupViewModel
+import com.yourapp.iptv.viewmodel.ParentalViewModel
+import com.yourapp.iptv.ui.screen.parental.ParentalSessionHost
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import android.view.WindowManager
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val startupPlayback: StartupPlaybackViewModel by viewModels()
     private val homeAppearance: HomeAppearanceViewModel by viewModels()
     private val backupStartup: BackupStartupViewModel by viewModels()
+    private val parental: ParentalViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             val appearance by homeAppearance.appearance.collectAsStateWithLifecycle()
             val maintenance by backupStartup.state.collectAsStateWithLifecycle()
+            val protection by parental.access.collectAsState()
+            SideEffect {
+                if (!protection.ready || protection.configured || protection.storageError)
+                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
             var startupInitialized by remember { mutableStateOf(false) }
-            LaunchedEffect(maintenance) {
-                if (maintenance == BackupMaintenance.READY && !startupInitialized) {
+            LaunchedEffect(maintenance,protection.ready,protection.storageError) {
+                if (maintenance == BackupMaintenance.READY && protection.ready && !protection.storageError && !startupInitialized) {
                     startupInitialized = true
                     startupPlayback.initialize(freshLaunch = savedInstanceState == null)
                 }
@@ -48,7 +60,9 @@ class MainActivity : ComponentActivity() {
                 AppLanguageHost {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         BackupStartupGate(maintenance, appearance?.language ?: HomeLanguage.ARABIC, backupStartup::retry) {
-                            AppNavGraph(startupPlayback)
+                            ParentalSessionHost(parental,appearance?.language ?: HomeLanguage.ARABIC) { initial, consumed ->
+                                AppNavGraph(startupPlayback,initial,consumed)
+                            }
                         }
                     }
                 }
@@ -62,7 +76,13 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        parental.background()
         startupPlayback.cancel()
         super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        parental.foreground()
     }
 }

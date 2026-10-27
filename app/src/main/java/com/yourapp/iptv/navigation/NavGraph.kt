@@ -5,6 +5,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yourapp.iptv.viewmodel.StartupPlaybackViewModel
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import com.yourapp.iptv.domain.parental.ParentalSection
+import com.yourapp.iptv.ui.screen.parental.ParentalRouteGate
+import com.yourapp.iptv.ui.screen.parental.ParentalSettingsScreen
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -29,9 +33,16 @@ import com.yourapp.iptv.ui.screen.backup.BackupScreen
 import com.yourapp.iptv.ui.screen.diagnostics.DiagnosticsScreen
 
 @Composable
-fun AppNavGraph(startup: StartupPlaybackViewModel) {
+fun AppNavGraph(startup: StartupPlaybackViewModel, initialRoute: String? = null, onInitialRouteHandled: () -> Unit = {}) {
     val nav = rememberNavController()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(initialRoute) {
+        if (initialRoute in setOf("parental","settings","vod/movie","vod/series","organization","home_appearance",
+                Destinations.PLAYER_APPEARANCE,Destinations.BACKUP,Destinations.DIAGNOSTICS,Destinations.SUBSCRIPTIONS,Destinations.HISTORY)) {
+            nav.navigate(requireNotNull(initialRoute)) { launchSingleTop = true }
+            onInitialRouteHandled()
+        }
+    }
     StartupPlaybackGuard(nav, startup)
     NavHost(navController = nav, startDestination = Destinations.HOME) {
         composable(Destinations.HOME) { entry ->
@@ -89,22 +100,26 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
         )) { entry ->
             val returnedChannel by entry.savedStateHandle
                 .getStateFlow<String?>("lastPlayedChannelId", null).collectAsStateWithLifecycle()
-            EpgScreen(
+            ParentalRouteGate(ParentalSection.LIVE,Destinations.HOME,{ nav.popBackStack() }) { EpgScreen(
                 returnedChannelId = returnedChannel,
                 onReturnHandled = { entry.savedStateHandle["lastPlayedChannelId"] = null },
                 onBack = { nav.popBackStack() },
                 onPlayChannel = { id, group, query, favoritesOnly ->
                     nav.navigate(playerRoute(id, group, query, favoritesOnly)) { launchSingleTop = true }
                 }
-            )
+            ) }
         }
+        composable("parental") { ParentalRouteGate(null,"parental",{ nav.popBackStack() }) {
+            ParentalSettingsScreen(onBack = { nav.popBackStack() })
+        } }
         composable("vod/{kind}", arguments = listOf(navArgument("kind") { type = NavType.StringType })) { entry ->
             val kind = if (entry.arguments?.getString("kind") == "series") VodKind.SERIES else VodKind.MOVIE
-            VodScreen(kind, onBack = { nav.popBackStack() }, onPlay = { mediaKind, id, ext, title, source, series ->
+            ParentalRouteGate(if (kind == VodKind.MOVIE) ParentalSection.MOVIES else ParentalSection.SERIES,
+                if (kind == VodKind.MOVIE) "vod/movie" else "vod/series",{ nav.popBackStack() }) { VodScreen(kind, onBack = { nav.popBackStack() }, onPlay = { mediaKind, id, ext, title, source, series ->
                 nav.navigate(vodPlaybackRoute(mediaKind, id, ext, title, source, series)) {
                     launchSingleTop = true
                 }
-            })
+            }) }
         }
         for (route in listOf(Destinations.VOD_PLAYER,Destinations.VOD_EPISODE_PLAYER)) {
         composable(route, arguments = listOf(
@@ -114,37 +129,44 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
             navArgument("title") { type = NavType.StringType; defaultValue = "" },
             navArgument("sourceKey") { type = NavType.StringType; nullable = true; defaultValue = null },
             navArgument("seriesId") { type = NavType.StringType; nullable = true; defaultValue = null }
-        )) { VodPlaybackScreen(onBack = { nav.popBackStack() }) }
+        )) { entry ->
+            val movie = entry.arguments?.getString("kind") == "movie"
+            ParentalRouteGate(if (movie) ParentalSection.MOVIES else ParentalSection.SERIES,
+                if (movie) "vod/movie" else "vod/series",{ nav.popBackStack() }) {
+                VodPlaybackScreen(onBack = { nav.popBackStack() })
+            }
         }
-        composable("organization") { OrganizationScreen(onBack = { nav.popBackStack() }) }
+        }
+        composable("organization") { ParentalRouteGate(null,"organization",{ nav.popBackStack() }) { OrganizationScreen(onBack = { nav.popBackStack() }) } }
         composable(Destinations.HISTORY) {
-            WatchHistoryScreen(onBack = { nav.popBackStack() }, onPlay = { id, source ->
+            ParentalRouteGate(ParentalSection.LIVE,Destinations.HISTORY,{ nav.popBackStack() }) { WatchHistoryScreen(onBack = { nav.popBackStack() }, onPlay = { id, source ->
                 nav.navigate(historyPlayerRoute(id, source)) { launchSingleTop = true }
-            })
+            }) }
         }
-        composable("home_appearance") { HomeAppearanceScreen(onBack = { nav.popBackStack() }) }
+        composable("home_appearance") { ParentalRouteGate(ParentalSection.SETTINGS,"home_appearance",{ nav.popBackStack() }) { HomeAppearanceScreen(onBack = { nav.popBackStack() }) } }
         composable(Destinations.PLAYER_APPEARANCE) {
-            PlayerAppearanceScreen(onBack = { nav.popBackStack() })
+            ParentalRouteGate(ParentalSection.SETTINGS,Destinations.PLAYER_APPEARANCE,{ nav.popBackStack() }) { PlayerAppearanceScreen(onBack = { nav.popBackStack() }) }
         }
         composable(Destinations.SETTINGS) {
-            SettingsScreen(
+            ParentalRouteGate(ParentalSection.SETTINGS,Destinations.SETTINGS,{ nav.popBackStack() }) { SettingsScreen(
+                onParental = { nav.navigate("parental") { launchSingleTop = true } },
                 onHomeAppearance = { nav.navigate("home_appearance") { launchSingleTop = true } },
                 onPlayerAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
                 onSubscriptions = { nav.navigate(Destinations.SUBSCRIPTIONS) { launchSingleTop = true } },
                 onBackup = { nav.navigate(Destinations.BACKUP) { launchSingleTop = true } },
                 onDiagnostics = { nav.navigate(Destinations.DIAGNOSTICS) { launchSingleTop = true } },
                 onBack = { nav.popBackStack() }
-            )
+            ) }
         }
-        composable(Destinations.BACKUP) { BackupScreen(onBack = { nav.popBackStack() }) }
-        composable(Destinations.DIAGNOSTICS) { DiagnosticsScreen(onBack = { nav.popBackStack() }) }
+        composable(Destinations.BACKUP) { ParentalRouteGate(null,Destinations.BACKUP,{ nav.popBackStack() }) { BackupScreen(onBack = { nav.popBackStack() }) } }
+        composable(Destinations.DIAGNOSTICS) { ParentalRouteGate(ParentalSection.SETTINGS,Destinations.DIAGNOSTICS,{ nav.popBackStack() }) { DiagnosticsScreen(onBack = { nav.popBackStack() }) } }
         composable(Destinations.SUBSCRIPTIONS) {
-            SubscriptionsScreen(onBack = { nav.popBackStack() }, onUsed = {
+            ParentalRouteGate(null,Destinations.SUBSCRIPTIONS,{ nav.popBackStack() }) { SubscriptionsScreen(onBack = { nav.popBackStack() }, onUsed = {
                 nav.navigate(Destinations.HOME) {
                     popUpTo(Destinations.HOME) { inclusive = true }
                     launchSingleTop = true
                 }
-            })
+            }) }
         }
         for (playerDestination in listOf(Destinations.PLAYER, Destinations.HISTORY_PLAYER)) {
         composable(playerDestination, arguments = listOf(
@@ -154,7 +176,7 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
             navArgument("favoritesOnly") { type = NavType.BoolType; defaultValue = false },
             navArgument("sourceKey") { type = NavType.StringType; nullable = true; defaultValue = null }
         )) {
-            PlayerScreen(onAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
+            ParentalRouteGate(ParentalSection.LIVE,Destinations.HOME,{ nav.popBackStack() }) { PlayerScreen(onAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },
                 onOpenHistoryChannel = { id, source ->
                     nav.navigate(historyPlayerRoute(id, source)) {
                         popUpTo(playerDestination) { inclusive = true }
@@ -175,7 +197,7 @@ fun AppNavGraph(startup: StartupPlaybackViewModel) {
                     nav.previousBackStackEntry?.savedStateHandle?.set("lastPlayedChannelId", channelId)
                 }
                 nav.popBackStack()
-            })
+            }) }
         }
         }
     }

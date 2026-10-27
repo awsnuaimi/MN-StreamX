@@ -37,6 +37,8 @@ import javax.inject.Inject
 import com.yourapp.iptv.util.LoadTimings
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import com.yourapp.iptv.domain.parental.ParentalControl
+import com.yourapp.iptv.domain.parental.ParentalProjection
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -46,7 +48,8 @@ class HomeViewModel @Inject constructor(
     favorites: FavoriteRepository,
     organization: OrganizationRepository = OrganizationRepository.Disabled,
     private val startup: HomeStartupRepository = HomeStartupRepository.Disabled,
-    browseSessions: HomeSessionRepository = HomeSessionRepository.Disabled
+    browseSessions: HomeSessionRepository = HomeSessionRepository.Disabled,
+    private val parental: ParentalControl = ParentalControl.Disabled
 ) : ViewModel() {
     private val state = MutableStateFlow(HomeUiState())
     val uiState = state.asStateFlow()
@@ -75,7 +78,8 @@ class HomeViewModel @Inject constructor(
     val favoriteState = favoriteController.uiState
     private val organizer: OrganizationController = OrganizationController(viewModelScope, organization, background, ::onCatalogChanged)
 
-    private fun onCatalogChanged(result: OrganizedChannels) {
+    private fun onCatalogChanged(value: OrganizedChannels) {
+        val result = ParentalProjection.prune(value,parental.state.value)
         catalogTree = result.tree
         state.update { it.copy(channels = result.channels,
             groups = if (result.tree.enabled) result.tree.folders.map { f -> FolderFilter.of(f.id) }

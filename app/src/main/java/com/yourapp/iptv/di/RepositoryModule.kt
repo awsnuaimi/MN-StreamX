@@ -21,12 +21,16 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Singleton
+import com.yourapp.iptv.data.parental.ProtectedChannels
+import com.yourapp.iptv.data.parental.ProtectedHomeStartup
+import com.yourapp.iptv.domain.parental.ParentalControl
 
 @Module
 @InstallIn(SingletonComponent::class)
 object RepositoryModule {
     @Provides
     @Singleton
+    @RawChannelCatalog
     fun provideChannels(database: AppDatabase, @ApplicationContext context: Context, favorites: FavoriteRepository): ChannelRepository = ChannelRepositoryImpl(
         m3uDataSource = M3uDataSource(),
         xtreamDataSource = XtreamDataSource(),
@@ -35,6 +39,10 @@ object RepositoryModule {
         snapshot = ChannelSnapshotDataStore(context), favorites = favorites
     )
 
+    @Provides @Singleton
+    fun protectedChannels(@RawChannelCatalog raw: ChannelRepository, settings: SettingsRepository,
+        parental: ParentalControl): ChannelRepository = ProtectedChannels(raw,settings,parental)
+
     @Provides
     @Singleton
     fun providePlaylists(channels: ChannelRepository): PlaylistRepository =
@@ -42,6 +50,7 @@ object RepositoryModule {
 
     @Provides @Singleton
     fun provideHomeStartup(@ApplicationContext context: Context, settings: SettingsRepository,
-        organization: OrganizationRepository): HomeStartupRepository = FileHomeStartupRepository(
-        File(context.noBackupFilesDir, "home_catalog_v24.bin"), settings, organization)
+        organization: OrganizationRepository, parental: ParentalControl,
+        @RawChannelCatalog complete: ChannelRepository): HomeStartupRepository = ProtectedHomeStartup(
+        FileHomeStartupRepository(File(context.noBackupFilesDir, "home_catalog_v24.bin"),settings,organization),parental,complete)
 }

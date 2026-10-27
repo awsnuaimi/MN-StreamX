@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import com.yourapp.iptv.domain.parental.ParentalControl
+import com.yourapp.iptv.domain.parental.ParentalProjection
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -35,7 +37,8 @@ class PlayerViewModel @Inject constructor(
     favorites: FavoriteRepository,
     organization: OrganizationRepository = OrganizationRepository.Disabled,
     history: WatchHistoryRepository = WatchHistoryRepository.Disabled,
-    private val settings: SettingsRepository? = null
+    private val settings: SettingsRepository? = null,
+    private val parental: ParentalControl = ParentalControl.Disabled
 ) : ViewModel() {
     private val state = MutableStateFlow(PlayerUiState(
         selectedGroup = savedStateHandle["group"],
@@ -58,7 +61,8 @@ class PlayerViewModel @Inject constructor(
     private val historyRecorder = PlaybackHistoryRecorder(history) { state.value.channel }
     private val lastChannel = LastChannelController(viewModelScope, history, channels, settings) { state.value.channel }
     val lastChannelState = lastChannel.uiState
-    private val organizer = OrganizationController(viewModelScope, organization, background) { result ->
+    private val organizer = OrganizationController(viewModelScope, organization, background) { value ->
+        val result = ParentalProjection.prune(value,parental.state.value)
         available = result.channels
         val group = result.resolveFilter(state.value.selectedGroup)
         savedStateHandle["group"] = group

@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.ui.component.common.LocalizedResources
 import com.yourapp.iptv.viewmodel.*
+import com.yourapp.iptv.ui.screen.parental.LocalParentalSession
 
 @Composable
 fun BackupScreen(onBack: () -> Unit, model: BackupViewModel = hiltViewModel(),
@@ -24,20 +25,30 @@ fun BackupScreen(onBack: () -> Unit, model: BackupViewModel = hiltViewModel(),
     val appearance by appearanceModel.appearance.collectAsStateWithLifecycle()
     val language = appearance?.language ?: HomeLanguage.ARABIC
     val labels = remember(language) { BackupLabels(language) }
-    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { model.write(it?.toString()) }
-    val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { model.read(it?.toString()) }
+    val protection = LocalParentalSession.current.model
+    var external by remember { mutableStateOf<Long?>(null) }
+    var returned by remember { mutableStateOf(false) }
+    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) {
+        model.write(it?.toString()); returned = true
+    }
+    val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        model.read(it?.toString()); returned = true
+    }
+    LaunchedEffect(returned,state.busy) {
+        if (returned && !state.busy) { protection?.finishExternal(external); external = null; returned = false }
+    }
     LaunchedEffect(state.exportRequest) {
         if (state.exportRequest != null) {
             model.consumeExportRequest()
-            try { export.launch(state.exportName) }
-            catch (_: Exception) { model.pickerUnavailable() }
+            try { external = protection?.beginExternal(); returned = false; export.launch(state.exportName) }
+            catch (_: Exception) { protection?.finishExternal(external); external = null; model.pickerUnavailable() }
         }
     }
     BackHandler(state.busy) { }
     LocalizedResources(language) {
         BackupContent(state, labels, onBack, model::create, onChoose = {
-            try { import.launch(arrayOf("*/*")) }
-            catch (_: Exception) { model.pickerUnavailable() }
+            try { external = protection?.beginExternal(); returned = false; import.launch(arrayOf("*/*")) }
+            catch (_: Exception) { protection?.finishExternal(external); external = null; model.pickerUnavailable() }
         }, onInspect = model::inspect, onCancelPreview = model::clearPreview, onRestore = model::restore)
     }
 }

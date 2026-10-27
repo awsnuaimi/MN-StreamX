@@ -14,12 +14,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import javax.inject.Singleton
+import com.yourapp.iptv.data.parental.ProtectedProgress
+import com.yourapp.iptv.domain.parental.ParentalControl
 
 @Module
 @InstallIn(SingletonComponent::class)
 object VodProgressModule {
     @Provides @Singleton
-    fun provideProgress(@ApplicationContext context: Context, settings: SettingsRepository): VodProgressRepository =
-        VodProgressDataStore(context.applicationContext.vodProgressStore, settings,
-            CoroutineScope(SupervisorJob() + Dispatchers.IO))
+    fun provideProgress(@ApplicationContext context: Context, settings: SettingsRepository,
+        parental: ParentalControl): VodProgressRepository =
+        ProtectedProgress(VodProgressDataStore(context.applicationContext.vodProgressStore, settings,
+            CoroutineScope(SupervisorJob() + Dispatchers.IO)),parental)
 }
