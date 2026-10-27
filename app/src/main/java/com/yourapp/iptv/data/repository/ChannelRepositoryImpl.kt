@@ -31,11 +31,15 @@ class ChannelRepositoryImpl(
     private val channelDao: ChannelDao,
     private val favoriteDao: FavoriteDao,
     private val snapshot: ChannelSnapshotStore = ChannelSnapshotStore.Disabled,
-    private val favorites: FavoriteRepository? = null
+    private val favorites: FavoriteRepository? = null,
+    private val profiles: com.yourapp.iptv.domain.repository.ProfileRepository = com.yourapp.iptv.domain.repository.ProfileRepository.Disabled
 ) : ChannelRepository {
     private val importLock = Mutex()
     private val snapshotLock = Mutex()
     private var memory: List<Channel>? = null
+    private var projection: List<Channel>? = null
+    private var projectionScope: String? = null
+    private var projectionIds: Set<String>? = null
 
     override suspend fun getCachedChannels(source: AppSettings): List<Channel>? =
         LoadTimings.measure(LoadTimings.Stage.CACHE_READ) {
@@ -62,10 +66,14 @@ class ChannelRepositoryImpl(
     }
 
     private suspend fun readChannelsLocked(): List<Channel> {
-        val favoriteIds = favorites?.observeFavoriteIds(snapshot.read())?.first()
+        val key = personalKey()
+        val favoriteIds = favorites?.observeFavoriteIds(key)?.first()
             ?: favoriteDao.getAllFavorites().map { it.channelId }.toSet()
-        val base = memory ?: channelDao.getAllChannels().map { it.toDomain() }
-        return ChannelFavorites.apply(base, favoriteIds).also { memory = it }
+        val base = memory ?: channelDao.getAllChannels().map { it.toDomain().copy(isFavorite = false) }.also { memory = it }
+        projection?.takeIf { projectionScope == key && projectionIds == favoriteIds }?.let { return it }
+        return ChannelFavorites.apply(base, favoriteIds).also {
+            projection = it;projectionScope = key;projectionIds = favoriteIds.toSet()
+        }
     }
 
     override suspend fun getPlaybackChannel(source: AppSettings, id: String): Channel? =
@@ -87,12 +95,12 @@ class ChannelRepositoryImpl(
     override suspend fun getFavorites(): List<Channel> = getChannels().filter { it.isFavorite }
 
     override suspend fun addFavorite(channel: Channel) = withContext(Dispatchers.IO) {
-        if (favorites != null) favorites.setFavorite(channel.id, true, snapshot.read())
+        if (favorites != null) favorites.setFavorite(channel.id, true, personalKey())
         else favoriteDao.addFavorite(FavoriteEntity(channel.id))
     }
 
     override suspend fun removeFavorite(channel: Channel) = withContext(Dispatchers.IO) {
-        if (favorites != null) favorites.setFavorite(channel.id, false, snapshot.read())
+        if (favorites != null) favorites.setFavorite(channel.id, false, personalKey())
         else favoriteDao.removeFavorite(channel.id)
     }
 
@@ -125,7 +133,7 @@ class ChannelRepositoryImpl(
                     // Invalidate BEFORE Room changes. A crash cannot label new rows as the old account.
                     snapshot.write(null)
                     ChannelCache.clearCache()
-                    memory = null
+                    memory = null;projection = null
                     channelDao.replaceAll(channels.map { it.toEntity() })
                     snapshot.write(fingerprint)
                     memory = channels
@@ -133,6 +141,8 @@ class ChannelRepositoryImpl(
                 }
             }
         }
+
+    private suspend fun personalKey() = snapshot.read()?.let { com.yourapp.iptv.domain.profile.ProfileScope.key(profiles.state.value.catalog.activeId,it) }
 
     private fun sameContent(a: List<Channel>, b: List<Channel>): Boolean {
         if (a.size != b.size) return false

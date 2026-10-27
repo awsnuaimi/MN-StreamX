@@ -6,7 +6,8 @@ data class AppSettings(
     val xtreamUsername: String = "",
     val xtreamPassword: String = "",
     val epgUrl: String = "",
-    val source: PlaylistSource = PlaylistSource.M3U
+    val source: PlaylistSource = PlaylistSource.M3U,
+    val profileId: String = "default"
 ) {
     fun hasSelectedSource(): Boolean = when (source) {
         PlaylistSource.M3U -> m3uUrl.isNotBlank()

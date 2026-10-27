@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+import com.yourapp.iptv.domain.repository.ProfileRepository
 import com.yourapp.iptv.data.backup.editAppData
 
 import android.content.Context
@@ -17,7 +19,7 @@ import kotlinx.coroutines.flow.*
 
 internal val Context.searchHistoryStore by preferencesDataStore(name = "search_history")
 
-class SearchHistoryDataStore(private val store: DataStore<Preferences>) : SearchHistoryRepository {
+class SearchHistoryDataStore(private val store: DataStore<Preferences>, private val profiles: ProfileRepository = ProfileRepository.Disabled) : SearchHistoryRepository {
     override fun observe(sourceKey: String): Flow<List<String>> {
         require(validKey(sourceKey))
         return store.data.map { decode(it[key(sourceKey)]) }.distinctUntilChanged().flowOn(Dispatchers.IO)
@@ -29,12 +31,14 @@ class SearchHistoryDataStore(private val store: DataStore<Preferences>) : Search
         val normalized = SearchText.normalized(clean)
         if (normalized.isBlank()) return
         store.editAppData { values ->
+            check(ProfileScope.belongs(sourceKey,profiles.state.value))
             val previous = decode(values[key(sourceKey)])
             val rows = (listOf(clean) + previous.filterNot { SearchText.normalized(it) == normalized }).take(LIMIT)
             val timestamp = values.asMap().filter { it.key.name.startsWith(PREFIX) }.values
                 .maxOfOrNull { updated(it as? String) }?.coerceAtMost(Long.MAX_VALUE - 2)?.plus(1) ?: 1L
             values[key(sourceKey)] = encode(rows, timestamp)
-            values.asMap().filter { it.key.name.startsWith(PREFIX) }.entries
+            values.asMap().filter { it.key.name.startsWith(PREFIX) &&
+                ProfileScope.profile(it.key.name.removePrefix(PREFIX)) == ProfileScope.profile(sourceKey) }.entries
                 .sortedByDescending { updated(it.value as? String) }.drop(32)
                 .forEach { values.remove(stringPreferencesKey(it.key.name)) }
         }
@@ -42,11 +46,11 @@ class SearchHistoryDataStore(private val store: DataStore<Preferences>) : Search
 
     override suspend fun clear(sourceKey: String) {
         require(validKey(sourceKey))
-        store.editAppData { it.remove(key(sourceKey)) }
+        store.editAppData { check(ProfileScope.belongs(sourceKey,profiles.state.value));it.remove(key(sourceKey)) }
     }
 
     private fun key(source: String) = stringPreferencesKey(PREFIX + source)
-    private fun validKey(value: String) = value.length == 64 && value.all { it in '0'..'9' || it in 'a'..'f' }
+    private fun validKey(value: String) = ProfileScope.valid(value)
     private fun encode(rows: List<String>, updated: Long) = JsonObject().apply {
         addProperty("version", 1); addProperty("updated", updated)
         add("queries", JsonArray().apply { rows.forEach(::add) })

@@ -6,7 +6,7 @@ internal object BackupSnapshotCodec {
     fun encode(value: BackupSnapshot): ByteArray {
         BackupSizeBudget.snapshot(value)
         return JsonObject().apply {
-            addProperty("version", 1)
+            addProperty("version", 2)
             add("stores", BackupPreferenceCodec.encode(value.stores.mapValues { BackupPreferenceCodec.values(it.value) }))
             add("favorites", BackupPayloadCodec.favorites(value.favorites))
             add("legacy", JsonArray().apply { value.legacyFavorites.forEach(::add) })
@@ -18,8 +18,10 @@ internal object BackupSnapshotCodec {
 
     fun decode(bytes: ByteArray): BackupSnapshot {
         val root = BackupJson.read(bytes, BackupLimits.JOURNAL)
-        require(root.get("version").asInt == 1)
-        val stores = BackupPreferenceCodec.decode(root.getAsJsonObject("stores"))
+        val version = root.get("version").asInt
+        require(version in 1..2)
+        val stores = BackupPreferenceCodec.decode(root.getAsJsonObject("stores")).toMutableMap()
+        if (version == 1) stores.putIfAbsent(BackupStore.PROFILES,emptyMap())
         require(stores.keys == BackupStore.entries.toSet())
         val legacy = root.getAsJsonArray("legacy").also { require(it.size() <= 100_000) }.map {
             require(it.isJsonPrimitive && it.asJsonPrimitive.isString)

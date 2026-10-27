@@ -7,9 +7,9 @@ import androidx.lifecycle.ViewModelStoreOwner
 /** Activity-owned navigation survives configuration changes when PIN protection is disabled.
  * A security-session change clears the entire previous navigation graph's ViewModels. */
 internal class ParentalNavigationStores : ViewModel() {
-    private var id: Long? = null
+    private var id: Any? = null
     private var current: ViewModelStoreOwner? = null
-    fun owner(session: Long): ViewModelStoreOwner {
+    fun owner(session: Any): ViewModelStoreOwner {
         if (id != session || current == null) {
             clear(); id = session
             current = object : ViewModelStoreOwner { override val viewModelStore = ViewModelStore() }

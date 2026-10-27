@@ -23,13 +23,14 @@ data class ParentalRules(
 data class ParentalState(
     val ready: Boolean = false, val configured: Boolean = false,
     val unlocked: Boolean = false, val storageError: Boolean = false,
-    val rules: ParentalRules = ParentalRules(), val epoch: Long = 0
+    val rules: ParentalRules = ParentalRules(), val epoch: Long = 0,
+    val profileLocked: Boolean = false, val profileId: String = "default"
 ) {
     val restricted: Boolean get() = configured && !unlocked
     val contentRestricted: Boolean get() = restricted &&
-        (rules.sections.any { it != ParentalSection.SETTINGS } || rules.groups.values.any { it.isNotEmpty() })
+        (profileLocked || rules.sections.any { it != ParentalSection.SETTINGS } || rules.groups.values.any { it.isNotEmpty() })
     fun allows(section: ParentalSection): Boolean = ready && !storageError &&
-        (!restricted || section !in rules.sections)
+        (!restricted || (!profileLocked && section !in rules.sections))
     fun allows(kind: VodKind) = allows(if (kind == VodKind.MOVIE) ParentalSection.MOVIES else ParentalSection.SERIES)
     fun allows(source: String, channel: Channel): Boolean = allows(ParentalSection.LIVE) &&
         (!restricted || channel.group.orEmpty() !in rules.groups[source].orEmpty())
@@ -38,11 +39,14 @@ data class ParentalState(
 enum class ParentalResult { OK, WRONG_PIN, INVALID_PIN, INVALID_RULES, WAIT, STORAGE_ERROR, DENIED }
 
 interface ParentalControl {
+    val childProfile: Boolean get() = false
+    val canDisable: Boolean get() = true
     val state: StateFlow<ParentalState>
     suspend fun initialize()
     fun foreground()
     fun background()
     fun lock()
+    fun rotateSession(expectedEpoch: Long): Boolean = false
     fun remainingSeconds(): Long
     suspend fun unlock(pin: CharArray): ParentalResult
     suspend fun create(pin: CharArray): ParentalResult

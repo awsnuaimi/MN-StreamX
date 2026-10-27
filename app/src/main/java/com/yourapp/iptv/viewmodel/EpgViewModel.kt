@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+
 import androidx.lifecycle.SavedStateHandle
 import com.yourapp.iptv.domain.organization.*
 import com.yourapp.iptv.domain.repository.OrganizationRepository
@@ -81,7 +83,7 @@ class EpgViewModel @Inject constructor(
         loadJob = viewModelScope.launch {
             try {
                 val account = settings?.observeSettings()?.first()
-                favoriteController.bind(account?.takeIf { it.hasSelectedSource() }?.let(PlaylistCacheKey::of))
+                favoriteController.bind(account?.takeIf { it.hasSelectedSource() }?.let(ProfileScope::of))
                 val stored = if (account == null) channels.getChannels() else channels.getCachedChannels(account).orEmpty()
                 organizer.setChannels(stored)
             } catch (error: CancellationException) {

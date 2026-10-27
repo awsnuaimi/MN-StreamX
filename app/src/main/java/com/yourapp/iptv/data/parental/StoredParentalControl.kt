@@ -20,6 +20,10 @@ internal class StoredParentalControl(private val storage: ParentalStorage, priva
     @Volatile private var deadline = 0L
 
     override fun foreground() { synchronized(gate) { foreground = true } }
+    override fun rotateSession(expectedEpoch: Long): Boolean = synchronized(gate) {
+        if (!foreground || !state.value.unlocked || state.value.epoch != expectedEpoch) false
+        else { generation++;mutable.value = state.value.copy(epoch = state.value.epoch + 1);true }
+    }
     override fun background() { synchronized(gate) { foreground = false; lock() } }
     override fun lock() { synchronized(gate) {
         generation++

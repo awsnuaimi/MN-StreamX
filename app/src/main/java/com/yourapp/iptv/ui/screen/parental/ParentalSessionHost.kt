@@ -30,7 +30,7 @@ data class ParentalUiSession(val state: ParentalState = ParentalState(ready = tr
 val LocalParentalSession = staticCompositionLocalOf { ParentalUiSession() }
 
 @Composable
-fun ParentalSessionHost(model: ParentalViewModel, language: HomeLanguage,
+fun ParentalSessionHost(model: ParentalViewModel, language: HomeLanguage, contentReady: Boolean = true,
     content: @Composable (String?, () -> Unit) -> Unit) {
     // Collect while paused too, so locking disposes the previous playback and its scoped ViewModels.
     val access by model.access.collectAsState()
@@ -41,13 +41,13 @@ fun ParentalSessionHost(model: ParentalViewModel, language: HomeLanguage,
     val revision by model.renderReset.collectAsState()
     val labels = remember(language) { ParentalLabels(language) }
     val stores: ParentalNavigationStores = viewModel()
-    val sessions = remember { ParentalRenderSession() }
+    val sessions = remember(access.profileId) { ParentalRenderSession() }
     val frame = sessions.frame(access,external != null,revision)
     SideEffect { external?.takeIf { !it.awaitingResult && access.unlocked }?.let { model.consumeExternal(it.token) } }
-    if (!access.ready || access.storageError) {
+    if (!access.ready || access.storageError || !contentReady) {
         stores.clear()
         Box(Modifier.fillMaxSize(),contentAlignment = Alignment.Center) {
-            if (!access.ready) CircularProgressIndicator()
+            if (!access.ready || (!access.storageError && !contentReady)) CircularProgressIndicator()
             else Column(horizontalAlignment = Alignment.CenterHorizontally,verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(labels.text("تعذر قراءة الحماية. يبقى المحتوى مقفولًا.","Protection could not be read. Content stays locked.",
                     "Schutz konnte nicht gelesen werden. Inhalte bleiben gesperrt."))
@@ -65,8 +65,9 @@ fun ParentalSessionHost(model: ParentalViewModel, language: HomeLanguage,
                 }
             }) {
             CompositionLocalProvider(LocalParentalSession provides ParentalUiSession(frame.state,language,model)) {
-                val navigationOwner = stores.owner(frame.owner)
-                key(frame.owner) { SessionViewModels(navigationOwner) { content(route,model::routeHandled) } }
+                val sessionKey = access.profileId to frame.owner
+                val navigationOwner = stores.owner(sessionKey)
+                key(sessionKey) { SessionViewModels(navigationOwner) { content(route,model::routeHandled) } }
             }
         }
         if (frame.hidden) RetainedFlowLock(labels,external?.awaitingResult == true,model)

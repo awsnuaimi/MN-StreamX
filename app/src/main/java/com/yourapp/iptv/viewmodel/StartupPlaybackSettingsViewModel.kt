@@ -27,6 +27,7 @@ class StartupPlaybackSettingsViewModel @Inject constructor(
     private val state = MutableStateFlow(StartupPlaybackSettingsState())
     val uiState = state.asStateFlow()
     private var work: Job? = null
+    private val owner = repository.profileId
 
     init { load() }
 
@@ -47,7 +48,7 @@ class StartupPlaybackSettingsViewModel @Inject constructor(
         state.value = current.copy(isSaving = true, saveFailed = false)
         work = viewModelScope.launch {
             try {
-                repository.save(!current.enabled)
+                repository.saveFor(owner,!current.enabled)
                 state.value = current.copy(enabled = !current.enabled, isSaving = false, saveFailed = false)
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { state.value = current.copy(isSaving = false, saveFailed = true) }

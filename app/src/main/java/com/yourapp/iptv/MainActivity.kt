@@ -36,12 +36,15 @@ class MainActivity : ComponentActivity() {
     private val homeAppearance: HomeAppearanceViewModel by viewModels()
     private val backupStartup: BackupStartupViewModel by viewModels()
     private val parental: ParentalViewModel by viewModels()
+    private val profiles: com.yourapp.iptv.viewmodel.ProfilesViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             val appearance by homeAppearance.appearance.collectAsStateWithLifecycle()
             val maintenance by backupStartup.state.collectAsStateWithLifecycle()
             val protection by parental.access.collectAsState()
+            val people by profiles.people.collectAsState()
+            val contentReady = people.ready && !people.failed && !people.switching && appearance?.profileId == people.catalog.activeId
             SideEffect {
                 if (!protection.ready || protection.configured || protection.storageError)
                     window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -57,10 +60,10 @@ class MainActivity : ComponentActivity() {
             IPTVAppTheme(isDarkTheme = appearance?.isDarkTheme ?: true,
                 isNightMode = appearance?.isNightMode ?: false,
                 theme = appearance?.theme ?: com.yourapp.iptv.domain.model.HomeTheme.DARK_BLUE) {
-                AppLanguageHost {
+                AppLanguageHost(fallbackLanguage = if (protection.storageError) HomeLanguage.ARABIC else null) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         BackupStartupGate(maintenance, appearance?.language ?: HomeLanguage.ARABIC, backupStartup::retry) {
-                            ParentalSessionHost(parental,appearance?.language ?: HomeLanguage.ARABIC) { initial, consumed ->
+                            ParentalSessionHost(parental,appearance?.language ?: HomeLanguage.ARABIC,contentReady) { initial, consumed ->
                                 AppNavGraph(startupPlayback,initial,consumed)
                             }
                         }

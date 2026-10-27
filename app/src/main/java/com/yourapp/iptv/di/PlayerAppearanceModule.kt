@@ -1,6 +1,7 @@
 package com.yourapp.iptv.di
 
 import android.content.Context
+import com.yourapp.iptv.domain.repository.ProfileRepository
 import com.yourapp.iptv.data.datastore.PlayerAppearanceDataStore
 import com.yourapp.iptv.data.datastore.playerAppearanceStore
 import com.yourapp.iptv.domain.repository.PlayerAppearanceRepository
@@ -16,6 +17,6 @@ import javax.inject.Singleton
 object PlayerAppearanceModule {
     @Provides
     @Singleton
-    fun providePlayerAppearance(@ApplicationContext context: Context): PlayerAppearanceRepository =
-        PlayerAppearanceDataStore(context.applicationContext.playerAppearanceStore)
+    fun providePlayerAppearance(@ApplicationContext context: Context, profiles: ProfileRepository): PlayerAppearanceRepository =
+        PlayerAppearanceDataStore(context.applicationContext.playerAppearanceStore, profiles = profiles)
 }

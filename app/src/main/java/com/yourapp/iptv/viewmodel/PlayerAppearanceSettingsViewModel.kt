@@ -43,7 +43,7 @@ class PlayerAppearanceSettingsViewModel @Inject constructor(
         if (current.isLoading || current.isSaving || current.loadFailed) return
         state.update { it.copy(appearance = value.normalized(), errorMessage = null, isSaved = false) }
     }
-    fun reset() = update(PlayerAppearance())
+    fun reset() = update(PlayerAppearance(profileId = state.value.appearance.profileId))
     fun resetSaveStatus() { state.update { it.copy(isSaved = false) } }
 
     fun save() {

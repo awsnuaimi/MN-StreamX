@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.PlaylistCacheKey
@@ -24,7 +26,7 @@ class VodProgressViewModel @Inject constructor(
 ) : ViewModel() {
     val entries = settings.observeSettings().map { account ->
         if (account.source == PlaylistSource.XTREAM && account.hasSelectedSource())
-            PlaylistCacheKey.of(account) else null
+            ProfileScope.of(account) else null
     }.distinctUntilChanged().flatMapLatest { source ->
         if (source == null) flowOf(emptyList()) else progress.observe(source)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<VodProgressEntry>())

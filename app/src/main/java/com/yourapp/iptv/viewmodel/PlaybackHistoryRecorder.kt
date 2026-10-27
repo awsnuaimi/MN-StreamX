@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.repository.WatchHistoryRepository
 
@@ -9,7 +11,7 @@ internal class PlaybackHistoryRecorder(private val history: WatchHistoryReposito
     var sourceKey: String? = null
         private set
     private var lastTime = 0L
-    fun bind(source: AppSettings?) { sourceKey = source?.takeIf { it.hasSelectedSource() }?.let(PlaylistCacheKey::of) }
+    fun bind(source: AppSettings?) { sourceKey = source?.takeIf { it.hasSelectedSource() }?.let(ProfileScope::of) }
     fun onFirstFrame(selected: Channel) {
         val key = sourceKey ?: return
         val active = current() ?: return

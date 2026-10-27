@@ -12,7 +12,7 @@ class ParentalRenderSession {
     fun frame(actual: ParentalState, external: Boolean, revision: Long): ParentalRenderFrame {
         val previous = rendered
         if (previous == null) { rendered = actual; reset = revision }
-        else if (reset != revision || previous.configured != actual.configured || previous.rules != actual.rules || actual.storageError) {
+        else if (reset != revision || previous.configured != actual.configured || previous.rules != actual.rules || previous.profileLocked != actual.profileLocked || previous.profileId != actual.profileId || actual.storageError) {
             rendered = actual; serial++; held = false; reset = revision
         } else {
             if (external && previous.configured && previous.unlocked) held = true

@@ -15,7 +15,8 @@ data class PlayerAppearance(
     val showNext: Boolean = true,
     val showDescription: Boolean = true,
     val showChannelButtons: Boolean = true,
-    val showHints: Boolean = false
+    val showHints: Boolean = false,
+    val profileId: String = "default"
 ) {
     fun normalized() = copy(displaySeconds = displaySeconds.takeIf { it in setOf(3, 5, 8) } ?: 5)
     val timeoutMillis: Long get() = normalized().displaySeconds * 1000L

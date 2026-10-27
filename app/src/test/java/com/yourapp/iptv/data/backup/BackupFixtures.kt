@@ -32,7 +32,7 @@ internal class BackupTestDevice(context: Context, directory: File, seed: Byte) {
     val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
     val cipher = KeystoreSubscriptionCipher { SecretKeySpec(ByteArray(32) { seed }, "AES") }
     val settings = SettingsDataStore(stores.getValue(BackupStore.SETTINGS), cipher)
-    val storage = BackupStorage(stores, database.backupDao(), database.scopedFavoriteDao(), settings, cipher)
+    val storage = BackupStorage(stores, database.backupDao(), database.scopedFavoriteDao(), settings, cipher,com.yourapp.iptv.data.profile.DeviceProfileCipher { SecretKeySpec(ByteArray(32) { (seed + 2).toByte() }, "AES") })
     val journal = DeviceBackupJournal(File(directory, "restore.journal")) { SecretKeySpec(ByteArray(32) { (seed + 1).toByte() }, "AES") }
     val repository = EncryptedBackupRepository(storage, journal)
     suspend fun start(user: String = "A") {

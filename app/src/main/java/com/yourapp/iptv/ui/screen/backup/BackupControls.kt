@@ -37,6 +37,7 @@ internal fun BackupPreviewContent(preview: BackupPreview, busy: Boolean, labels:
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { Text(labels.preview(), style = MaterialTheme.typography.titleLarge) }
             item { Text(labels.date(preview.createdAtMillis)) }
+            item { Text(labels.profileCount(preview.profileCount)) }
             item { Text(labels.accounts(preview.newSubscriptions, preview.existingSubscriptions)) }
             item { Text(labels.counts(preview.favoriteCount, preview.folderCount, preview.historyCount, preview.progressCount)) }
             item {

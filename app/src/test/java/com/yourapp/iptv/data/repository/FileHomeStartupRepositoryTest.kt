@@ -67,6 +67,19 @@ class FileHomeStartupRepositoryTest {
         assertNotNull(repo.restore(source))
     }
 
+    @Test fun sharedStartupCatalogNeverRestoresAnotherProfilesFavoriteFlagsIncludingOldSnapshots() = runBlocking {
+        val file = temporary.root.resolve("catalog.bin")
+        val repo = FileHomeStartupRepository(file,settings,organization)
+        val config = organization.value.value
+        val marked = ChannelOrganizer.project(rows.map { it.copy(isFavorite = true) },config)
+        repo.save(source,config,marked,1)
+        assertFalse(repo.restore(source)!!.catalog.channels.single().isFavorite)
+        // Simulate the shared file written before profile support was installed.
+        com.yourapp.iptv.data.cache.HomeCatalogFile(file).write(PlaylistCacheKey.of(source),config,marked,2) { }
+        settings.value.value = source.copy(profileId = "11111111-1111-4111-8111-111111111111")
+        assertFalse(repo.restore(settings.value.value)!!.catalog.channels.single().isFavorite)
+    }
+
     private class Settings(initial: AppSettings) : SettingsRepository {
         val value = MutableStateFlow(initial)
         override fun observeSettings() = value

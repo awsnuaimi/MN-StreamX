@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.*
@@ -65,11 +67,11 @@ class VodViewModel @Inject constructor(
         mutable.value = VodUiState(kind = kind)
         catalogJob = viewModelScope.launch {
             try {
-                settings.observeSettings().distinctUntilChangedBy(PlaylistCacheKey::of).collectLatest { source ->
+                settings.observeSettings().distinctUntilChangedBy(ProfileScope::of).collectLatest { source ->
                     cancelSelection()
                     val current = ++generation
                     account = source
-                    mutable.value = VodUiState(kind = kind, sourceKey = PlaylistCacheKey.of(source))
+                    mutable.value = VodUiState(kind = kind, sourceKey = ProfileScope.of(source))
                     if (!repository.supports(source)) {
                         mutable.value = mutable.value.copy(loading = false, unavailable = true)
                         return@collectLatest

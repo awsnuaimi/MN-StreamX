@@ -55,8 +55,9 @@ private fun ParentalSettingsForm(model: ParentalViewModel, access: ParentalState
                 items(ParentalSection.entries.toList(),key = { it.name }) { section ->
                     AppButton((if (section in sections) "☑ " else "☐ ") + labels.section(section),{
                         sections = if (section in sections) sections - section else sections + section
-                    },enabled = !editor.busy)
+                    },enabled = !editor.busy && !(model.control.childProfile && section == ParentalSection.SETTINGS))
                 }
+                if (model.control.childProfile) item { Text(labels.text("إعدادات ملف الأطفال تبقى محمية دائمًا.","Child profile settings always require PIN.","Einstellungen des Kinderprofils bleiben PIN-geschützt.")) }
                 item { Text(labels.text("مجموعات القنوات الأصلية — للاشتراك الحالي فقط","Original channel groups — current subscription only",
                     "Originale Sendergruppen — nur für das aktuelle Abo"),style = MaterialTheme.typography.titleMedium) }
                 item { Text(labels.text("تُحجب المجموعة في القنوات والبحث والمفضلة والسجل والدليل. إدارة الاشتراكات والنسخ الاحتياطي والتنظيم تتطلب فتح PIN دائمًا.",
@@ -99,7 +100,8 @@ private fun ParentalSettingsForm(model: ParentalViewModel, access: ParentalState
                 },enabled = !editor.busy) }
                 item { AppButton(labels.text("إيقاف الحماية — يتطلب PIN","Disable protection — PIN required","Schutz deaktivieren — PIN erforderlich"),{
                     workflow.clear(); mode = PinSetupMode.DISABLE
-                },enabled = !editor.busy) }
+                },enabled = !editor.busy && model.control.canDisable) }
+                if (!model.control.canDisable) item { Text(labels.text("احذف ملفات الأطفال قبل إيقاف PIN.","Remove child profiles before disabling PIN.","Kinderprofile vor dem Deaktivieren der PIN entfernen.")) }
             }
             if (editor.busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             val message = labels.message(editor.result)

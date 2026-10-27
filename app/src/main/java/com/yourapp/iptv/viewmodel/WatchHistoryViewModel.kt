@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.di.DefaultDispatcher
@@ -39,10 +41,10 @@ class WatchHistoryViewModel @Inject constructor(private val settings: SettingsRe
         state.update { it.copy(isLoading = true, error = null) }
         observer = viewModelScope.launch {
             try {
-                settings.observeSettings().distinctUntilChangedBy(PlaylistCacheKey::of).collect { source ->
+                settings.observeSettings().distinctUntilChangedBy(ProfileScope::of).collect { source ->
                     historyJob?.cancel(); lookupJob?.cancel()
                     val token = ++generation
-                    val key = PlaylistCacheKey.of(source)
+                    val key = ProfileScope.of(source)
                     state.value = WatchHistoryUiState(sourceKey = key, isLoading = source.hasSelectedSource(),
                         needsSource = !source.hasSelectedSource())
                     if (!source.hasSelectedSource()) return@collect

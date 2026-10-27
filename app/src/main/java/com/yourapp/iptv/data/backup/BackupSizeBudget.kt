@@ -31,6 +31,7 @@ internal class BackupSizeBudget(private val limit: Int) {
                 val s = entry.settings
                 listOf(s.m3uUrl,s.xtreamServer,s.xtreamUsername,s.xtreamPassword,s.epgUrl).forEach { budget.text(it) }
             }
+            budget.text(com.yourapp.iptv.data.profile.ProfileCodec.rows(value.profiles).toString())
             value.areas.values.forEach { rows -> rows.forEach { (name,item) -> budget.text(name);budget.text(item.text,128) } }
             value.favorites.forEach { budget.text(it.source);budget.text(it.channel) }
         }

@@ -57,7 +57,11 @@ internal class EncryptedBackupRepository(
             val plain = cipher.decrypt(bytes, password)
             val value = try { BackupPayloadCodec.decode(plain) } finally { plain.fill(0) }
             storage.prepare()
-            val merge = AppDataGate.write { BackupMerge.accounts(storage.accounts(storage.capture()), value.subscriptions, true) }
+            val merge = AppDataGate.write {
+                val current = storage.capture()
+                storage.restored(current,value,BackupRestoreOptions()) // Validate capacity before staging a preview.
+                BackupMerge.accounts(storage.accounts(current),value.subscriptions,true)
+            }
             currentCoroutineContext().ensureActive()
             val token = UUID.randomUUID().toString()
             val candidate = Staged(token, clock(), value)
@@ -68,7 +72,7 @@ internal class EncryptedBackupRepository(
             }
             BackupPreview(token, value.createdAt, BackupMerge.usefulEntries(value.subscriptions).map { it.name },
                 merge.newCount, merge.existingCount, value.favorites.size, count(BackupStore.ORGANIZATION, "folders"),
-                count(BackupStore.HISTORY, "rows"), count(BackupStore.VOD, "entries"))
+                count(BackupStore.HISTORY, "rows"), count(BackupStore.VOD, "entries"),value.profiles.size)
         } } } catch (e: CancellationException) {
             prepared?.let { staged.compareAndSet(it, null) }
             throw e

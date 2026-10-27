@@ -15,6 +15,6 @@ import javax.inject.Singleton
 object FavoriteModule {
     @Provides
     @Singleton
-    fun provideFavorites(database: AppDatabase, subscriptions: SubscriptionRepository): FavoriteRepository =
-        FavoriteRepositoryImpl(database.scopedFavoriteDao(), subscriptions)
+    fun provideFavorites(database: AppDatabase, subscriptions: SubscriptionRepository, profiles: com.yourapp.iptv.domain.repository.ProfileRepository): FavoriteRepository =
+        FavoriteRepositoryImpl(database.scopedFavoriteDao(), subscriptions,profiles)
 }

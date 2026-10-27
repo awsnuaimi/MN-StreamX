@@ -10,7 +10,8 @@ data class HomeAppearance(
     val columns: Int = 3,
     val restoreBrowseSession: Boolean = true,
     val theme: HomeTheme = HomeTheme.DARK_BLUE,
-    val isNightMode: Boolean = false
+    val isNightMode: Boolean = false,
+    val profileId: String = "default"
 ) {
     val isDarkTheme: Boolean get() = theme != HomeTheme.LIGHT
     val sidebarOnRight: Boolean get() = sidebarSide == SidebarSide.RIGHT ||

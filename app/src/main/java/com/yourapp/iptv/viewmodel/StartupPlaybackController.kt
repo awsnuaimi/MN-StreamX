@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+
 import com.yourapp.iptv.domain.model.PlaylistCacheKey
 import com.yourapp.iptv.domain.repository.*
 import kotlinx.coroutines.*
@@ -40,14 +42,14 @@ internal class StartupPlaybackController(
                 withTimeoutOrNull(3_000) {
                     if (!preference.observe().first()) return@withTimeoutOrNull
                     val source = settings.observeSettings().first()
-                    if (!source.hasSelectedSource() || PlaylistCacheKey.of(source) != sourceKey) return@withTimeoutOrNull
+                    if (!source.hasSelectedSource() || ProfileScope.of(source) != sourceKey) return@withTimeoutOrNull
                     val last = history.observe(sourceKey).first().firstOrNull() ?: return@withTimeoutOrNull
                     val available = channels.getPlaybackChannels(source, setOf(last.channelId))
                         .any { it.id == last.channelId && it.streamUrl.isNotBlank() }
                     if (!available) return@withTimeoutOrNull
                     if (!preference.observe().first()) return@withTimeoutOrNull
                     val current = settings.observeSettings().first()
-                    if (!current.hasSelectedSource() || PlaylistCacheKey.of(current) != sourceKey) return@withTimeoutOrNull
+                    if (!current.hasSelectedSource() || ProfileScope.of(current) != sourceKey) return@withTimeoutOrNull
                     if (history.observe(sourceKey).first().firstOrNull() != last) return@withTimeoutOrNull
                     currentCoroutineContext().ensureActive()
                     if (token == generation) onPlay(StartupPlaybackTarget(last.channelId, sourceKey))

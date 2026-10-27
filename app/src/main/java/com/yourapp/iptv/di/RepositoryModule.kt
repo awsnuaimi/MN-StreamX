@@ -31,12 +31,12 @@ object RepositoryModule {
     @Provides
     @Singleton
     @RawChannelCatalog
-    fun provideChannels(database: AppDatabase, @ApplicationContext context: Context, favorites: FavoriteRepository): ChannelRepository = ChannelRepositoryImpl(
+    fun provideChannels(database: AppDatabase, @ApplicationContext context: Context, favorites: FavoriteRepository, profiles: com.yourapp.iptv.domain.repository.ProfileRepository): ChannelRepository = ChannelRepositoryImpl(
         m3uDataSource = M3uDataSource(),
         xtreamDataSource = XtreamDataSource(),
         channelDao = database.channelDao(),
         favoriteDao = database.favoriteDao(),
-        snapshot = ChannelSnapshotDataStore(context), favorites = favorites
+        snapshot = ChannelSnapshotDataStore(context), favorites = favorites, profiles = profiles
     )
 
     @Provides @Singleton

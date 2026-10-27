@@ -2,6 +2,7 @@ package com.yourapp.iptv.data.backup
 
 import androidx.datastore.preferences.core.*
 import com.google.gson.JsonObject
+import com.yourapp.iptv.domain.profile.*
 import com.yourapp.iptv.data.datastore.*
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.organization.OrganizationNames
@@ -9,10 +10,10 @@ import com.yourapp.iptv.domain.search.SearchText
 
 internal object PortablePreferences {
     val global = setOf(BackupStore.HOME, BackupStore.PLAYER, BackupStore.STARTUP, BackupStore.CAPTIONS)
-    val portable = BackupStore.entries.toSet() - BackupStore.SETTINGS
+    val portable = BackupStore.entries.toSet() - setOf(BackupStore.SETTINGS,BackupStore.PROFILES)
 
-    fun collect(stores: Map<BackupStore, Preferences>, accounts: Subscriptions): Map<BackupStore, Map<String, BackupValue>> {
-        val keys = sourceKeys(accounts)
+    fun collect(stores: Map<BackupStore, Preferences>, accounts: Subscriptions, profiles: List<UserProfile> = UserProfiles().entries): Map<BackupStore, Map<String, BackupValue>> {
+        val keys = sourceKeys(accounts,profiles)
         val organizationKeys = accounts.entries.filter { it.settings.hasSelectedSource() }
             .map { "source_" + OrganizationNames.sourceKey(it.settings) }.toSet()
         return portable.associateWith { area ->
@@ -25,16 +26,16 @@ internal object PortablePreferences {
         }
     }
 
-    fun validate(areas: Map<BackupStore, Map<String, BackupValue>>, accounts: Subscriptions) {
+    fun validate(areas: Map<BackupStore, Map<String, BackupValue>>, accounts: Subscriptions, profiles: List<UserProfile> = UserProfiles().entries) {
         require(areas.keys == portable)
-        val keys = sourceKeys(accounts)
+        val keys = sourceKeys(accounts,profiles)
         val organizationKeys = accounts.entries.filter { it.settings.hasSelectedSource() }
             .map { "source_" + OrganizationNames.sourceKey(it.settings) }.toSet()
         areas.forEach { (area, values) ->
             if (area in global) {
                 require(values == canonicalGlobal(area, BackupPreferenceCodec.preferences(values)))
             } else {
-                require(values.size <= Subscriptions.LIMIT)
+                require(values.size <= Subscriptions.LIMIT * (if (area == BackupStore.ORGANIZATION) 1 else profiles.size))
                 values.forEach { (name, value) ->
                     require(if (area == BackupStore.ORGANIZATION) name in organizationKeys
                         else name.startsWith(prefix(area)) && name.removePrefix(prefix(area)) in keys)
@@ -43,8 +44,9 @@ internal object PortablePreferences {
             }
         }
     }
-    fun sourceKeys(accounts: Subscriptions) = accounts.entries.filter { it.settings.hasSelectedSource() }
-        .map { PlaylistCacheKey.of(it.settings) }.toSet()
+    fun sourceKeys(accounts: Subscriptions, profiles: List<UserProfile> = UserProfiles().entries) =
+        profiles.flatMap { person -> accounts.entries.filter { it.settings.hasSelectedSource() }
+            .map { ProfileScope.key(person.id,PlaylistCacheKey.of(it.settings)) } }.toSet()
     fun prefix(area: BackupStore) = when (area) {
         BackupStore.HISTORY -> "history_"
         BackupStore.VOD -> "vod_"

@@ -15,6 +15,7 @@ internal class BackupLabels(language: HomeLanguage) {
     fun description() = text("احفظ الاشتراكات والمفضلة والمجلدات والإعدادات والسجل في ملف مشفّر لنقله إلى جهاز آخر.",
         "Save subscriptions, favorites, folders, settings and history in an encrypted file for another device.",
         "Abos, Favoriten, Ordner, Einstellungen und Verlauf in einer verschlüsselten Datei auf ein anderes Gerät übertragen.")
+    fun profileCount(count: Int) = text("الملفات الشخصية: $count. لا يُنقل PIN أو قيود الحماية؛ ملفات الأطفال المستعادة تبدأ مقفولة.","Profiles: $count. PIN and protection rules are not transferred; restored child profiles start locked.","Profile: $count. PIN und Schutzregeln werden nicht übertragen; wiederhergestellte Kinderprofile starten gesperrt.")
     fun excluded() = text("مفاتيح خدمات الترجمة السحابية وملفات النماذج لا تُنقل. أدخل مفاتيحك مجددًا على الجهاز الجديد.",
         "Cloud translation keys and model files are not transferred. Enter your keys again on the new device.",
         "Cloud-Übersetzungsschlüssel und Modelldateien werden nicht übertragen. Schlüssel auf dem neuen Gerät erneut eingeben.")
@@ -59,6 +60,7 @@ internal class BackupLabels(language: HomeLanguage) {
         BackupProblem.UNSUPPORTED -> text("إصدار هذه النسخة غير مدعوم. حدّث التطبيق.", "Unsupported backup version. Update the app.", "Sicherungsversion nicht unterstützt. App aktualisieren.")
         BackupProblem.TOO_LARGE -> text("النسخة أكبر من الحد الآمن البالغ 16 MiB.", "The backup exceeds the safe 16 MiB limit.", "Sicherung überschreitet die sichere Grenze von 16 MiB.")
         BackupProblem.STORAGE -> text("تعذر إكمال العملية. تحقق من الملف والمساحة المتاحة ثم أعد المحاولة.", "Could not complete the operation. Check the file and free space, then retry.", "Vorgang fehlgeschlagen. Datei und freien Speicher prüfen, dann erneut versuchen.")
+        BackupProblem.PROFILE_LIMIT -> text("سيزيد عدد الملفات الشخصية عن 8. احذف ملفًا غير مستخدم ثم أعد المعاينة.","This would exceed 8 profiles. Remove an unused profile and preview again.","Mehr als 8 Profile. Ein ungenutztes Profil entfernen und Vorschau wiederholen.")
         BackupProblem.ACCOUNT_LIMIT -> text("سيزيد عدد الاشتراكات عن 16. أزل اشتراكًا غير مستخدم ثم أعد المعاينة.", "This would exceed 16 subscriptions. Remove an unused subscription and preview again.", "Mehr als 16 Abos. Ein ungenutztes Abo entfernen und Vorschau wiederholen.")
         BackupProblem.RECOVERY -> text("تعذر إكمال استرجاع البيانات السابقة. أعد المحاولة قبل متابعة الاستخدام.", "Could not finish recovering previous data. Retry before continuing.", "Vorherige Daten konnten nicht vollständig wiederhergestellt werden. Vor dem Fortfahren erneut versuchen.")
         BackupProblem.PICKER -> text("لا يوجد منتقي ملفات متوافق. يلزم تطبيق ملفات يدعم اختيار مستندات Android.", "No compatible file picker is available. A file app supporting Android document selection is required.", "Keine passende Dateiauswahl verfügbar. Eine Datei-App mit Android-Dokumentauswahl wird benötigt.")

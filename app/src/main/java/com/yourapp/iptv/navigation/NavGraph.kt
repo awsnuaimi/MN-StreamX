@@ -37,7 +37,8 @@ fun AppNavGraph(startup: StartupPlaybackViewModel, initialRoute: String? = null,
     val nav = rememberNavController()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(initialRoute) {
-        if (initialRoute in setOf("parental","settings","vod/movie","vod/series","organization","home_appearance",
+        if ((initialRoute?.startsWith("profiles?select=") == true &&
+                com.yourapp.iptv.domain.profile.UserProfiles.validId(initialRoute.removePrefix("profiles?select="))) || initialRoute in setOf("profiles","profile_manager","parental","settings","vod/movie","vod/series","organization","home_appearance",
                 Destinations.PLAYER_APPEARANCE,Destinations.BACKUP,Destinations.DIAGNOSTICS,Destinations.SUBSCRIPTIONS,Destinations.HISTORY)) {
             nav.navigate(requireNotNull(initialRoute)) { launchSingleTop = true }
             onInitialRouteHandled()
@@ -46,6 +47,8 @@ fun AppNavGraph(startup: StartupPlaybackViewModel, initialRoute: String? = null,
     StartupPlaybackGuard(nav, startup)
     NavHost(navController = nav, startDestination = Destinations.HOME) {
         composable(Destinations.HOME) { entry ->
+            val profiles: com.yourapp.iptv.viewmodel.ProfilesViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+            val people by profiles.people.collectAsStateWithLifecycle()
             val returnedChannel by entry.savedStateHandle
                 .getStateFlow<String?>("lastPlayedChannelId", null).collectAsStateWithLifecycle()
             val openLive by entry.savedStateHandle
@@ -60,6 +63,8 @@ fun AppNavGraph(startup: StartupPlaybackViewModel, initialRoute: String? = null,
                         nav.navigate(historyPlayerRoute(id, source)) { launchSingleTop = true }
                     }
                 } },
+                profileName = people.catalog.active.name,
+                onProfiles = { nav.navigate("profiles") { launchSingleTop = true } },
                 onHistory = { nav.navigate(Destinations.HISTORY) { launchSingleTop = true } },
                 onMovies = { nav.navigate("vod/movie") { launchSingleTop = true } },
                 onSeries = { nav.navigate("vod/series") { launchSingleTop = true } },
@@ -109,6 +114,18 @@ fun AppNavGraph(startup: StartupPlaybackViewModel, initialRoute: String? = null,
                 }
             ) }
         }
+        composable("profiles?select={select}",arguments = listOf(navArgument("select") { type = NavType.StringType;nullable = true;defaultValue = null })) { entry ->
+            val selection by entry.savedStateHandle.getStateFlow<String?>("handledSelection",null).collectAsStateWithLifecycle()
+            val requested = entry.arguments?.getString("select")?.takeUnless { it == selection }
+            com.yourapp.iptv.ui.screen.profile.ProfileScreen(onBack = { nav.popBackStack() },
+                onManage = { nav.navigate("profile_manager") { launchSingleTop = true } },onUsed = {
+                    nav.popBackStack(Destinations.HOME,false)
+                },selected = requested,onSelectionHandled = { entry.savedStateHandle["handledSelection"] = requested })
+        }
+        composable("profile_manager") { ParentalRouteGate(null,"profile_manager",{ nav.popBackStack() }) {
+            com.yourapp.iptv.ui.screen.profile.ProfileManagerScreen(onBack = { nav.popBackStack() },
+                onParental = { nav.navigate("parental") { launchSingleTop = true } })
+        } }
         composable("parental") { ParentalRouteGate(null,"parental",{ nav.popBackStack() }) {
             ParentalSettingsScreen(onBack = { nav.popBackStack() })
         } }

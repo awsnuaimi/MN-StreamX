@@ -45,6 +45,8 @@ fun HomeScreen(
     onHistory: () -> Unit = {},
     onMovies: () -> Unit = {},
     onSeries: () -> Unit = {},
+    onProfiles: () -> Unit = {},
+    profileName: String = "",
     onStartupReady: (String) -> Unit = {},
     onSearch: () -> Unit = {},
     openLiveRequested: Boolean = false,
@@ -171,7 +173,11 @@ fun HomeScreen(
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 Column(Modifier.weight(1f).fillMaxHeight().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ParentalHomeControl()
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ParentalHomeControl()
+                        val name = profileName.ifBlank { labels.text("الملف الأساسي","Original profile","Bisheriges Profil") }
+                        AppButton(labels.text("الملف: ","Profile: ","Profil: ") + name.take(20) + if (name.length > 20) "…" else "",onProfiles)
+                    }
                     if (!dashboardVisible) {
                         Column(Modifier.fillMaxWidth()) {
                             Text(labels.section(selected), style = MaterialTheme.typography.headlineSmall,

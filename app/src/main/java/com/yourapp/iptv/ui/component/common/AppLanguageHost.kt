@@ -12,9 +12,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.iptv.viewmodel.HomeAppearanceViewModel
 
 @Composable
-internal fun AppLanguageHost(viewModel: HomeAppearanceViewModel = hiltViewModel(), content: @Composable () -> Unit) {
+internal fun AppLanguageHost(viewModel: HomeAppearanceViewModel = hiltViewModel(),
+    fallbackLanguage: com.yourapp.iptv.domain.model.HomeLanguage? = null, content: @Composable () -> Unit) {
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
-    val language = appearance?.language
+    val language = appearance?.language ?: fallbackLanguage
     if (language == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
     } else {

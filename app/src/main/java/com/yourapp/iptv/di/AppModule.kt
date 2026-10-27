@@ -5,6 +5,8 @@ import com.yourapp.iptv.data.datastore.SettingsDataStore
 import com.yourapp.iptv.data.local.AppDatabase
 import com.yourapp.iptv.domain.repository.SettingsRepository
 import com.yourapp.iptv.domain.repository.SubscriptionRepository
+import com.yourapp.iptv.domain.repository.ProfileRepository
+import com.yourapp.iptv.data.profile.ProfileSettingsRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,7 +34,7 @@ object AppModule {
         SettingsDataStore(context)
 
     @Provides
-    fun provideSettingsRepository(store: SettingsDataStore): SettingsRepository = store
+    fun provideSettingsRepository(store: SettingsDataStore, profiles: ProfileRepository): SettingsRepository = ProfileSettingsRepository(store,profiles)
 
     @Provides
     fun provideSubscriptionRepository(store: SettingsDataStore): SubscriptionRepository = store

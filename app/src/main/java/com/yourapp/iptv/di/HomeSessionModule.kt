@@ -1,6 +1,7 @@
 package com.yourapp.iptv.di
 
 import android.content.Context
+import com.yourapp.iptv.domain.repository.ProfileRepository
 import com.yourapp.iptv.data.datastore.HomeSessionDataStore
 import com.yourapp.iptv.data.datastore.homeSessionStore
 import com.yourapp.iptv.domain.repository.HomeSessionRepository
@@ -18,7 +19,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object HomeSessionModule {
     @Provides @Singleton
-    fun provideHomeSession(@ApplicationContext context: Context): HomeSessionRepository =
+    fun provideHomeSession(@ApplicationContext context: Context, profiles: ProfileRepository): HomeSessionRepository =
         HomeSessionDataStore(context.applicationContext.homeSessionStore,
-            CoroutineScope(SupervisorJob() + Dispatchers.IO))
+            CoroutineScope(SupervisorJob() + Dispatchers.IO), profiles = profiles)
 }

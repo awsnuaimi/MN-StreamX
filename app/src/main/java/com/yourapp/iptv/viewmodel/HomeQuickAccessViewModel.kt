@@ -25,7 +25,7 @@ class HomeQuickAccessViewModel @Inject constructor(
     private var currentKey: String? = null
 
     fun bind(sourceKey: String?) {
-        val key = sourceKey?.takeIf { it.length == 64 && it.all { char -> char in '0'..'9' || char in 'a'..'f' } }
+        val key = sourceKey?.takeIf { com.yourapp.iptv.domain.profile.ProfileScope.valid(it) }
         if (currentKey == key) return
         observing?.cancel()
         currentKey = key

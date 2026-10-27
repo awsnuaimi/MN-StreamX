@@ -6,4 +6,6 @@ import kotlinx.coroutines.flow.Flow
 interface StartupPlaybackRepository {
     fun observe(): Flow<Boolean>
     suspend fun save(enabled: Boolean)
+    val profileId: String get() = "default"
+    suspend fun saveFor(profile: String, enabled: Boolean) = save(enabled)
 }

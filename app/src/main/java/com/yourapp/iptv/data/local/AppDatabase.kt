@@ -23,6 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun channelDao(): ChannelDao
     abstract fun favoriteDao(): FavoriteDao
     abstract fun scopedFavoriteDao(): ScopedFavoriteDao
+    abstract fun profileFavoriteDao(): com.yourapp.iptv.data.local.dao.ProfileFavoriteDao
     abstract fun backupDao(): BackupDao
     abstract fun epgDao(): EpgDao
 

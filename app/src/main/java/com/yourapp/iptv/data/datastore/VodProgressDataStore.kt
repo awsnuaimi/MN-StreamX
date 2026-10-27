@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+import com.yourapp.iptv.domain.repository.ProfileRepository
 import com.yourapp.iptv.data.backup.editAppData
 
 import android.content.Context
@@ -28,7 +30,7 @@ internal val Context.vodProgressStore by preferencesDataStore(
 class VodProgressDataStore(
     private val store: DataStore<Preferences>,
     private val settings: SettingsRepository,
-    scope: CoroutineScope
+    scope: CoroutineScope, private val profiles: ProfileRepository = ProfileRepository.Disabled
 ) : VodProgressRepository {
     private data class Command(val source: String, val entry: VodProgressEntry, val completed: Boolean)
     private val pending = Channel<Command>(Channel.BUFFERED)
@@ -55,8 +57,9 @@ class VodProgressDataStore(
 
     private suspend fun apply(command: Command) {
         val source = settings.observeSettings().first()
-        if (!source.hasSelectedSource() || PlaylistCacheKey.of(source) != command.source) return
+        if (!source.hasSelectedSource() || PlaylistCacheKey.of(source) != ProfileScope.source(command.source)) return
         store.editAppData { preferences ->
+            check(ProfileScope.belongs(command.source,profiles.state.value))
             val itemKey = key(command.source)
             val previous = VodProgressCodec.decode(preferences[itemKey])
             val updated = VodProgress.record(previous, command.entry, command.completed)
@@ -67,7 +70,6 @@ class VodProgressDataStore(
         }
     }
 
-    private fun validSource(value: String) = value.length == 64 &&
-        value.all { it in '0'..'9' || it in 'a'..'f' }
+    private fun validSource(value: String) = ProfileScope.valid(value)
     private fun key(source: String) = stringPreferencesKey("vod_$source")
 }

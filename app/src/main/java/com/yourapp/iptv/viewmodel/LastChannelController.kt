@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.repository.*
 import com.yourapp.iptv.ui.state.*
@@ -69,14 +71,14 @@ internal class LastChannelController(private val scope: CoroutineScope,
         try {
             val sourceSettings = settings ?: run { fail(request, LastChannelError.SOURCE_CHANGED); return null }
             val source = sourceSettings.observeSettings().first()
-            if (!source.hasSelectedSource() || PlaylistCacheKey.of(source) != key) {
+            if (!source.hasSelectedSource() || ProfileScope.of(source) != key) {
                 fail(request, LastChannelError.SOURCE_CHANGED); return null
             }
             if (!isCurrent(request, key, active)) return null
             // One small, source-checked request; warm data comes from the existing repository cache.
             val found = channels.getPlaybackChannels(source, ids).associateBy { it.id }
             val latest = sourceSettings.observeSettings().first()
-            if (!latest.hasSelectedSource() || PlaylistCacheKey.of(latest) != key) {
+            if (!latest.hasSelectedSource() || ProfileScope.of(latest) != key) {
                 fail(request, LastChannelError.SOURCE_CHANGED); return null
             }
             if (!isCurrent(request, key, active)) return null

@@ -1,5 +1,7 @@
 package com.yourapp.iptv.data.datastore
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+import com.yourapp.iptv.domain.repository.ProfileRepository
 import com.yourapp.iptv.data.backup.editAppData
 
 import android.content.Context
@@ -18,7 +20,7 @@ internal val Context.watchHistoryStore by preferencesDataStore(name = "watch_his
     corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() })
 
 class WatchHistoryDataStore(private val store: DataStore<Preferences>, private val settings: SettingsRepository,
-    scope: CoroutineScope) : WatchHistoryRepository {
+    scope: CoroutineScope, private val profiles: ProfileRepository = ProfileRepository.Disabled) : WatchHistoryRepository {
     private data class Command(val source: String, val entry: WatchHistoryEntry? = null,
         val remove: String? = null, val clear: Boolean = false, val reply: CompletableDeferred<Unit>? = null)
     private val commands = Channel<Command>(Channel.UNLIMITED)
@@ -58,9 +60,10 @@ class WatchHistoryDataStore(private val store: DataStore<Preferences>, private v
 
     private suspend fun apply(command: Command) {
         val source = settings.observeSettings().first()
-        if (!source.hasSelectedSource() || PlaylistCacheKey.of(source) != command.source)
+        if (!source.hasSelectedSource() || PlaylistCacheKey.of(source) != ProfileScope.source(command.source))
             throw IOException("History source changed")
         store.editAppData { values ->
+            check(ProfileScope.belongs(command.source,profiles.state.value))
             val key = key(command.source)
             val previous = WatchHistoryCodec.decode(values[key])
             val rows = when {
@@ -76,12 +79,13 @@ class WatchHistoryDataStore(private val store: DataStore<Preferences>, private v
                     .maxOfOrNull { WatchHistoryCodec.updated(it as? String ?: "") }?.plus(1) ?: now)
                 if (rows != previous) values[key] = WatchHistoryCodec.encode(rows, updated)
             }
-            values.asMap().filter { it.key.name.startsWith("history_") }.entries
+            values.asMap().filter { it.key.name.startsWith("history_") &&
+                ProfileScope.profile(it.key.name.removePrefix("history_")) == ProfileScope.profile(command.source) }.entries
                 .sortedByDescending { WatchHistoryCodec.updated(it.value as? String ?: "") }
                 .drop(32).forEach { values.remove(stringPreferencesKey(it.key.name)) }
         }
     }
 
-    private fun validKey(value: String) = value.length == 64 && value.all { it in '0'..'9' || it in 'a'..'f' }
+    private fun validKey(value: String) = ProfileScope.valid(value)
     private fun key(source: String) = stringPreferencesKey("history_$source")
 }

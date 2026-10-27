@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+
 import com.yourapp.iptv.domain.organization.*
 import com.yourapp.iptv.domain.repository.OrganizationRepository
 import androidx.lifecycle.ViewModel
@@ -188,7 +190,7 @@ class HomeViewModel @Inject constructor(
         settingsJob?.cancel()
         settingsJob = viewModelScope.launch {
             try {
-                settings.observeSettings().distinctUntilChangedBy(PlaylistCacheKey::of).collect { source ->
+                settings.observeSettings().distinctUntilChangedBy(ProfileScope::of).collect { source ->
                     generation++
                     loadJob?.cancel()
                     filterJob?.cancel()
@@ -202,7 +204,7 @@ class HomeViewModel @Inject constructor(
                     activeSource = source
                     refreshing = false
                     state.value = HomeUiState(isLoading = source.hasSelectedSource(),
-                        needsSource = !source.hasSelectedSource(), browseScope = PlaylistCacheKey.of(source))
+                        needsSource = !source.hasSelectedSource(), browseScope = ProfileScope.of(source))
                     favoriteController.bind(state.value.browseScope.takeIf { source.hasSelectedSource() })
                     session.open(state.value.browseScope.takeIf { source.hasSelectedSource() })
                     if (source.hasSelectedSource()) load(source)

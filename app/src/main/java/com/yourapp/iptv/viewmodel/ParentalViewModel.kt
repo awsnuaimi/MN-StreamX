@@ -40,8 +40,11 @@ class ParentalViewModel @Inject constructor(val control: ParentalControl, settin
         viewModelScope.launch {
             control.initialize()
             try {
-                settings.observeSettings().distinctUntilChangedBy(PlaylistCacheKey::of).collect { value ->
-                    if (account != null) lock()
+                settings.observeSettings().distinctUntilChangedBy { it.profileId to PlaylistCacheKey.of(it) }.collect { value ->
+                    if (account != null) {
+                        if (PlaylistCacheKey.of(requireNotNull(account)) != PlaylistCacheKey.of(value)) lock()
+                        else { operation?.cancel();dismissPin();route.value = null;leaseTimeout?.cancel();external.value = null;reset.value++ }
+                    }
                     account = value; generation++; groupsJob?.cancel()
                     mutable.value = ParentalEditorState(sourceKey = PlaylistCacheKey.of(value))
                 }

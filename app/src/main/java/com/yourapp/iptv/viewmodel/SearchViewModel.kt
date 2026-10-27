@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -47,7 +49,7 @@ class SearchViewModel @Inject constructor(
         sourceJob?.cancel()
         sourceJob = viewModelScope.launch {
             try {
-                settings.observeSettings().distinctUntilChangedBy(PlaylistCacheKey::of).collect { account -> bind(account) }
+                settings.observeSettings().distinctUntilChangedBy(ProfileScope::of).collect { account -> bind(account) }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) {
                 bind(null)
@@ -61,7 +63,7 @@ class SearchViewModel @Inject constructor(
         channelsJob?.cancel(); queryJob?.cancel(); historyJob?.cancel()
         source = account?.takeIf { it.hasSelectedSource() }
         channelIndex = null
-        val key = source?.let(PlaylistCacheKey::of)
+        val key = source?.let(ProfileScope::of)
         val query = if (key != null && key == saved.get<String>(SOURCE)) mutable.value.query else ""
         saved[SOURCE] = key; saved[QUERY] = query
         mutable.value = SearchUiState(query = query, sourceKey = key, sourceLoading = false,

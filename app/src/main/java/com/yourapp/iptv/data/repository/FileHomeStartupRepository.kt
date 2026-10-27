@@ -25,7 +25,8 @@ class FileHomeStartupRepository(file: File, private val settings: SettingsReposi
                     if (config.sourceKey != OrganizationNames.sourceKey(source)) return@withLock null
                     val worker = currentCoroutineContext()
                     val restored = storage.read(PlaylistCacheKey.of(source), config) { worker.ensureActive() }
-                    if (isCurrent(source) && organization.observe().first() == config) restored else null
+                    if (isCurrent(source) && organization.observe().first() == config) restored?.copy(catalog = restored.catalog.copy(
+                        channels = restored.catalog.channels.map { it.copy(isFavorite = false) })) else null
                 }
             }
         }
@@ -39,7 +40,7 @@ class FileHomeStartupRepository(file: File, private val settings: SettingsReposi
             if (!isCurrent(source) || organization.observe().first() != config ||
                 config.sourceKey != OrganizationNames.sourceKey(source)) return@withLock
             val worker = currentCoroutineContext()
-            storage.write(PlaylistCacheKey.of(source), config, catalog, refreshedAt) { worker.ensureActive() }
+            storage.write(PlaylistCacheKey.of(source), config, catalog.copy(channels = catalog.channels.map { it.copy(isFavorite = false) }), refreshedAt) { worker.ensureActive() }
         }
     }
 

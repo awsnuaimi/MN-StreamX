@@ -1,6 +1,7 @@
 package com.yourapp.iptv.di
 
 import android.content.Context
+import com.yourapp.iptv.domain.repository.ProfileRepository
 import com.yourapp.iptv.data.datastore.SearchHistoryDataStore
 import com.yourapp.iptv.data.datastore.searchHistoryStore
 import com.yourapp.iptv.data.repository.UnifiedSearchRepositoryImpl
@@ -20,6 +21,6 @@ object SearchModule {
     @Provides @Singleton
     fun provideSearch(impl: UnifiedSearchRepositoryImpl): UnifiedSearchRepository = impl
     @Provides @Singleton
-    fun provideSearchHistory(@ApplicationContext context: Context, parental: ParentalControl): SearchHistoryRepository =
-        ProtectedSearchHistory(SearchHistoryDataStore(context.applicationContext.searchHistoryStore),parental)
+    fun provideSearchHistory(@ApplicationContext context: Context, parental: ParentalControl, profiles: ProfileRepository): SearchHistoryRepository =
+        ProtectedSearchHistory(SearchHistoryDataStore(context.applicationContext.searchHistoryStore, profiles = profiles),parental)
 }

@@ -1,6 +1,7 @@
 package com.yourapp.iptv.di
 
 import android.content.Context
+import com.yourapp.iptv.domain.repository.ProfileRepository
 import com.yourapp.iptv.data.datastore.VodProgressDataStore
 import com.yourapp.iptv.data.datastore.vodProgressStore
 import com.yourapp.iptv.domain.repository.SettingsRepository
@@ -22,7 +23,7 @@ import com.yourapp.iptv.domain.parental.ParentalControl
 object VodProgressModule {
     @Provides @Singleton
     fun provideProgress(@ApplicationContext context: Context, settings: SettingsRepository,
-        parental: ParentalControl): VodProgressRepository =
+        parental: ParentalControl, profiles: ProfileRepository): VodProgressRepository =
         ProtectedProgress(VodProgressDataStore(context.applicationContext.vodProgressStore, settings,
-            CoroutineScope(SupervisorJob() + Dispatchers.IO)),parental)
+            CoroutineScope(SupervisorJob() + Dispatchers.IO), profiles = profiles),parental)
 }

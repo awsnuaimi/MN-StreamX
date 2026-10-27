@@ -36,11 +36,11 @@ class HomeAppearanceViewModel @Inject constructor(private val repository: HomeAp
 
     private fun saveAppearanceChange(change: (HomeAppearance) -> HomeAppearance) {
         if (themeBusyState.value) return
+        val current = state.value?.normalized() ?: return
         themeBusyState.value = true
         themeErrorState.value = false
         viewModelScope.launch {
             try {
-                val current = repository.observe().first().normalized()
                 repository.save(change(current))
             } catch (error: CancellationException) {
                 throw error
@@ -85,7 +85,7 @@ class HomeAppearanceSettingsViewModel @Inject constructor(private val repository
         if (state.value.loading || state.value.saving || state.value.failed) return
         state.value = state.value.copy(value = value.normalized(), error = null, saved = false)
     }
-    fun reset() = update(HomeAppearance())
+    fun reset() = update(HomeAppearance(profileId = state.value.value.profileId))
     fun save() {
         val current = state.value
         if (current.loading || current.saving || current.failed) return

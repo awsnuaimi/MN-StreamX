@@ -1,5 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
+import com.yourapp.iptv.domain.profile.ProfileScope
+
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -36,7 +38,7 @@ class VodPlaybackViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             try {
-                settings.observeSettings().map { it to PlaylistCacheKey.of(it) }
+                settings.observeSettings().map { it to ProfileScope.of(it) }
                     .distinctUntilChangedBy { it.second }.collect { (value, key) ->
                         if (account == null) {
                             require(repository.supports(value))
@@ -114,7 +116,7 @@ class VodPlaybackViewModel @Inject constructor(
                 episodesFailed(series)
             }
             catch (error: CancellationException) { throw error }
-            catch (error: Exception) { if (!blocked) DiagnosticFailures.record(DiagnosticArea.DETAILS,error,key);episodesFailed(series) }
+            catch (error: Exception) { if (!blocked) DiagnosticFailures.record(DiagnosticArea.DETAILS,error,ProfileScope.source(key));episodesFailed(series) }
         }
     }
 
