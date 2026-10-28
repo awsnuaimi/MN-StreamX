@@ -45,6 +45,7 @@ fun AppNavGraph(startup: StartupPlaybackViewModel, initialRoute: String? = null,
         }
     }
     StartupPlaybackGuard(nav, startup)
+    NavigationPerformanceEffect(nav)
     NavHost(navController = nav, startDestination = Destinations.HOME) {
         composable(Destinations.HOME) { entry ->
             val profiles: com.yourapp.iptv.viewmodel.ProfilesViewModel = androidx.hilt.navigation.compose.hiltViewModel()

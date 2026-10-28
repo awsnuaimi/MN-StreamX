@@ -9,17 +9,18 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.yourapp.iptv.domain.performance.PerformanceJournal
 
 internal class AndroidDiagnosticsRepository(context: Context) : DiagnosticsRepository {
     private val environment = AndroidDiagnosticSnapshot(context.applicationContext)
     private val probe = DiagnosticSourceProbe(DiagnosticTransport(HttpClient.create().newBuilder()
         .connectTimeout(6,TimeUnit.SECONDS).readTimeout(8,TimeUnit.SECONDS).callTimeout(10,TimeUnit.SECONDS).build()))
     private val reports = DiagnosticReports(File(context.applicationContext.cacheDir,"diagnostic-reports"))
-    override suspend fun snapshot() = withContext(Dispatchers.IO) { environment.read() }
+    override suspend fun snapshot() = withContext(Dispatchers.IO) { environment.read().copy(performance = PerformanceJournal.snapshot()) }
     override fun sourceKind(source: AppSettings) = probe.kind(source)
     override suspend fun probe(source: AppSettings,onCheck: (DiagnosticCheck) -> Unit) = probe.run(source,onCheck)
     override suspend fun export(snapshot: DiagnosticSnapshot, source: DiagnosticSource, sourceKey: String?,
         checks: List<DiagnosticCheck>, events: List<DiagnosticEvent>, language: HomeLanguage) = withContext(Dispatchers.IO) {
-        reports.write(DiagnosticReport.build(snapshot,source,sourceKey,checks,events,language))
+        reports.write(DiagnosticReport.build(snapshot.copy(performance = PerformanceJournal.snapshot()),source,sourceKey,checks,events,language))
     }
 }

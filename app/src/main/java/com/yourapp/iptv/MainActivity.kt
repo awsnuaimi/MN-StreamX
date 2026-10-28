@@ -22,6 +22,7 @@ import com.yourapp.iptv.ui.screen.parental.ParentalSessionHost
 import com.yourapp.iptv.ui.screen.recovery.AppResetHost
 import com.yourapp.iptv.ui.theme.IPTVAppTheme
 import com.yourapp.iptv.viewmodel.*
+import com.yourapp.iptv.util.LoadTimings
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -34,9 +35,11 @@ class MainActivity : ComponentActivity() {
     private val profiles: ProfilesViewModel by viewModels()
     private val navigation: ParentalNavigationStores by viewModels()
     private var normalSession = false
+    private var activityTiming: Long? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        activityTiming = LoadTimings.beginActivity()
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         setContent {
             val systemLanguage = when (LocalConfiguration.current.locales[0].language) {
@@ -105,6 +108,7 @@ class MainActivity : ComponentActivity() {
         super.onUserInteraction()
     }
     override fun onPause() {
+        LoadTimings.cancelActivity(activityTiming)
         appReset.cancel()
         if (normalSession) { parental.background();startupPlayback.cancel() }
         super.onPause()
@@ -112,5 +116,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (normalSession) parental.foreground()
+    }
+    override fun onDestroy() {
+        LoadTimings.cancelActivity(activityTiming)
+        super.onDestroy()
     }
 }

@@ -11,6 +11,7 @@ import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.parental.*
 import com.yourapp.iptv.domain.profile.*
 import com.yourapp.iptv.domain.repository.ProfileRepository
+import com.yourapp.iptv.domain.performance.*
 import java.io.IOException
 import java.util.Locale
 import java.util.UUID
@@ -151,6 +152,7 @@ internal class StoredProfiles(private val store: DataStore<Preferences>, private
         if (removed.isNotEmpty()) persist(catalog.copy(retired = catalog.retired - removed,revision = catalog.revision + 1))
     }
     private suspend fun persist(value: UserProfiles) {
+        PerformanceJournal.measure(PerformanceStage.PROFILE_COMMIT) {
         try {
             val plain = ProfileCodec.encode(value)
             val committed = store.updateData { prefs ->
@@ -165,6 +167,7 @@ internal class StoredProfiles(private val store: DataStore<Preferences>, private
         catch (error: Exception) {
             // Fail closed before select() removes its switching mask and before the gate opens.
             storageFailed(error);throw error
+        }
         }
     }
     private suspend fun observeRecord(prefs: Preferences, ticket: Long) {

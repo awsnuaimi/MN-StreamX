@@ -2,6 +2,7 @@ package com.yourapp.iptv.domain.diagnostics
 
 import com.yourapp.iptv.domain.model.HomeLanguage
 import java.time.Instant
+import com.yourapp.iptv.domain.performance.PerformanceReport
 
 object DiagnosticReport {
     const val MAX_BYTES = 64 * 1024
@@ -14,6 +15,10 @@ object DiagnosticReport {
             appendLine(text.device())
             DiagnosticSummary.rows(snapshot,text).forEach { (name,value) -> appendLine("$name: $value") }
             appendLine("${text.current()}: ${source.name}");appendLine()
+            if (snapshot.performance.isNotEmpty()) {
+                appendLine(PerformanceReport.title(language));appendLine(PerformanceReport.note(language))
+                PerformanceReport.rows(snapshot.performance).forEach { appendLine(it) };appendLine()
+            }
             appendLine(text.checks())
             checks.take(12).forEach { check ->
                 append("${text.area(check.area)}: ${text.status(check.status)} — ${text.issue(check.issue)}")

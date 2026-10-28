@@ -1,6 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
 import com.yourapp.iptv.domain.profile.ProfileScope
+import com.yourapp.iptv.domain.performance.*
 
 import com.yourapp.iptv.domain.organization.*
 import com.yourapp.iptv.domain.repository.OrganizationRepository
@@ -259,7 +260,7 @@ class HomeViewModel @Inject constructor(
         val saved = pendingBrowse?.takeIf { snapshot.channels.isNotEmpty() &&
             (!it.favoritesOnly || ids != null || favoriteState.value.errorMessage != null) }
         filterJob = viewModelScope.launch {
-            val result = withContext(background) {
+            val result = PerformanceJournal.measure(PerformanceStage.HOME_FILTER) { withContext(background) {
                 val marked = ChannelFavorites.apply(snapshot.channels, ids)
                 val restored = saved?.let { HomeSessionResolver.resolve(it, marked, topology) }
                 val favorites = restored?.session?.favoritesOnly ?: snapshot.favoritesOnly
@@ -270,7 +271,7 @@ class HomeViewModel @Inject constructor(
                 FilteredHome(marked, restored?.visible ?: if (group == null) matching else
                     PlaybackQueue.filterChannels(matching, group),
                     if (all) topology else topology.withCounts(matching), restored?.session)
-            }
+            } }
             currentCoroutineContext().ensureActive()
             if (state.value.browseScope != snapshot.browseScope) return@launch
             val (marked, visible, tree, restored) = result

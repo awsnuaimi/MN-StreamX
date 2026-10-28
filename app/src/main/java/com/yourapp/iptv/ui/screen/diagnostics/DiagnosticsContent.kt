@@ -13,6 +13,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.diagnostics.*
+import com.yourapp.iptv.domain.performance.PerformanceReport
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.viewmodel.DiagnosticsState
 import java.time.Instant
@@ -50,6 +51,15 @@ internal fun DiagnosticsContent(state: DiagnosticsState, events: List<Diagnostic
                     Surface(shape = MaterialTheme.shapes.small,color = MaterialTheme.colorScheme.surfaceContainer) {
                         Column(Modifier.fillMaxWidth().padding(12.dp)) { Text(name,style = MaterialTheme.typography.labelLarge);Text(value) }
                     }
+                }
+                val performance = PerformanceReport.rows(snapshot.performance)
+                if (performance.isNotEmpty()) {
+                    item { Text(text.text("قياسات الأداء في الجلسة","Session performance measurements","Leistungsmessungen der Sitzung"),
+                        Modifier.testTag("diagnostics-performance"),style = MaterialTheme.typography.titleMedium) }
+                    item { Text(text.text(PerformanceReport.note(com.yourapp.iptv.domain.model.HomeLanguage.ARABIC),
+                        PerformanceReport.note(com.yourapp.iptv.domain.model.HomeLanguage.ENGLISH),
+                        PerformanceReport.note(com.yourapp.iptv.domain.model.HomeLanguage.GERMAN)),style = MaterialTheme.typography.bodySmall) }
+                    items(performance) { row -> Text(row,style = MaterialTheme.typography.bodySmall) }
                 }
             }
             item {

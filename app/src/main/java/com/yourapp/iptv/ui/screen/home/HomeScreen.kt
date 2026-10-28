@@ -23,6 +23,7 @@ import com.yourapp.iptv.ui.component.channel.FavoriteFeedback
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.tv.TvChannelGrid
 import com.yourapp.iptv.viewmodel.HomeViewModel
+import com.yourapp.iptv.util.LoadTimings
 import com.yourapp.iptv.viewmodel.HomeAppearanceViewModel
 import com.yourapp.iptv.viewmodel.HomeQuickAccessViewModel
 import com.yourapp.iptv.domain.model.HomeDashboardSelection
@@ -53,6 +54,7 @@ fun HomeScreen(
     onOpenLiveHandled: () -> Unit = {}
 ) {
     HomeSessionLifecycle(viewModel)
+    val activityTiming = remember { LoadTimings.activityTicket() }
     val parental = LocalParentalSession.current
     val liveLocked = !parental.state.allows(ParentalSection.LIVE)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -78,6 +80,7 @@ fun HomeScreen(
     LaunchedEffect(state.isLoading, state.channels.isNotEmpty(), state.browseScope) {
         if (!state.isLoading && state.channels.isNotEmpty()) {
             withFrameNanos { }; withFrameNanos { }
+            LoadTimings.homeDrawn(activityTiming)
             onStartupReady(state.browseScope)
             viewModel.onHomeReady()
         }
