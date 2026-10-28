@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourapp.iptv.domain.model.HomeAppearance
 import com.yourapp.iptv.domain.model.HomeTheme
+import com.yourapp.iptv.domain.model.HomeChannelLayout
 import com.yourapp.iptv.domain.repository.HomeAppearanceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -18,6 +19,8 @@ class HomeAppearanceViewModel @Inject constructor(private val repository: HomeAp
     val themeSaving = themeBusyState.asStateFlow()
     private val themeErrorState = MutableStateFlow(false)
     val themeError = themeErrorState.asStateFlow()
+    private val layoutErrorState = MutableStateFlow(false)
+    val channelLayoutError = layoutErrorState.asStateFlow()
 
     val nightSaving = themeSaving
     val nightError = themeError
@@ -34,18 +37,24 @@ class HomeAppearanceViewModel @Inject constructor(private val repository: HomeAp
         current.copy(isNightMode = !current.isNightMode)
     }
 
-    private fun saveAppearanceChange(change: (HomeAppearance) -> HomeAppearance) {
+    fun setChannelLayout(layout: HomeChannelLayout) {
+        if (state.value?.channelLayout == layout) return
+        saveAppearanceChange(layoutErrorState) { it.copy(channelLayout = layout) }
+    }
+
+    private fun saveAppearanceChange(failure: MutableStateFlow<Boolean> = themeErrorState,
+        change: (HomeAppearance) -> HomeAppearance) {
         if (themeBusyState.value) return
         val current = state.value?.normalized() ?: return
         themeBusyState.value = true
-        themeErrorState.value = false
+        failure.value = false
         viewModelScope.launch {
             try {
                 repository.save(change(current))
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                themeErrorState.value = true
+                failure.value = true
             } finally {
                 themeBusyState.value = false
             }

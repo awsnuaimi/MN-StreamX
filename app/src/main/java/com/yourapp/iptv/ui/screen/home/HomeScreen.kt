@@ -6,7 +6,6 @@ import com.yourapp.iptv.ui.component.organization.FolderBrowser
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -15,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -67,6 +65,7 @@ fun HomeScreen(
     val savedAppearance by appearanceViewModel.appearance.collectAsStateWithLifecycle()
     val nightSaving by appearanceViewModel.nightSaving.collectAsStateWithLifecycle()
     val nightError by appearanceViewModel.nightError.collectAsStateWithLifecycle()
+    val layoutError by appearanceViewModel.channelLayoutError.collectAsStateWithLifecycle()
     val appearance = savedAppearance
     if (appearance == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -102,7 +101,6 @@ fun HomeScreen(
     DisposableEffect(quickAccessViewModel) {
         onDispose { quickAccessViewModel.bind(null) }
     }
-    val searchFocus = remember { FocusRequester() }
     val sidebarFocus = remember { HomeSection.entries.associateWith { FocusRequester() } }
     val dashboardFocus = remember { FocusRequester() }
     var lastSidebarFocus by rememberSaveable { mutableStateOf(HomeSection.DASHBOARD.name) }
@@ -175,26 +173,19 @@ fun HomeScreen(
                     organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
-                Column(Modifier.weight(1f).fillMaxHeight().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f).fillMaxHeight().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (dashboardVisible) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         ParentalHomeControl()
                         val name = profileName.ifBlank { labels.text("الملف الأساسي","Original profile","Bisheriges Profil") }
                         AppButton(labels.text("الملف: ","Profile: ","Profil: ") + name.take(20) + if (name.length > 20) "…" else "",onProfiles)
-                    }
-                    if (!dashboardVisible) {
-                        Column(Modifier.fillMaxWidth()) {
-                            Text(labels.section(selected), style = MaterialTheme.typography.headlineSmall,
-                                color = MaterialTheme.colorScheme.primary)
-                            Text(labels.text("${state.visibleChannels.size} قناة ظاهرة من ${state.channels.size}",
-                                "${state.visibleChannels.size} of ${state.channels.size} channels",
-                                "${state.visibleChannels.size} von ${state.channels.size} Sendern"),
-                                style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        key(state.browseScope) {
+                            HomeChannelToolbar(labels.section(selected), state.visibleChannels.size, state.channels.size,
+                                labels, state.query, viewModel::updateQuery, appearance.channelLayout,
+                                appearanceViewModel::setChannelLayout, saving = nightSaving, saveError = layoutError)
                         }
+                        ParentalHomeControl()
                     }
-                    if (!dashboardVisible) OutlinedTextField(state.query, viewModel::updateQuery,
-                        label = { Text(labels.text("البحث عن قناة", "Search channels", "Sender suchen")) }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        modifier = Modifier.fillMaxWidth().focusRequester(searchFocus))
                     if (state.isRefreshing && state.channels.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
                     FavoriteFeedback(favorites, viewModel::retryFavorites)
                     if (state.organization.readFailed) Text(stringResource(R.string.org_read_warning),
@@ -215,6 +206,7 @@ fun HomeScreen(
                             isDarkTheme = appearance.isDarkTheme,
                             theme = appearance.theme,
                             isNightMode = appearance.isNightMode,
+                            showChannelLogos = appearance.showChannelLogos,
                             onPlayChannel = { channel ->
                                 initialFocusDone = true
                                 launchedFromDashboard = true
@@ -228,8 +220,8 @@ fun HomeScreen(
                             }
                         } }
                         else -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                        val categoryWidth = (maxWidth * 0.28f).coerceIn(160.dp, 220.dp)
-                        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        val categoryWidth = (maxWidth * 0.22f).coerceIn(128.dp, 176.dp)
+                        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             val categoryModifier = Modifier.width(categoryWidth).fillMaxHeight()
                             val chooseGroup: (String?) -> Unit = { group ->
                                 initialFocusDone = true
@@ -251,6 +243,7 @@ fun HomeScreen(
                                     onPlayChannel(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
                                 }, Modifier.weight(1f).fillMaxHeight(), columns = appearance.columns,
                                     showGroup = state.selectedGroup == null, restore = state.gridRestore,
+                                    layout = appearance.channelLayout, showLogos = appearance.showChannelLogos,
                                     onBrowsePosition = { id, position ->
                                         initialFocusDone = true
                                         viewModel.onBrowsePosition(state.browseScope, state.selectedGroup,

@@ -1,0 +1,8 @@
+<resources>
+    <string name="channel_layout_title">Channel view</string>
+    <string name="channel_layout_grid">Compact grid</string>
+    <string name="channel_layout_list">Compact list</string>
+    <string name="channel_logos_title">Show channel logos on Home and in the browser</string>
+    <string name="ui_columns_five">Smallest · 5</string>
+    <string name="channel_layout_hint">Switch grid and list with the view button beside the channel heading. Columns adapt to available space and font size.</string>
+</resources>

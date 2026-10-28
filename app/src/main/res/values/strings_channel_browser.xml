@@ -1,0 +1,8 @@
+<resources>
+    <string name="channel_layout_title">عرض القنوات</string>
+    <string name="channel_layout_grid">شبكة مضغوطة</string>
+    <string name="channel_layout_list">قائمة مضغوطة</string>
+    <string name="channel_logos_title">إظهار شعارات القنوات في الرئيسية والتصفح</string>
+    <string name="ui_columns_five">أصغر · 5</string>
+    <string name="channel_layout_hint">يمكن تبديل الشبكة والقائمة من زر العرض بجانب عنوان القنوات. يتكيف عدد الأعمدة مع المساحة وحجم الخط.</string>
+</resources>

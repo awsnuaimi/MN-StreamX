@@ -7,24 +7,27 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
+import com.yourapp.iptv.domain.model.HomeChannelLayout
 import com.yourapp.iptv.domain.model.HomeGridPosition
 import com.yourapp.iptv.domain.model.HomeGridRestore
 import com.yourapp.iptv.ui.component.channel.ChannelCard
 import com.yourapp.iptv.ui.presentation.TvGridLayout
 import com.yourapp.iptv.ui.presentation.HomeGridRestorePolicy
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 
+/** One lazy grid also implements the one-column list: stable item identity in both modes. */
 @Composable
 fun TvChannelGrid(channels: List<Channel>, selectedChannelId: String?, onChannelClick: (Channel) -> Unit,
     modifier: Modifier = Modifier, columns: Int? = null, showGroup: Boolean = true,
     restore: HomeGridRestore? = null,
     onBrowsePosition: (String, HomeGridPosition) -> Unit = { _, _ -> },
-    onRestoreHandled: (Long) -> Unit = {}) {
+    onRestoreHandled: (Long) -> Unit = {},
+    layout: HomeChannelLayout = HomeChannelLayout.GRID, showLogos: Boolean = true) {
     val grid = rememberLazyGridState()
     val restoreFocus = remember { FocusRequester() }
     var focusedIndex by remember { mutableIntStateOf(-1) }
@@ -32,34 +35,48 @@ fun TvChannelGrid(channels: List<Channel>, selectedChannelId: String?, onChannel
     var restoredId by remember { mutableStateOf<String?>(null) }
     var restoring by remember { mutableStateOf(false) }
     var focusedId by remember { mutableStateOf<String?>(null) }
+    var focusTargetId by remember { mutableStateOf<String?>(null) }
     val currentChannels by rememberUpdatedState(channels)
     val reportPosition by rememberUpdatedState(onBrowsePosition)
     val reportHandled by rememberUpdatedState(onRestoreHandled)
     val selectedIndex = remember(channels, selectedChannelId) { channels.indexOfFirst { it.id == selectedChannelId } }
     BoxWithConstraints(modifier.onFocusChanged { gridHasFocus = it.hasFocus }.focusGroup()) {
         val density = LocalDensity.current
-        val fontScale = density.fontScale.coerceAtLeast(1f)
-        val columnCount = TvGridLayout.columns(maxWidth.value, columns ?: 4, (if (columns == null) 220f else 164f) * fontScale)
-        val rows = TvGridLayout.rows(maxHeight.value, 96f * fontScale)
-        LaunchedEffect(selectedChannelId, selectedIndex, restore?.token) {
+        val columnCount = TvGridLayout.channelColumns(maxWidth.value, columns ?: 4, density.fontScale, layout)
+        val rows = TvGridLayout.channelRows(maxHeight.value, density.fontScale, layout)
+        val dimensions = GridDimensions(columnCount, rows.count, rows.height)
+        var previousDimensions by remember { mutableStateOf(dimensions) }
+        LaunchedEffect(selectedChannelId, selectedIndex, restore?.token, dimensions) {
+            val reflow = previousDimensions != dimensions
+            val oldColumns = previousDimensions.columns
+            previousDimensions = dimensions
             if (selectedChannelId == null) restoredId = null
-            if (selectedIndex >= 0 && (restore != null || restoredId != selectedChannelId)) {
-                restoring = true
-                try {
-                    val position = restore?.position
-                    val anchor = position?.anchorId?.let { id -> channels.indexOfFirst { it.id == id } } ?: -1
-                    val target = HomeGridRestorePolicy.target(anchor, selectedIndex, columnCount, rows.count,
-                        (position?.offsetPx ?: 0).coerceAtMost(((rows.height + 12f) * density.density).toInt().coerceAtLeast(1) - 1),
-                        position?.columns ?: 0)
-                    grid.scrollToItem(target.index, target.offset)
-                    snapshotFlow { grid.layoutInfo.visibleItemsInfo.any { it.index == selectedIndex } }.first { it }
-                    withFrameNanos { }; runCatching { restoreFocus.requestFocus() }
+            val restoreSelection = selectedIndex >= 0 && (restore != null || restoredId != selectedChannelId)
+            if (!restoreSelection && !reflow) return@LaunchedEffect
+            val focused = focusedId?.let { id -> channels.indexOfFirst { it.id == id } } ?: -1
+            val targetIndex = if (restoreSelection) selectedIndex
+                else focused.takeIf { it >= 0 } ?: grid.firstVisibleItemIndex.coerceAtMost(channels.lastIndex)
+            if (targetIndex < 0) return@LaunchedEffect
+            val takeFocus = restoreSelection || gridHasFocus
+            val position = if (restoreSelection) restore?.position else null
+            val anchor = if (restoreSelection) position?.anchorId?.let { id -> channels.indexOfFirst { it.id == id } } ?: -1
+                else grid.firstVisibleItemIndex
+            val target = HomeGridRestorePolicy.target(anchor, targetIndex, columnCount, rows.count,
+                (position?.offsetPx ?: 0).coerceAtMost(((rows.height + 8f) * density.density).toInt().coerceAtLeast(1) - 1),
+                position?.columns ?: if (reflow) 0 else oldColumns)
+            restoring = true
+            try {
+                if (takeFocus) focusTargetId = channels[targetIndex].id
+                grid.scrollToItem(target.index, target.offset)
+                snapshotFlow { grid.layoutInfo.visibleItemsInfo.any { it.index == targetIndex } }.first { it }
+                if (takeFocus) { withFrameNanos { }; restoreFocus.requestFocus() }
+                if (restoreSelection) {
                     restoredId = selectedChannelId
                     restore?.let { reportHandled(it.token) }
-                } finally { restoring = false }
-            }
+                }
+            } finally { restoring = false }
         }
-        LaunchedEffect(grid, columnCount) {
+        LaunchedEffect(grid, dimensions) {
             snapshotFlow { GridObservation(grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset,
                 focusedId, grid.isScrollInProgress || restoring) }
                 .filter { !it.busy && it.focused != null }
@@ -73,20 +90,21 @@ fun TvChannelGrid(channels: List<Channel>, selectedChannelId: String?, onChannel
                     reportPosition(id, HomeGridPosition(anchor, value.offset, columnCount))
                 }
         }
-        LaunchedEffect(columnCount) {
-            if (gridHasFocus && focusedIndex >= 0 && !restoring) grid.scrollToItem(TvGridLayout.rowStart(focusedIndex, columnCount))
-        }
-        // Focus bring-into-view owns normal scrolling. A second idle-time snap fights it.
-        LazyVerticalGrid(columns = GridCells.Fixed(columnCount), state = grid, modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Focus bring-into-view owns normal scrolling. No second idle-time snap.
+        LazyVerticalGrid(columns = GridCells.Fixed(columnCount), state = grid,
+            modifier = Modifier.fillMaxSize().testTag("channel-browser"),
+            contentPadding = PaddingValues(4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(channels, key = { _, channel -> channel.id }, contentType = { _, _ -> "channel" }) { index, channel ->
                 ChannelCard(channel, { onChannelClick(channel) }, Modifier.height(rows.height.dp)
+                    .testTag("browse-channel-${channel.id}")
                     .onFocusChanged { if (it.isFocused) { focusedIndex = index; focusedId = channel.id } }
-                    .then(if (index == selectedIndex) Modifier.focusRequester(restoreFocus) else Modifier), showGroup)
+                    .then(if (channel.id == focusTargetId) Modifier.focusRequester(restoreFocus) else Modifier),
+                    showGroup, showLogos, compact = true, listMode = layout == HomeChannelLayout.LIST)
             }
         }
     }
 }
 
+private data class GridDimensions(val columns: Int, val rows: Int, val height: Float)
 private data class GridObservation(val first: Int, val offset: Int, val focused: String?, val busy: Boolean)

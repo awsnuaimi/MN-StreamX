@@ -50,7 +50,8 @@ internal fun HomeDashboard(
     programState: HomeProgramUiState = HomeProgramUiState(),
     onPreviewChannel: (Channel?) -> Unit = {},
     theme: com.yourapp.iptv.domain.model.HomeTheme = if (isDarkTheme)
-        com.yourapp.iptv.domain.model.HomeTheme.DARK_BLUE else com.yourapp.iptv.domain.model.HomeTheme.LIGHT
+        com.yourapp.iptv.domain.model.HomeTheme.DARK_BLUE else com.yourapp.iptv.domain.model.HomeTheme.LIGHT,
+    showChannelLogos: Boolean = true
 ) {
     val colors = HomeTvPalettes.forTheme(theme, isNightMode)
     val featured = remember(selection, suggestedChannels) {
@@ -88,10 +89,10 @@ internal fun HomeDashboard(
                         "اكتشف قنوات مباشرة", "Discover live channels", "Live-Sender entdecken")
                 }
                 DashboardChannelStrip(featuredTitle, featured.channels,
-                    metrics, colors, labels, onChannelFocus, onPlayChannel)
+                    metrics, colors, labels, onChannelFocus, onPlayChannel, showChannelLogos)
             }
             DashboardWelcome(labels, highlighted, channelCount,
-                metrics, colors, programState, onPlayChannel)
+                metrics, colors, programState, showChannelLogos, onPlayChannel)
             DashboardSectionTitle(labels.text("اكتشف المحتوى", "Explore", "Entdecken"), colors)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)) {
@@ -112,7 +113,7 @@ internal fun HomeDashboard(
                 }
                 if (remainingFavorites.isNotEmpty()) {
                     DashboardChannelStrip(labels.section(HomeSection.FAVORITES),
-                        remainingFavorites, metrics, colors, labels, onChannelFocus, onPlayChannel)
+                        remainingFavorites, metrics, colors, labels, onChannelFocus, onPlayChannel, showChannelLogos)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -123,12 +124,15 @@ internal fun HomeDashboard(
 @Composable
 internal fun DashboardWelcome(labels: HomeLabels, highlighted: Channel?, channelCount: Int,
     metrics: HomeDashboardMetrics, colors: HomeTvPalette,
-    programState: HomeProgramUiState = HomeProgramUiState(), onPlayChannel: (Channel) -> Unit) {
+    programState: HomeProgramUiState = HomeProgramUiState(), showChannelLogos: Boolean = true,
+    onPlayChannel: (Channel) -> Unit) {
     val savedFrame = rememberChannelFrame(highlighted)
     Surface(Modifier.fillMaxWidth(), color = colors.surface,
         shape = MaterialTheme.shapes.large, border = BorderStroke(1.dp, colors.outline)) {
         Box(Modifier.fillMaxWidth()) {
-            HomeImageBackdrop(highlighted?.let(HomeArtworkSource::of) ?: HomeArtworkSource.Monogram("MN"), colors,
+            HomeImageBackdrop(highlighted?.let {
+                if (showChannelLogos) HomeArtworkSource.of(it) else HomeArtworkSource.fallback(it.name)
+            } ?: HomeArtworkSource.Monogram("MN"), colors,
                 Modifier.matchParentSize(), large = true, frame = savedFrame)
             Column(Modifier.fillMaxWidth(0.52f).padding(minOf(metrics.heroPadding, 14).dp)
                 .testTag("hero-copy"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -168,14 +172,14 @@ private fun DashboardSectionTitle(label: String, colors: HomeTvPalette) {
 @Composable
 private fun DashboardChannelStrip(title: String, channels: List<Channel>,
     metrics: HomeDashboardMetrics, colors: HomeTvPalette, labels: HomeLabels,
-    onFocus: (Channel, Boolean) -> Unit, onPlay: (Channel) -> Unit) {
+    onFocus: (Channel, Boolean) -> Unit, onPlay: (Channel) -> Unit, showChannelLogos: Boolean = true) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         DashboardSectionTitle(title, colors)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)) {
             items(channels, key = { it.id }) { channel ->
                 HomeCinematicChannelCard(channel, metrics, colors, labels,
-                    onFocus = { onFocus(channel, it) }, onClick = { onPlay(channel) })
+                    onFocus = { onFocus(channel, it) }, showChannelLogos = showChannelLogos, onClick = { onPlay(channel) })
             }
         }
     }

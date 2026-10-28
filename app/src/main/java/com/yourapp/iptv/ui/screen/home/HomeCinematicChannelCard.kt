@@ -43,6 +43,7 @@ internal fun HomeCinematicChannelCard(
     colors: HomeTvPalette,
     labels: HomeLabels,
     onFocus: (Boolean) -> Unit = {},
+    showChannelLogos: Boolean = true,
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -50,8 +51,8 @@ internal fun HomeCinematicChannelCard(
     LaunchedEffect(focused) {
         if (focused) bringIntoView.bringIntoView()
     }
-    val artwork = remember(channel.id, channel.name, channel.logoUrl) {
-        HomeArtworkSource.of(channel)
+    val artwork = remember(channel.id, channel.name, channel.logoUrl, showChannelLogos) {
+        if (showChannelLogos) HomeArtworkSource.of(channel) else HomeArtworkSource.fallback(channel.name)
     }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.04f else 1f,
@@ -115,7 +116,7 @@ internal fun HomeCinematicChannelCard(
                 Surface(shape = RoundedCornerShape(6.dp), color = colors.logoSurface,
                     modifier = Modifier.size(30.dp)) {
                     ChannelLogo(channel.name, channel.logoUrl,
-                        Modifier.fillMaxSize().padding(3.dp))
+                        Modifier.fillMaxSize().padding(3.dp), showImage = showChannelLogos)
                 }
                 Column(Modifier.weight(1f)) {
                     Text(channel.name, color = Color.White, maxLines = 1,

@@ -14,7 +14,7 @@ internal object HomeSessionCodec {
         addProperty("favorites", value.favoritesOnly); addProperty("focused", value.focusedChannelId)
         addProperty("anchor", value.position.anchorId)
         addProperty("offset", value.position.offsetPx.coerceIn(0, 100_000))
-        addProperty("columns", value.position.columns.takeIf { it in 1..4 } ?: 0)
+        addProperty("columns", value.position.columns.takeIf { it in 1..5 } ?: 0)
     }.toString().also { require(it.length <= MAX_TEXT) }
 
     fun decode(text: String): HomeBrowseSession? = try {
@@ -27,7 +27,7 @@ internal object HomeSessionCodec {
         }
         val favorites = root.get("favorites").also { require(it.isJsonPrimitive && it.asJsonPrimitive.isBoolean) }.asBoolean
         val offset = root.get("offset").asInt.also { require(it in 0..100_000) }
-        val columns = root.get("columns").asInt.also { require(it in 0..4) }
+        val columns = root.get("columns").asInt.also { require(it in 0..5) }
         HomeBrowseSession(string("group", 4096), string("root"), favorites, string("focused"),
             HomeGridPosition(string("anchor"), offset, columns))
     } catch (_: Exception) { null }

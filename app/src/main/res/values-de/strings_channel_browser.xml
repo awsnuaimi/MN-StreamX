@@ -1,0 +1,8 @@
+<resources>
+    <string name="channel_layout_title">Senderansicht</string>
+    <string name="channel_layout_grid">Kompaktes Raster</string>
+    <string name="channel_layout_list">Kompakte Liste</string>
+    <string name="channel_logos_title">Senderlogos auf der Startseite und in der Senderansicht anzeigen</string>
+    <string name="ui_columns_five">Sehr klein · 5</string>
+    <string name="channel_layout_hint">Raster und Liste lassen sich neben der Senderüberschrift umschalten. Die Spaltenzahl passt sich an Platz und Schriftgröße an.</string>
+</resources>

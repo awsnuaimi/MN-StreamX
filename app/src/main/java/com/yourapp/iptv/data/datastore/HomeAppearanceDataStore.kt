@@ -35,6 +35,8 @@ internal object HomeAppearanceCodec {
     private val darkTheme = booleanPreferencesKey("is_dark_theme")
     private val theme = stringPreferencesKey("color_theme")
     private val nightMode = booleanPreferencesKey("night_mode")
+    private val channelLayout = stringPreferencesKey("channel_layout")
+    private val channelLogos = booleanPreferencesKey("channel_logos")
     fun decode(values: Preferences) = HomeAppearance(
         language = HomeLanguage.entries.firstOrNull { it.name == read(values, language) } ?: HomeLanguage.ARABIC,
         sidebarSide = SidebarSide.entries.firstOrNull { it.name == read(values, side) } ?: SidebarSide.AUTO,
@@ -43,7 +45,10 @@ internal object HomeAppearanceCodec {
         restoreBrowseSession = read(values, restore) ?: true,
         theme = HomeTheme.entries.firstOrNull { it.name == read(values, theme) }
             ?: if (read(values, darkTheme) == false) HomeTheme.LIGHT else HomeTheme.DARK_BLUE,
-        isNightMode = read(values, nightMode) ?: false
+        isNightMode = read(values, nightMode) ?: false,
+        channelLayout = HomeChannelLayout.entries.firstOrNull { it.name == read(values, channelLayout) }
+            ?: HomeChannelLayout.GRID,
+        showChannelLogos = read(values, channelLogos) ?: true
     ).normalized()
     fun encode(values: MutablePreferences, appearance: HomeAppearance) {
         val value = appearance.normalized()
@@ -55,6 +60,10 @@ internal object HomeAppearanceCodec {
         values[theme] = value.theme.name
         values[darkTheme] = value.isDarkTheme
         values[nightMode] = value.isNightMode
+        // Omit new defaults so canonical portable backups from older versions stay valid.
+        if (value.channelLayout == HomeChannelLayout.GRID) values.remove(channelLayout)
+        else values[channelLayout] = value.channelLayout.name
+        if (value.showChannelLogos) values.remove(channelLogos) else values[channelLogos] = false
     }
     private inline fun <reified T> read(values: Preferences, key: Preferences.Key<T>): T? = values.asMap()[key] as? T
 }

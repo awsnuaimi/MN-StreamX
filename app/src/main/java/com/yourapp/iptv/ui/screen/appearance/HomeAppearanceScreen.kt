@@ -43,10 +43,19 @@ fun HomeAppearanceScreen(onBack: () -> Unit, viewModel: HomeAppearanceSettingsVi
                     viewModel.update(value.copy(sidebarSide = it))
                 }
                 AppearanceChoice(stringResource(R.string.ui_columns), value.columns,
-                    listOf(2 to stringResource(R.string.ui_columns_two), 3 to stringResource(R.string.ui_columns_three), 4 to stringResource(R.string.ui_columns_four)), enabled) {
+                    listOf(2 to stringResource(R.string.ui_columns_two), 3 to stringResource(R.string.ui_columns_three), 4 to stringResource(R.string.ui_columns_four), 5 to stringResource(R.string.ui_columns_five)), enabled) {
                     viewModel.update(value.copy(columns = it))
                 }
                 Text(stringResource(R.string.ui_grid_adaptive_hint), style = MaterialTheme.typography.bodySmall)
+                AppearanceChoice(stringResource(R.string.channel_layout_title), value.channelLayout,
+                    listOf(HomeChannelLayout.GRID to stringResource(R.string.channel_layout_grid),
+                        HomeChannelLayout.LIST to stringResource(R.string.channel_layout_list)), enabled) {
+                    viewModel.update(value.copy(channelLayout = it))
+                }
+                Text(stringResource(R.string.channel_layout_hint), style = MaterialTheme.typography.bodySmall)
+                AppearanceToggle(stringResource(R.string.channel_logos_title), value.showChannelLogos, enabled) {
+                    viewModel.update(value.copy(showChannelLogos = it))
+                }
                 AppearanceToggle(stringResource(R.string.ui_sidebar_expanded), value.expandedSidebar, enabled) {
                     viewModel.update(value.copy(expandedSidebar = it))
                 }
