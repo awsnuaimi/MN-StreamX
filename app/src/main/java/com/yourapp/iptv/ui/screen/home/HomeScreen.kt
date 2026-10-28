@@ -19,7 +19,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.iptv.ui.component.channel.FavoriteFeedback
 import com.yourapp.iptv.ui.component.common.AppButton
-import com.yourapp.iptv.ui.tv.TvChannelGrid
 import com.yourapp.iptv.viewmodel.HomeViewModel
 import com.yourapp.iptv.util.LoadTimings
 import com.yourapp.iptv.viewmodel.HomeAppearanceViewModel
@@ -219,7 +218,7 @@ fun HomeScreen(
                                     AppButton(labels.text("مسح التصفية", "Clear filters", "Filter löschen"), viewModel::clearFilters)
                                 }
                             } else key(state.browseScope, state.selectedGroup, state.favoritesOnly, state.query) {
-                                TvChannelGrid(state.visibleChannels, state.selectedChannelId, { channel ->
+                                HomeLiveChannelGrid(state.visibleChannels, state.selectedChannelId, { channel ->
                                     initialFocusDone = true
                                     launchedFromDashboard = false
                                     viewModel.selectChannel(channel.id)
@@ -227,6 +226,7 @@ fun HomeScreen(
                                 }, Modifier.weight(1f).fillMaxHeight(), columns = appearance.columns,
                                     showGroup = state.selectedGroup == null, restore = state.gridRestore,
                                     layout = appearance.channelLayout, showLogos = appearance.showChannelLogos,
+                                    language = appearance.language, owner = state.browseScope,
                                     onBrowsePosition = { id, position ->
                                         initialFocusDone = true
                                         viewModel.onBrowsePosition(state.browseScope, state.selectedGroup,

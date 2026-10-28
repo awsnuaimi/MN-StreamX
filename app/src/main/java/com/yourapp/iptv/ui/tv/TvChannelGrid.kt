@@ -9,6 +9,8 @@ import androidx.compose.ui.focus.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.yourapp.iptv.domain.model.HomeLanguage
+import com.yourapp.iptv.ui.presentation.ChannelProgramInfo
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.HomeChannelLayout
 import com.yourapp.iptv.domain.model.HomeGridPosition
@@ -27,7 +29,10 @@ fun TvChannelGrid(channels: List<Channel>, selectedChannelId: String?, onChannel
     restore: HomeGridRestore? = null,
     onBrowsePosition: (String, HomeGridPosition) -> Unit = { _, _ -> },
     onRestoreHandled: (Long) -> Unit = {},
-    layout: HomeChannelLayout = HomeChannelLayout.GRID, showLogos: Boolean = true) {
+    layout: HomeChannelLayout = HomeChannelLayout.GRID, showLogos: Boolean = true,
+    showGuide: Boolean = false, language: HomeLanguage = HomeLanguage.ARABIC,
+    program: (Channel) -> ChannelProgramInfo = { ChannelProgramInfo() },
+    onVisibleChannels: (List<Channel>) -> Unit = {}) {
     val grid = rememberLazyGridState()
     val restoreFocus = remember { FocusRequester() }
     var focusedIndex by remember { mutableIntStateOf(-1) }
@@ -39,11 +44,21 @@ fun TvChannelGrid(channels: List<Channel>, selectedChannelId: String?, onChannel
     val currentChannels by rememberUpdatedState(channels)
     val reportPosition by rememberUpdatedState(onBrowsePosition)
     val reportHandled by rememberUpdatedState(onRestoreHandled)
+    val reportVisible by rememberUpdatedState(onVisibleChannels)
+    LaunchedEffect(grid, showGuide) {
+        if (showGuide) snapshotFlow {
+            val info = grid.layoutInfo
+            info.visibleItemsInfo.asSequence()
+                .filter { it.offset.y < info.viewportEndOffset && it.offset.y + it.size.height > info.viewportStartOffset }
+                .sortedBy { it.index }.mapNotNull { currentChannels.getOrNull(it.index) }.toList()
+        }.distinctUntilChanged().collect { reportVisible(it) }
+    }
+    DisposableEffect(grid, showGuide) { onDispose { if (showGuide) reportVisible(emptyList()) } }
     val selectedIndex = remember(channels, selectedChannelId) { channels.indexOfFirst { it.id == selectedChannelId } }
     BoxWithConstraints(modifier.onFocusChanged { gridHasFocus = it.hasFocus }.focusGroup()) {
         val density = LocalDensity.current
         val columnCount = TvGridLayout.channelColumns(maxWidth.value, columns ?: 4, density.fontScale, layout)
-        val rows = TvGridLayout.channelRows(maxHeight.value, density.fontScale, layout)
+        val rows = TvGridLayout.channelRows(maxHeight.value, density.fontScale, layout, showGuide)
         val dimensions = GridDimensions(columnCount, rows.count, rows.height)
         var previousDimensions by remember { mutableStateOf(dimensions) }
         LaunchedEffect(selectedChannelId, selectedIndex, restore?.token, dimensions) {
@@ -100,7 +115,8 @@ fun TvChannelGrid(channels: List<Channel>, selectedChannelId: String?, onChannel
                     .testTag("browse-channel-${channel.id}")
                     .onFocusChanged { if (it.isFocused) { focusedIndex = index; focusedId = channel.id } }
                     .then(if (channel.id == focusTargetId) Modifier.focusRequester(restoreFocus) else Modifier),
-                    showGroup, showLogos, compact = true, listMode = layout == HomeChannelLayout.LIST)
+                    showGroup, showLogos, compact = true, listMode = layout == HomeChannelLayout.LIST,
+                    program = if (showGuide) program(channel) else null, language = language)
             }
         }
     }

@@ -108,4 +108,31 @@ class HomeGuideViewModelTest {
         advanceTimeBy(61_000);runCurrent()
         assertEquals(1, calls.count { it == "1" })
     }
+
+    @Test fun browserWindowUsesItsOwnBoundAndRetainsTheTwoRequestLimit() = runTest(dispatcher) {
+        var active = 0;var maximum = 0;val calls = mutableListOf<String>()
+        val vm = model(fake { row, _ ->
+            calls += row.id;active++;maximum = maxOf(maximum, active)
+            try { delay(10); EpgSchedule(emptyList()) } finally { active-- }
+        })
+        backgroundScope.launch { vm.uiState.collect() }
+        vm.bind((0 until 7490).map(::channel), Int.MAX_VALUE)
+        runCurrent();advanceTimeBy(1_000);runCurrent()
+        assertEquals(HomeGuideViewModel.MAX_BROWSER_CHANNELS, calls.size)
+        assertEquals(2, maximum)
+        vm.bind((100 until 120).map(::channel));runCurrent();advanceTimeBy(1_000);runCurrent()
+        assertEquals((100 until 108).map(Int::toString), calls.filter { it.toInt() >= 100 })
+    }
+
+    @Test fun clearingTheBrowserWindowCancelsRequestsEvenWhileTheHostStillCollects() = runTest(dispatcher) {
+        var calls = 0;var cancelled = 0
+        val vm = model(fake { _, _ ->
+            calls++;try { delay(30_000);EpgSchedule(emptyList()) } finally { cancelled++ }
+        })
+        backgroundScope.launch { vm.uiState.collect() }
+        vm.bind((0 until 25).map(::channel), HomeGuideViewModel.MAX_BROWSER_CHANNELS)
+        runCurrent();advanceTimeBy(351);runCurrent();assertEquals(2, calls)
+        vm.bind(emptyList());runCurrent();advanceTimeBy(120_000);runCurrent()
+        assertEquals(2, cancelled);assertEquals(2, calls);assertTrue(vm.uiState.value.entries.isEmpty())
+    }
 }

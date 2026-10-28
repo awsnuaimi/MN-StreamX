@@ -33,4 +33,13 @@ class ChannelBrowseLayoutTest {
         assertEquals(HomeGridTarget(35, 0), HomeGridRestorePolicy.target(37, 37, 5, 4, 60, 1))
         assertEquals(HomeGridTarget(35, 12), HomeGridRestorePolicy.target(35, 37, 5, 4, 12, 5))
     }
+
+    @Test fun guideRowsReserveSpaceForNowNextTimeAndProgressInBothLayouts() {
+        for (layout in HomeChannelLayout.entries) for (height in listOf(260f, 380f, 540f))
+            for (scale in listOf(1f, 1.5f, 2f)) {
+                val rows = TvGridLayout.channelRows(height, scale, layout, showGuide = true)
+                assertEquals(height, rows.count * rows.height + (rows.count - 1) * 8f + 8f, 0.01f)
+                if (rows.count > 1) assertTrue(rows.height >= (if (layout == HomeChannelLayout.LIST) 104f else 112f) * scale - 0.01f)
+            }
+    }
 }

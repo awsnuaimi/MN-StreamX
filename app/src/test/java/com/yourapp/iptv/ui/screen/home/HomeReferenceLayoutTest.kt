@@ -132,14 +132,17 @@ class HomeReferenceLayoutTest {
         compose.onNodeWithText("7490 Sender verfügbar").assertDoesNotExist()
     }
 
-    @Test fun overflowKeepsSeriesAndGuideReachableWithoutLeavingHiddenFocusTargets() {
+    @Test fun seriesIsDirectlyReachableAndRemovedFromOverflowWithoutHiddenFocusTargets() {
         val clicked = mutableListOf<HomeSection>()
         board(onAction = { clicked += it })
+        compose.onNodeWithTag("rail-SERIES").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(listOf(HomeSection.SERIES), clicked) }
+        assertEquals(HomeSection.SERIES, HomeFocusPolicy.railTarget(HomeSection.SERIES))
         compose.onNodeWithTag("rail-MORE").performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag("rail-MORE").performClick()
-        compose.onNodeWithTag("rail-menu-SERIES").performClick()
-        compose.runOnIdle { assertEquals(listOf(HomeSection.SERIES), clicked) }
-        assertEquals(HomeSection.MORE, HomeFocusPolicy.railTarget(HomeSection.SERIES))
+        compose.onNodeWithTag("rail-menu-SERIES").assertDoesNotExist()
+        compose.onNodeWithTag("rail-menu-GUIDE").performClick()
+        compose.runOnIdle { assertEquals(listOf(HomeSection.SERIES, HomeSection.GUIDE), clicked) }
         assertEquals(HomeSection.SETTINGS, HomeFocusPolicy.railTarget(HomeSection.SETTINGS))
         compose.onNodeWithTag("rail-SETTINGS").assertIsDisplayed()
     }

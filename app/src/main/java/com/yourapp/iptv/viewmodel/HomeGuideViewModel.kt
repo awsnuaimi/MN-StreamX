@@ -20,7 +20,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
 
-/** Visible card guides only. Home's highlighted channel keeps its existing independent guide. */
+/** Visible card guides only. Home and the browser use separate scoped instances; no video playback. */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HomeGuideViewModel @Inject constructor(settings: SettingsRepository, repository: LiveEpgRepository,
@@ -68,9 +68,11 @@ class HomeGuideViewModel @Inject constructor(settings: SettingsRepository, repos
         emit(HomeGuideState()); delay(5_000); true
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 0, replayExpirationMillis = 0), HomeGuideState())
 
-    fun bind(channels: List<Channel>) {
-        selected.value = channels.asSequence().distinctBy { it.id to it.streamUrl }.take(MAX_CHANNELS)
+    fun bind(channels: List<Channel>) = bind(channels, MAX_CHANNELS)
+
+    fun bind(channels: List<Channel>, maxChannels: Int) {
+        selected.value = channels.asSequence().distinctBy { it.id to it.streamUrl }.take(maxChannels.coerceIn(1, MAX_BROWSER_CHANNELS))
             .map { it.copy(isFavorite = false, folderIds = emptyList()) }.toList()
     }
-    companion object { const val MAX_CHANNELS = 8 }
+    companion object { const val MAX_CHANNELS = 8; const val MAX_BROWSER_CHANNELS = 40 }
 }

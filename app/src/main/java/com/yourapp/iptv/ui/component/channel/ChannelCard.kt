@@ -21,11 +21,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yourapp.iptv.domain.model.HomeLanguage
+import com.yourapp.iptv.ui.presentation.ChannelProgramInfo
 import com.yourapp.iptv.domain.model.Channel
 
 @Composable
 fun ChannelCard(channel: Channel, onClick: () -> Unit, modifier: Modifier = Modifier, showGroup: Boolean = true,
-    showLogos: Boolean = true, compact: Boolean = false, listMode: Boolean = false) {
+    showLogos: Boolean = true, compact: Boolean = false, listMode: Boolean = false,
+    program: ChannelProgramInfo? = null, language: HomeLanguage = HomeLanguage.ARABIC) {
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
@@ -45,17 +48,18 @@ fun ChannelCard(channel: Channel, onClick: () -> Unit, modifier: Modifier = Modi
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(channel.name, maxLines = if (listMode) 1 else 2, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleSmall)
-                    if (showGroup && (!compact || listMode)) channel.group?.let {
+                    if (program == null && showGroup && (!compact || listMode)) channel.group?.let {
                         Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                     }
                 }
                 FavoriteBadge(channel.isFavorite)
             }
-            if (showGroup && compact && !listMode) channel.group?.let {
+            if (program == null && showGroup && compact && !listMode) channel.group?.let {
                 Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
             }
+            program?.let { ChannelProgramGuide(it, language, channel.id) }
         }
     }
 }

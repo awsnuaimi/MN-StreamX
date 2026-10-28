@@ -10,8 +10,11 @@ internal object TvGridLayout {
         if (layout == HomeChannelLayout.LIST) 1
         else columns(viewport, preferred, 144f * fontScale.coerceAtLeast(1f), gap = 8f)
 
-    fun channelRows(viewport: Float, fontScale: Float, layout: HomeChannelLayout): TvGridRows =
-        rows(viewport, (if (layout == HomeChannelLayout.LIST) 64f else 80f) * fontScale.coerceAtLeast(1f), gap = 8f)
+    fun channelRows(viewport: Float, fontScale: Float, layout: HomeChannelLayout, showGuide: Boolean = false): TvGridRows {
+        val minimum = if (showGuide) { if (layout == HomeChannelLayout.LIST) 104f else 112f }
+            else if (layout == HomeChannelLayout.LIST) 64f else 80f
+        return rows(viewport, minimum * fontScale.coerceAtLeast(1f), gap = 8f)
+    }
 
     fun columns(viewport: Float, preferred: Int, minimum: Float, gap: Float = 12f, padding: Float = 4f): Int {
         val available = (viewport - padding * 2).coerceAtLeast(1f)
