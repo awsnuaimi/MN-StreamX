@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -31,6 +33,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.DefaultTrackNameProvider
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.AspectRatioFrameLayout
+import com.yourapp.iptv.domain.model.PlayerAppearance
 import com.yourapp.iptv.domain.model.VodSeek
 import com.yourapp.iptv.player.vod.*
 import com.yourapp.iptv.ui.component.common.AppButton
@@ -48,7 +52,8 @@ private class VodVideoHandle {
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewModel,
-    labels: VodPlaybackLabels, preferences: VodTrackPreferences, autoNext: Boolean, onBack: () -> Unit) {
+    labels: VodPlaybackLabels, preferences: VodTrackPreferences, autoNext: Boolean, onBack: () -> Unit,
+    appearance: PlayerAppearance = PlayerAppearance()) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val video = remember { VodVideoHandle() }
@@ -58,9 +63,10 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
     val errorFocus = remember { FocusRequester() }
     var session by remember { mutableStateOf<VodPlaybackSession?>(null) }
     var creationFailed by remember { mutableStateOf(false) }
-    var controls by remember { mutableStateOf(true) }
-    var interaction by remember { mutableIntStateOf(0) }
-    var trackType by remember { mutableStateOf<Int?>(null) }
+    val chrome = remember { VodControlsState() }
+    var display by rememberSaveable { mutableStateOf(VodDisplayMode.FIT) }
+    var seekFeedback by remember { mutableStateOf<Pair<Long,Long>?>(null) }
+    var seekEpoch by remember { mutableIntStateOf(0) }
     var cancelled by rememberSaveable { mutableStateOf(false) }
     var active by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
 
@@ -89,14 +95,23 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
     }
     val current = session
     val snapshot = current?.snapshot ?: VodPlayerSnapshot()
-    fun touch() { interaction++; controls = true; if (snapshot.ended) cancelled = true }
+    fun touch() { chrome.touch(); if (snapshot.ended) cancelled = true }
+    fun step(delta: Long) {
+        touch()
+        if (snapshot.seekable && current != null) {
+            current.seekBy(delta);seekFeedback = delta to current.snapshot.position;seekEpoch++
+        }
+    }
+    fun open(panel: VodPlayerPanel, target: VodControlTarget) { touch();chrome.open(panel,target) }
+    fun closePanel() { chrome.closePanel();input.clear() }
     val tap by rememberUpdatedState(newValue = { touch() })
     fun next() { current?.save(); model.playNext(item) }
     val countdown = vodNextCountdown(snapshot.ended,item.next != null,autoNext,active,
-        cancelled || trackType != null || snapshot.failed,::next)
+        cancelled || chrome.panel != null || snapshot.failed,::next)
     fun back() {
-        if (countdown != null) { cancelled = true; controls = true }
-        else if (controls && !snapshot.failed && !creationFailed) controls = false
+        if (chrome.panel != null) closePanel()
+        else if (countdown != null) { cancelled = true; chrome.touch();chrome.resetFocus() }
+        else if (chrome.shown && !snapshot.failed && !creationFailed) chrome.hide()
         else { current?.save(); onBack() }
     }
     BackHandler(onBack = ::back)
@@ -106,7 +121,7 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
             when (event) {
                 Lifecycle.Event.ON_START -> { active = true; video.view?.player = current?.player }
                 Lifecycle.Event.ON_STOP -> {
-                    active = false; cancelled = true; input.clear(); current?.pause(); video.detach()
+                    active = false; cancelled = true; chrome.scrubbing = false; chrome.touch(); input.clear(); current?.pause(); video.detach()
                 }
                 else -> Unit
             }
@@ -117,39 +132,43 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
     LaunchedEffect(current,lifecycle) {
         val owned = current ?: return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (isActive) { owned.tick(controls); delay(if (controls) 500L else 1000L) }
+            while (isActive) { owned.tick(chrome.shown); delay(if (chrome.shown) 500L else 1000L) }
         }
     }
     LaunchedEffect(snapshot.ended,snapshot.failed) {
-        if (snapshot.ended || snapshot.failed) controls = true
+        if (snapshot.ended || snapshot.failed) chrome.touch()
+        if (snapshot.failed) { chrome.closePanel();chrome.resetFocus() }
         if (!snapshot.ended) cancelled = false
     }
-    LaunchedEffect(controls,snapshot.playing,snapshot.ended,snapshot.failed,trackType,interaction,active) {
-        if (controls && snapshot.playing && !snapshot.ended && !snapshot.failed && trackType == null && active) {
-            delay(5000); controls = false
+    LaunchedEffect(chrome.shown,chrome.interaction,snapshot.playing,snapshot.buffering,snapshot.ended,snapshot.failed,
+        chrome.panel,chrome.scrubbing,active,appearance.displaySeconds) {
+        if (chrome.shown && vodMayHideControls(snapshot,active,chrome.panel != null,chrome.scrubbing)) {
+            delay(appearance.timeoutMillis);chrome.hide()
         }
     }
-    LaunchedEffect(controls,trackType,current,snapshot.failed) {
-        if (current != null && trackType == null) {
+    LaunchedEffect(chrome.shown,current,snapshot.failed) {
+        if (current != null && chrome.panel == null) {
             withFrameNanos { }
             if (snapshot.failed) errorFocus.requestFocus()
-            else if (controls) playFocus.requestFocus() else surfaceFocus.requestFocus()
+            else if (!chrome.shown) surfaceFocus.requestFocus()
         }
     }
+    LaunchedEffect(seekEpoch) { if (seekFeedback != null) { delay(1000);seekFeedback = null } }
     if (creationFailed) { VodPlaybackFailure(labels.failed(),labels,onBack); return }
 
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("vod-player")
         .onPreviewKeyEvent { event ->
             val key = event.nativeKeyEvent
-            if (key.action == android.view.KeyEvent.ACTION_DOWN) {
-                interaction++; if (snapshot.ended) cancelled = true
+            val wasShown = chrome.shown
+            if (key.action == android.view.KeyEvent.ACTION_DOWN && wasShown && key.keyCode != android.view.KeyEvent.KEYCODE_BACK) {
+                chrome.touch(); if (snapshot.ended) cancelled = true
             }
-            input.handle(key.keyCode,key.action,key.repeatCount,controls) { command ->
-                controls = true
+            input.handle(key.keyCode,key.action,key.repeatCount,wasShown) { command ->
+                chrome.touch()
                 when (command) {
                     VodRemoteCommand.SHOW -> Unit
-                    VodRemoteCommand.REWIND -> current?.seekBy(-VodSeek.STEP_MS)
-                    VodRemoteCommand.FORWARD -> current?.seekBy(VodSeek.STEP_MS)
+                    VodRemoteCommand.REWIND -> step(-VodSeek.STEP_MS)
+                    VodRemoteCommand.FORWARD -> step(VodSeek.STEP_MS)
                     VodRemoteCommand.TOGGLE -> current?.toggle()
                     VodRemoteCommand.PLAY -> current?.play()
                     VodRemoteCommand.PAUSE -> current?.pause()
@@ -163,16 +182,39 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
         } }, update = { view ->
             view.player = if (active) current?.player else null
+            view.resizeMode = when (display) {
+                VodDisplayMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                VodDisplayMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                VodDisplayMode.STRETCH -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            }
+            view.subtitleView?.setBottomPaddingFraction(if (chrome.shown) .48f else .08f)
             view.keepScreenOn = active && snapshot.playWhenReady && !snapshot.ended && !snapshot.failed
         }, onRelease = { view -> view.player = null; view.keepScreenOn = false; if (video.view === view) video.view = null },
             modifier = Modifier.fillMaxSize())
-        if (snapshot.buffering && !snapshot.failed) CircularProgressIndicator(Modifier.align(Alignment.Center))
-        if (controls && current != null) VodPlayerControls(item,snapshot,labels,autoNext,countdown,
+        val density = LocalDensity.current
+        CompositionLocalProvider(LocalDensity provides Density(density.density,density.fontScale*appearance.textSize.scale)) {
+        if (snapshot.buffering && !snapshot.failed) Column(Modifier.align(Alignment.Center),horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator();Text(labels.buffering(),color = Color.White)
+        }
+        seekFeedback?.let { (delta,position) -> Surface(Modifier.align(Alignment.Center).testTag("vod-seek-feedback"),
+            color = Color.Black.copy(alpha = .8f),contentColor = Color.White,shape = MaterialTheme.shapes.large) {
+            Column(Modifier.padding(18.dp),horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (delta < 0) labels.rewind() else labels.forward(),style = MaterialTheme.typography.titleLarge)
+                Text(VodSeek.time(position))
+            }
+        } }
+        if (chrome.shown && current != null) VodPlayerControls(item,snapshot,labels,autoNext,countdown,
             VodPlayerActions(back = { current.save(); onBack() },toggle = { touch(); current.toggle() },
-                step = { touch(); current.seekBy(it) },seek = { touch(); current.seekTo(it) },
-                restart = { touch(); current.restart() },audio = { touch(); trackType = C.TRACK_TYPE_AUDIO },
-                subtitles = { touch(); trackType = C.TRACK_TYPE_TEXT },next = { touch(); next() },
-                automatic = { touch(); cancelled = !it; model.setAutoNext(it) },cancelNext = { cancelled = true },retryEpisodes = { touch(); model.retryEpisodes() }),playFocus)
+                step = ::step,seek = { touch(); current.seekTo(it) },
+                restart = { open(VodPlayerPanel.RESTART,VodControlTarget.RESTART) },
+                audio = { open(VodPlayerPanel.AUDIO,VodControlTarget.AUDIO) },
+                subtitles = { open(VodPlayerPanel.SUBTITLES,VodControlTarget.SUBTITLES) },next = { touch(); next() },
+                automatic = { touch(); cancelled = !it; model.setAutoNext(it) },cancelNext = { touch();cancelled = true;chrome.resetFocus() },retryEpisodes = { touch(); model.retryEpisodes() },
+                speed = { open(VodPlayerPanel.SPEED,VodControlTarget.SPEED) },
+                display = { open(VodPlayerPanel.DISPLAY,VodControlTarget.DISPLAY) },
+                scrubbing = { chrome.scrubbing = it;if (it) touch() }),playFocus,display,chrome.restore,chrome.focusEpoch,
+                manageFocus = chrome.panel == null && !snapshot.failed)
         if (snapshot.failed) Surface(Modifier.align(Alignment.Center).widthIn(max = 620.dp),shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(24.dp),verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(labels.failed())
@@ -180,9 +222,17 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
                 AppButton(labels.back(),onBack)
             }
         }
-        trackType?.let { type -> VodTrackDialog(if (type == C.TRACK_TYPE_AUDIO) labels.audio() else labels.subtitles(),
-            if (type == C.TRACK_TYPE_AUDIO) snapshot.audio else snapshot.subtitles,type == C.TRACK_TYPE_TEXT,labels,
-            onSelect = { current?.selectTrack(type,it); trackType = null },
-            onOff = { current?.disableSubtitles(); trackType = null },onClose = { trackType = null }) }
+        chrome.panel?.let { panel ->
+            if (panel == VodPlayerPanel.AUDIO || panel == VodPlayerPanel.SUBTITLES) {
+                val audio = panel == VodPlayerPanel.AUDIO
+                VodTrackDialog(if (audio) labels.audio() else labels.subtitles(),
+                    if (audio) snapshot.audio else snapshot.subtitles,!audio,labels,
+                    onSelect = { current?.selectTrack(if (audio) C.TRACK_TYPE_AUDIO else C.TRACK_TYPE_TEXT,it);closePanel() },
+                    onOff = { current?.disableSubtitles();closePanel() },onClose = ::closePanel)
+            } else VodPlayerOptionDialog(panel,labels,snapshot.speed,display,
+                onSpeed = { current?.setSpeed(it);closePanel() },onDisplay = { display = it;closePanel() },
+                onRestart = { current?.restart();closePanel() },onClose = ::closePanel)
+        }
+        }
     }
 }

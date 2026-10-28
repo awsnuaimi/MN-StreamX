@@ -57,4 +57,20 @@ class VodPlaybackSessionTest {
         assertTrue(session.snapshot.failed);session.retry()
         assertFalse(session.snapshot.failed);assertEquals(1,fake.prepares);session.close()
     }
+    @Test fun speedChangesUseTheSamePlayerAndDoNotRewriteResumeOrPitch() {
+        val session = session()
+        assertEquals(90000L,session.snapshot.buffered);assertTrue(session.snapshot.speedSupported)
+        session.setSpeed(1.5f)
+        assertEquals(1.5f,session.snapshot.speed,0f);assertEquals(1f,fake.playback.pitch,0f)
+        assertTrue(captures.isEmpty());assertEquals(0,fake.prepares);assertTrue(fake.seeks.isEmpty())
+        session.close();session.setSpeed(2f);assertEquals(1,fake.speedChanges)
+    }
+    @Test fun unsupportedAndInvalidSpeedChoicesCannotReachThePlayer() {
+        val session = session()
+        listOf(Float.NaN,Float.POSITIVE_INFINITY,0f,-1f,30f).forEach(session::setSpeed)
+        assertEquals(0,fake.speedChanges)
+        fake.speedAvailable = false;fake.fire();session.setSpeed(2f)
+        assertFalse(session.snapshot.speedSupported);assertEquals(0,fake.speedChanges)
+        session.close()
+    }
 }

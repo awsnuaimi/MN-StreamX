@@ -16,12 +16,15 @@ internal class VodTestPlayer {
     var error: PlaybackException? = null
     var tracks = Tracks.EMPTY
     var parameters = TrackSelectionParameters.Builder(org.robolectric.RuntimeEnvironment.getApplication()).build()
+    var speedAvailable = true
+    var playback = PlaybackParameters.DEFAULT
+    var speedChanges = 0
     var releases = 0
     var prepares = 0
     val seeks = mutableListOf<Long>()
     val listeners = mutableListOf<Player.Listener>()
     private val commands = Player.Commands.Builder().addAll(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
-        Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS).build()
+        Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS,Player.COMMAND_SET_SPEED_AND_PITCH).build()
     val player: Player = Proxy.newProxyInstance(Player::class.java.classLoader,arrayOf(Player::class.java)) { proxy,method,args ->
         when (method.name) {
             "getCurrentPosition", "getContentPosition" -> position
@@ -34,7 +37,7 @@ internal class VodTestPlayer {
             "getTrackSelectionParameters" -> parameters
             "setTrackSelectionParameters" -> { parameters = args!![0] as TrackSelectionParameters;fire();null }
             "getAvailableCommands" -> commands
-            "isCommandAvailable" -> commands.contains(args!![0] as Int)
+            "isCommandAvailable" -> commands.contains(args!![0] as Int) && (args[0] != Player.COMMAND_SET_SPEED_AND_PITCH || speedAvailable)
             "isCurrentMediaItemSeekable" -> seekable
             "addListener" -> { listeners.add(args!![0] as Player.Listener);null }
             "removeListener" -> { listeners.remove(args!![0] as Player.Listener);null }
@@ -48,7 +51,9 @@ internal class VodTestPlayer {
             "getMediaMetadata" -> MediaMetadata.EMPTY
             "getVideoSize" -> VideoSize.UNKNOWN
             "getAudioAttributes" -> AudioAttributes.DEFAULT
-            "getPlaybackParameters" -> PlaybackParameters.DEFAULT
+            "getBufferedPosition" -> (position+30000).coerceAtMost(duration)
+            "getPlaybackParameters" -> playback
+            "setPlaybackSpeed" -> { speedChanges++;playback = playback.withSpeed(args!![0] as Float);fire();null }
             "getVolume" -> 1f
             "equals" -> proxy === args?.firstOrNull()
             "hashCode" -> System.identityHashCode(proxy)

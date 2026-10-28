@@ -19,8 +19,10 @@ import com.yourapp.iptv.viewmodel.*
 
 @Composable
 fun VodPlaybackScreen(onBack: () -> Unit, model: VodPlaybackViewModel = hiltViewModel(),
-    appearance: HomeAppearanceViewModel = hiltViewModel()) {
+    appearance: HomeAppearanceViewModel = hiltViewModel(),
+    playerAppearance: PlayerAppearanceViewModel = hiltViewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
+    val playerStyle by playerAppearance.appearance.collectAsStateWithLifecycle()
     val autoNext by model.autoNext.collectAsStateWithLifecycle()
     val style by appearance.appearance.collectAsStateWithLifecycle()
     val language = style?.language ?: HomeLanguage.ARABIC
@@ -34,7 +36,7 @@ fun VodPlaybackScreen(onBack: () -> Unit, model: VodPlaybackViewModel = hiltView
             }
             VodPlaybackState.Error -> { BackHandler(onBack = onBack); VodPlaybackFailure(labels.unavailable(),labels,onBack) }
             is VodPlaybackState.Ready -> key(value.sourceKey,value.kind,value.id) {
-                VodPlayerHost(value,model,labels,preferences,autoNext,onBack)
+                VodPlayerHost(value,model,labels,preferences,autoNext,onBack,playerStyle)
             }
         }
     }

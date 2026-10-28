@@ -8,6 +8,31 @@ internal class VodPlaybackLabels(private val language: HomeLanguage) {
         HomeLanguage.ENGLISH -> en
         HomeLanguage.GERMAN -> de
     }
+    fun speed() = text("سرعة التشغيل", "Speed", "Tempo")
+    fun picture() = text("حجم الصورة", "Picture", "Bildformat")
+    fun fit() = text("ملاءمة", "Fit", "Einpassen")
+    fun zoom() = text("تكبير", "Zoom", "Vergrößern")
+    fun stretch() = text("تمديد", "Stretch", "Strecken")
+    fun pictureHint() = text("الملاءمة تحفظ الصورة كاملة؛ التكبير يقتص الأطراف؛ التمديد قد يغيّر الأبعاد.",
+        "Fit keeps the whole picture. Zoom crops its edges. Stretch may distort its proportions.",
+        "Einpassen zeigt das ganze Bild. Vergrößern beschneidet Ränder. Strecken kann Proportionen verändern.")
+    fun sessionOnly() = text("لهذا الفيديو فقط", "For this video only", "Nur für dieses Video")
+    fun restartTitle() = text("بدء الفيديو من جديد؟", "Restart this video?", "Video neu starten?")
+    fun restartHint() = text("ستعود المشاهدة إلى البداية ويُعاد ضبط موضع المتابعة المحفوظ.",
+        "Playback returns to the beginning and the saved resume position is reset.",
+        "Die Wiedergabe beginnt von vorne; die gespeicherte Fortsetzungsposition wird zurückgesetzt.")
+    fun stay() = text("متابعة المشاهدة", "Keep watching", "Weitersehen")
+    fun remaining(time: String) = text("المتبقي $time", "$time remaining", "Noch $time")
+    fun movie() = text("فيلم", "Movie", "Film")
+    fun series() = text("مسلسل", "Series", "Serie")
+    fun finished() = text("انتهى الفيديو", "Video finished", "Video beendet")
+    fun buffering() = text("جارٍ التحميل…", "Buffering…", "Wird geladen…")
+    fun seekUnavailable() = text("التنقل غير متاح لهذا الفيديو حاليًا", "Seeking is currently unavailable", "Spulen derzeit nicht verfügbar")
+    fun hint() = text("OK لإظهار الأزرار · الأسهم للتنقل · رجوع لإخفائها", "OK shows controls · Arrows navigate · Back hides controls",
+        "OK zeigt Bedienelemente · Pfeile navigieren · Zurück blendet sie aus")
+    fun display(mode: VodDisplayMode) = when (mode) {
+        VodDisplayMode.FIT -> fit(); VodDisplayMode.ZOOM -> zoom(); VodDisplayMode.STRETCH -> stretch()
+    }
     fun back() = text("رجوع", "Back", "Zurück")
     fun play() = text("تشغيل", "Play", "Abspielen")
     fun pause() = text("إيقاف مؤقت", "Pause", "Pause")

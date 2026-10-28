@@ -15,7 +15,8 @@ internal data class VodPlayerSnapshot(
     val seekable: Boolean = false, val buffering: Boolean = true,
     val ended: Boolean = false, val failed: Boolean = false,
     val audio: VodTrackList = VodTrackList(), val subtitles: VodTrackList = VodTrackList(),
-    val playWhenReady: Boolean = false
+    val playWhenReady: Boolean = false, val buffered: Long = 0,
+    val speed: Float = 1f, val speedSupported: Boolean = false
 )
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -57,7 +58,9 @@ internal class VodPlaybackSession(
             duration > 0 && player.isCurrentMediaItemSeekable && player.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM),
             player.playbackState == Player.STATE_BUFFERING,player.playbackState == Player.STATE_ENDED,player.playerError != null,
             if (positionOnly) snapshot.audio else vodTracks(player,C.TRACK_TYPE_AUDIO,names),
-            if (positionOnly) snapshot.subtitles else vodTracks(player,C.TRACK_TYPE_TEXT,names),player.playWhenReady)
+            if (positionOnly) snapshot.subtitles else vodTracks(player,C.TRACK_TYPE_TEXT,names),player.playWhenReady,
+            player.bufferedPosition.coerceAtLeast(0),player.playbackParameters.speed,
+            player.isCommandAvailable(Player.COMMAND_SET_SPEED_AND_PITCH))
     }
     fun seekBy(delta: Long) { VodSeek.target(player.currentPosition,player.duration,delta)?.let(::seekTo) }
     fun seekTo(position: Long) {
@@ -81,6 +84,10 @@ internal class VodPlaybackSession(
         if (closed) return
         player.prepare(); player.play(); refresh()
     }
+    fun setSpeed(speed: Float) {
+        if (closed || speed !in VOD_SPEEDS || !player.isCommandAvailable(Player.COMMAND_SET_SPEED_AND_PITCH)) return
+        player.setPlaybackSpeed(speed); refresh()
+    }
     fun selectTrack(type: Int, choice: VodTrackChoice?) { if (!closed) { preferences.select(player,type,choice); refresh() } }
     fun disableSubtitles() { if (!closed) { preferences.disableText(player); refresh() } }
     private fun resetResume() { try { clearResume(player.duration) } catch (_: Exception) { } }
@@ -100,3 +107,5 @@ internal class VodPlaybackSession(
         }
     }
 }
+/** Session-only choices; no account, backup or profile settings are rewritten. */
+internal val VOD_SPEEDS = listOf(0.5f,0.75f,1f,1.25f,1.5f,2f)

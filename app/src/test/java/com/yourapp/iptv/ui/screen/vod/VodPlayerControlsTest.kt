@@ -16,7 +16,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.media3.common.Format
@@ -45,26 +48,28 @@ class VodPlayerControlsTest {
     private val item = VodPlaybackState.Ready("https://synthetic.invalid/10.mp4","Serie — Staffel 1, Folge 1","a".repeat(64),
         VodKind.SERIES,"10","mp4",0,"55",VodEpisode("20","Folge 2",1,2,"mp4"))
     private val snapshot = mutableStateOf(VodPlayerSnapshot(position = 60000,duration = 200000,playing = true,seekable = true,
-        buffering = false,playWhenReady = true))
+        buffering = false,playWhenReady = true,speedSupported = true,buffered = 120000))
     private val steps = mutableListOf<Long>()
     private var next = 0
     private var automatic: Boolean? = null
     private var cancelled = 0
-    private fun show(language: HomeLanguage = HomeLanguage.GERMAN, countdown: Int? = null) {
+    private fun show(language: HomeLanguage = HomeLanguage.GERMAN, countdown: Int? = null, fontScale: Float = 1f, movie: Boolean = false) {
         compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density,fontScale)) {
             IPTVAppTheme(theme = HomeTheme.RED) {
                 LocalizedResources(language) {
                     val input = LocalInputModeManager.current
                     SideEffect { input.requestInputMode(InputMode.Keyboard) }
                     Box(Modifier.fillMaxSize().background(Color.Black)) {
-                        VodPlayerControls(item,snapshot.value,VodPlaybackLabels(language),countdown != null,countdown,
+                        VodPlayerControls(if (movie) item.copy(kind = VodKind.MOVIE,seriesId = null,next = null) else item,snapshot.value,VodPlaybackLabels(language),countdown != null,countdown,
                             VodPlayerActions({}, {}, { delta ->
                                 steps.add(delta);snapshot.value = snapshot.value.copy(position = snapshot.value.position + delta)
                             }, {}, {}, {}, {}, { next++ },{ automatic = it },{ cancelled++ },{}),remember { FocusRequester() })
                     }
                 }
             }
-        }
+        } }
     }
     @Test fun remoteDownAndUpKeepTheFocusBetweenTheMainActionAndAudioChoice() {
         show()
@@ -102,6 +107,9 @@ class VodPlayerControlsTest {
         compose.onNodeWithTag("vod-timeline").performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag("vod-timeline").performKeyInput { pressKey(Key.DirectionRight) }
         compose.runOnIdle { assertEquals(listOf(10000L),steps) }
+        val rewind = compose.onNodeWithTag("vod-rewind").fetchSemanticsNode().boundsInRoot
+        val forward = compose.onNodeWithTag("vod-forward").fetchSemanticsNode().boundsInRoot
+        assertTrue(rewind.left < forward.left)
         export("ar-small")
     }
     @Test fun trackDialogProvidesSupportedChoicesAutomaticAndSubtitleOffInTheChosenLanguage() {
@@ -115,6 +123,92 @@ class VodPlayerControlsTest {
         compose.runOnIdle { assertEquals(track,selected);assertEquals(1,off) }
         compose.onNodeWithTag("vod-track-auto").performClick();compose.runOnIdle { assertNull(selected) }
         compose.onNodeWithText("Untertitel").assertExists();compose.onNodeWithText("Schließen").assertIsDisplayed()
+    }
+    @Test fun newToolsAndRemainingTimeAreVisibleWithoutInventingMediaMetadata() {
+        show(HomeLanguage.ENGLISH)
+        listOf("vod-speed","vod-display","vod-restart","vod-remaining").forEach { compose.onNodeWithTag(it).assertIsDisplayed() }
+        compose.onNodeWithText("02:20 remaining").assertIsDisplayed()
+        compose.onNodeWithTag("vod-buffered").assertRangeInfoEquals(ProgressBarRangeInfo(.6f,0f..1f))
+        export("en-redesigned")
+    }
+    @Test fun unknownDurationDisablesSeekAndKeepsTheElapsedAndRemainingValuesHonest() {
+        snapshot.value = snapshot.value.copy(duration = -1,seekable = false)
+        show(HomeLanguage.ENGLISH)
+        compose.onNodeWithTag("vod-timeline").assertIsNotEnabled()
+        compose.onNodeWithTag("vod-rewind").assertIsNotEnabled()
+        compose.onNodeWithTag("vod-restart").assertIsNotEnabled()
+        compose.onNodeWithText("–:–– remaining").assertIsDisplayed()
+        compose.onNodeWithTag("vod-elapsed").assertTextEquals("01:00")
+        compose.onNodeWithTag("vod-buffered").assertRangeInfoEquals(ProgressBarRangeInfo(0f,0f..1f))
+    }
+    @Test fun speedModalAppliesAChoiceAndReturnsRemoteFocusToTheSpeedButton() {
+        options()
+        compose.onNodeWithTag("vod-speed").performClick()
+        compose.onNodeWithTag("vod-speed-4").performScrollTo().performClick()
+        compose.onNodeWithTag("vod-option-dialog").assertDoesNotExist()
+        compose.onNodeWithTag("vod-speed").assertIsFocused()
+        compose.runOnIdle { assertEquals(1.5f,snapshot.value.speed,0f) }
+    }
+    @Test fun pictureSelectionAndRestartCancellationReturnToTheirOwnControls() {
+        options()
+        compose.onNodeWithTag("vod-display").performClick()
+        compose.onNodeWithTag("vod-display-1").performClick()
+        compose.onNodeWithTag("vod-display").assertIsFocused()
+        compose.onNodeWithText("Zoom").assertIsDisplayed()
+        compose.onNodeWithTag("vod-restart").performClick()
+        compose.onNodeWithTag("vod-restart-stay").assertIsFocused().performClick()
+        compose.onNodeWithTag("vod-restart").assertIsFocused()
+        compose.runOnIdle { assertEquals(60000L,snapshot.value.position) }
+    }
+    @Test fun restartOnlyRunsAfterItsSeparateConfirmation() {
+        options()
+        compose.onNodeWithTag("vod-restart").performClick()
+        compose.onNodeWithTag("vod-restart-confirm").performClick()
+        compose.runOnIdle { assertEquals(0L,snapshot.value.position) }
+        compose.onNodeWithTag("vod-restart").assertIsFocused()
+    }
+    @Test fun largeTextKeepsTheScrollableToolsAndPrimaryControlsReachable() {
+        show(HomeLanguage.ARABIC,fontScale = 1.6f)
+        compose.onNodeWithTag("vod-toggle").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithTag("vod-toggle").assertIsDisplayed()
+        compose.onNodeWithTag("vod-auto-next").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithTag("vod-auto-next").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(true,automatic) }
+        export("ar-large-text")
+    }
+    @Test fun openingTracksStartsAtTheSelectedSupportedLanguage() {
+        val track = VodTrackChoice(TrackGroup("text",Format.Builder().setSampleMimeType("text/vtt").setLanguage("en").build()),0,"English",true)
+        compose.setContent { IPTVAppTheme { VodTrackDialog("Subtitles",VodTrackList(listOf(track),automatic = false),true,
+            VodPlaybackLabels(HomeLanguage.ENGLISH),{}, {}, {}) } }
+        compose.onNodeWithTag("vod-track-0").assertIsFocused()
+    }
+    @Test fun moviesKeepAllPlaybackToolsAndDoNotShowEpisodeActions() {
+        show(HomeLanguage.ENGLISH,movie = true)
+        compose.onNodeWithTag("vod-next").assertDoesNotExist()
+        compose.onNodeWithTag("vod-auto-next").assertDoesNotExist()
+        listOf("vod-toggle","vod-speed","vod-display","vod-audio","vod-subtitles").forEach {
+            compose.onNodeWithTag(it).assertIsDisplayed()
+        }
+        export("movie-en")
+    }
+    private fun options() {
+        val state = VodControlsState()
+        compose.setContent { IPTVAppTheme { LocalizedResources(HomeLanguage.ENGLISH) {
+            val input = LocalInputModeManager.current
+            SideEffect { input.requestInputMode(InputMode.Keyboard) }
+            var display by remember { mutableStateOf(VodDisplayMode.FIT) }
+            val labels = VodPlaybackLabels(HomeLanguage.ENGLISH)
+            fun open(panel: VodPlayerPanel,target: VodControlTarget) { state.open(panel,target) }
+            VodPlayerControls(item,snapshot.value,labels,false,null,VodPlayerActions({}, {}, {}, {},
+                { open(VodPlayerPanel.RESTART,VodControlTarget.RESTART) },{}, {},{}, {}, {}, {},
+                speed = { open(VodPlayerPanel.SPEED,VodControlTarget.SPEED) },
+                display = { open(VodPlayerPanel.DISPLAY,VodControlTarget.DISPLAY) }),remember { FocusRequester() },
+                display,state.restore,state.focusEpoch,state.panel == null)
+            state.panel?.let { panel -> VodPlayerOptionDialog(panel,labels,snapshot.value.speed,display,
+                { snapshot.value = snapshot.value.copy(speed = it);state.closePanel() },
+                { display = it;state.closePanel() },
+                { snapshot.value = snapshot.value.copy(position = 0);state.closePanel() },state::closePanel) }
+        } } }
     }
     private fun export(name: String) {
         val directory = System.getProperty("mnstreamx.uiPreviewDir")?.let(::File) ?: return
