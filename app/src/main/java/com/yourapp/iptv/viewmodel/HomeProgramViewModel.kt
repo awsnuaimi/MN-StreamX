@@ -30,11 +30,12 @@ class HomeProgramViewModel @Inject constructor(
         .distinctUntilChanged()
         .flatMapLatest { (channel, account) ->
             observePlayerEpg(channel, account, repository).map { guide ->
-                HomeProgramUiState(channel?.id, channel?.streamUrl, guide.schedule, guide.nowMillis)
+                HomeProgramUiState(channel?.id, channel?.streamUrl, guide.schedule, guide.nowMillis,
+                    sourceKey = com.yourapp.iptv.domain.profile.ProfileScope.of(account))
             }
         }
         .catch { emit(HomeProgramUiState()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 0), HomeProgramUiState())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 0, replayExpirationMillis = 0), HomeProgramUiState())
 
     fun selectChannel(channel: Channel?) {
         selected.value = channel?.copy(isFavorite = false)

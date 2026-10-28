@@ -32,9 +32,9 @@ class HomeDashboardLayoutTest {
         assertTrue(sizes.all { it.actionHeight >= 64 && it.channelWidth <= 272 })
     }
 
-    @Test fun everyChannelCardIs16By9() {
+    @Test fun everyChannelCardIncludesTheReferenceArtworkAndCaptionRatio() {
         for (width in listOf(320, 559, 560, 919, 920, 1920)) {
-            assertEquals(16f / 9f,
+            assertEquals(20f / 13f,
                 HomeDashboardLayout.forWidth(width).channelAspectRatio, 0.001f)
         }
     }

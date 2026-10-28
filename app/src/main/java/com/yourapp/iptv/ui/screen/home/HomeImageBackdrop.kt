@@ -18,6 +18,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -52,9 +56,9 @@ internal fun HomeImageBackdrop(
     var showingFrame by remember(frame?.absolutePath, frame?.lastModified()) { mutableStateOf(false) }
     val direction = LocalLayoutDirection.current
     // Bright on the picture side, readable near the copy. Light theme uses white scrim.
-    val scrimColor = if (colors.text == Color.White) Color.Black else Color.White
-    val photoOverlay = listOf(scrimColor.copy(alpha = 0.12f),
-        scrimColor.copy(alpha = 0.45f), scrimColor.copy(alpha = 0.87f))
+    val scrimColor = colors.background
+    val photoOverlay = listOf(scrimColor.copy(alpha = 0.02f),
+        scrimColor.copy(alpha = 0.35f), scrimColor.copy(alpha = 0.92f))
     // A fallback logo has its own image area; it needs no opaque Hero scrim.
     val baseOverlay = if (showingFrame) photoOverlay else listOf(Color.Transparent, Color.Transparent)
     val overlay = if (showingFrame) {
@@ -67,7 +71,7 @@ internal fun HomeImageBackdrop(
                 .crossfade(false).build()
         }
     }
-    Box(modifier.testTag("hero-artwork").background(Brush.horizontalGradient(colors.heroGradient))) {
+    Box(modifier.testTag("hero-artwork").background(Brush.horizontalGradient(if (large) listOf(colors.background, colors.surface) else colors.heroGradient))) {
         if (request != null && !logoFailed) {
             AsyncImage(
                 model = request, contentDescription = null,
@@ -92,7 +96,18 @@ internal fun HomeImageBackdrop(
         // Preserve the entire 16:9 frame on the picture side instead of cropping
         // it into a very wide Hero. Alignment follows the interface direction.
         SavedChannelFrame(frame, Modifier.align(Alignment.CenterEnd)
-            .fillMaxWidth(0.48f).fillMaxHeight(),
+            .fillMaxWidth(0.70f).fillMaxHeight()
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                val picture = minOf(1f, size.height * 16f / 9f / size.width)
+                val fade = minOf(0.28f, picture)
+                val stops = if (direction == LayoutDirection.Rtl)
+                    arrayOf(0f to Color.Black, (picture - fade) to Color.Black, picture to Color.Transparent, 1f to Color.Transparent)
+                else arrayOf(0f to Color.Transparent, (1f - picture) to Color.Transparent,
+                    (1f - picture + fade) to Color.Black, 1f to Color.Black)
+                drawRect(Brush.horizontalGradient(*stops), blendMode = BlendMode.DstIn)
+            },
             contentScale = ContentScale.Fit, alignment = Alignment.CenterEnd) { showingFrame = it }
         Box(Modifier.matchParentSize().background(Brush.horizontalGradient(overlay)))
     }

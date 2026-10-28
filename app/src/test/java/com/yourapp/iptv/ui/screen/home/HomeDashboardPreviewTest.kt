@@ -159,7 +159,7 @@ class HomeDashboardPreviewTest {
             }
             val frame = draw("saved-channel-frame")
             try {
-                val pictureHeight = frame.width * 9f / 16f
+                val pictureHeight = minOf(frame.height.toFloat(), frame.width * 9f / 16f)
                 val top = (frame.height - pictureHeight) / 2f
                 val x = if (value == LayoutDirection.Ltr) frame.width - 12 else 12
                 val red = frame.getPixel(x, (top + pictureHeight * 0.05f).toInt())

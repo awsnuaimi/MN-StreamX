@@ -64,7 +64,6 @@ fun HomeScreen(
     }
     val savedAppearance by appearanceViewModel.appearance.collectAsStateWithLifecycle()
     val nightSaving by appearanceViewModel.nightSaving.collectAsStateWithLifecycle()
-    val nightError by appearanceViewModel.nightError.collectAsStateWithLifecycle()
     val layoutError by appearanceViewModel.channelLayoutError.collectAsStateWithLifecycle()
     val appearance = savedAppearance
     if (appearance == null) {
@@ -107,7 +106,7 @@ fun HomeScreen(
     fun restoreSidebarFocus() {
         val target = HomeFocusPolicy.restore(lastSidebarFocus, state.isLoading || state.isRefreshing,
             !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
-        runCatching { sidebarFocus.getValue(target).requestFocus() }
+        runCatching { sidebarFocus.getValue(HomeFocusPolicy.railTarget(target)).requestFocus() }
     }
     var initialFocusDone by remember(state.browseScope) { mutableStateOf(false) }
     LaunchedEffect(returnedChannelId, state.channels.isNotEmpty()) {
@@ -139,6 +138,7 @@ fun HomeScreen(
         initialFocusDone = true
         viewModel.onBrowseInteraction()
         when (section) {
+            HomeSection.MORE -> Unit
             HomeSection.DASHBOARD -> { dashboardVisible = true }
             HomeSection.LIVE, HomeSection.FAVORITES -> {
                 if (liveLocked) parental.model?.requestPin()
@@ -167,18 +167,13 @@ fun HomeScreen(
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 HomeSidebar(appearance, labels, selected, state.isLoading || state.isRefreshing,
                     sidebarFocus, { section -> lastSidebarFocus = section.name }, ::select,
-                    onToggleNightMode = appearanceViewModel::toggleNightMode,
-                    nightSaving = nightSaving, nightError = nightError,
                     dashboardFocus = dashboardFocus,
                     organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
-                Column(Modifier.weight(1f).fillMaxHeight().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (dashboardVisible) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ParentalHomeControl()
-                        val name = profileName.ifBlank { labels.text("الملف الأساسي","Original profile","Bisheriges Profil") }
-                        AppButton(labels.text("الملف: ","Profile: ","Profil: ") + name.take(20) + if (name.length > 20) "…" else "",onProfiles)
-                    } else {
+                Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = if (dashboardVisible) 30.dp else 12.dp,
+                    vertical = if (dashboardVisible) 20.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (!dashboardVisible) {
                         key(state.browseScope) {
                             HomeChannelToolbar(labels.section(selected), state.visibleChannels.size, state.channels.size,
                                 labels, state.query, viewModel::updateQuery, appearance.channelLayout,
@@ -198,26 +193,14 @@ fun HomeScreen(
                         state.channels.isEmpty() && !liveLocked -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
                             labels.section(HomeSection.REFRESH), viewModel::refresh)
                         dashboardVisible -> Box(Modifier.weight(1f).fillMaxWidth()) { key(state.browseScope) {
-                            HomeProgramHost { programState, onPreview ->
-                            HomeDashboard(labels, dashboardData, state.channels.size,
-                            programState = programState, onPreviewChannel = onPreview,
-                            dashboardFocus = dashboardFocus,
-                            suggestedChannels = state.channels.take(5),
-                            isDarkTheme = appearance.isDarkTheme,
-                            theme = appearance.theme,
-                            isNightMode = appearance.isNightMode,
-                            showChannelLogos = appearance.showChannelLogos,
-                            onPlayChannel = { channel ->
-                                initialFocusDone = true
-                                launchedFromDashboard = true
-                                onPlayChannel(channel.id, null, "", false)
-                            },
-                            onLive = { select(HomeSection.LIVE) },
-                            onMovies = onMovies,
-                            onSeries = onSeries,
-                            onGuide = { onOpenGuide(null, null, "", false) },
-                            onHistory = onHistory)
-                            }
+                            HomeDashboardScene(labels, appearance, profileName, dashboardData, state.channels,
+                                state.browseScope, dashboardFocus, onProfiles, onSearch,
+                                onPlay = { channel ->
+                                    initialFocusDone = true
+                                    launchedFromDashboard = true
+                                    onPlayChannel(channel.id, null, "", false)
+                                }, onLive = { select(HomeSection.LIVE) }, onMovies = onMovies, onSeries = onSeries,
+                                onGuide = { onOpenGuide(null, null, "", false) }, onHistory = onHistory)
                         } }
                         else -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                         val categoryWidth = (maxWidth * 0.22f).coerceIn(128.dp, 176.dp)

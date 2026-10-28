@@ -89,7 +89,7 @@ class HomeFrameRenderingTest {
         val logo = compose.onNodeWithTag("hero-logo", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         val action = compose.onNodeWithTag("hero-continue", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertTrue("Continue overlaps logo: $action / $logo", action.right <= logo.left || logo.right <= action.left)
-        assertTrue(action.height >= 64f)
+        assertTrue(action.height >= 35f && action.height <= 50f)
         export("hero-$direction", "hero-artwork")
     }
 

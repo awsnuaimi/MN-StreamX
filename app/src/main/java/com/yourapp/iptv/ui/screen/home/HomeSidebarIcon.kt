@@ -78,6 +78,10 @@ internal fun HomeSidebarIcon(section: HomeSection, color: Color) {
                         drawCircle(color, 7f, Offset(10f, 10f), style = stroke)
                         drawLine(color, Offset(15f, 15f), Offset(22f, 22f), 1.8f)
                     }
+                    HomeSection.MORE -> {
+                        for (row in 0..1) for (column in 0..1) drawRoundRect(color,
+                            Offset(2f + column * 12f, 2f + row * 12f), Size(8f, 8f), CornerRadius(1f), style = stroke)
+                    }
                     HomeSection.REFRESH -> {
                         drawArc(color, 40f, 290f, false, Offset(4f, 4f), Size(16f, 16f), style = stroke)
                         drawLine(color, Offset(21f, 4f), Offset(20f, 10f), 1.8f)

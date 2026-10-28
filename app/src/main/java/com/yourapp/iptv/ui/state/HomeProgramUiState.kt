@@ -8,7 +8,8 @@ data class HomeProgramUiState(
     val channelId: String? = null,
     val streamUrl: String? = null,
     val schedule: EpgSchedule = EpgSchedule(emptyList()),
-    val nowMillis: Long = 0L
+    val nowMillis: Long = 0L,
+    val sourceKey: String? = null
 ) {
     fun matches(channel: Channel): Boolean = channel.id == channelId && channel.streamUrl == streamUrl
 
