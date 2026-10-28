@@ -167,6 +167,7 @@ fun AppNavGraph(startup: StartupPlaybackViewModel, initialRoute: String? = null,
         }
         composable(Destinations.SETTINGS) {
             ParentalRouteGate(ParentalSection.SETTINGS,Destinations.SETTINGS,{ nav.popBackStack() }) { SettingsScreen(
+                onProfiles = { nav.navigate("profile_manager") { launchSingleTop = true } },
                 onParental = { nav.navigate("parental") { launchSingleTop = true } },
                 onHomeAppearance = { nav.navigate("home_appearance") { launchSingleTop = true } },
                 onPlayerAppearance = { nav.navigate(Destinations.PLAYER_APPEARANCE) { launchSingleTop = true } },

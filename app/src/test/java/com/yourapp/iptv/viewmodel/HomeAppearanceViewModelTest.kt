@@ -133,4 +133,50 @@ class HomeAppearanceViewModelTest {
         }
     }
 
+    @Test fun committedDraftSurvivesCollectorRecreationAndDiscardDoesNotWriteOrLoseProfile() = runTest(dispatcher) {
+        val profile = "12345678-1234-1234-1234-123456789abc"
+        val repository = Repository().apply { values.value = HomeAppearance(profileId = profile) }
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("draft", it) }
+        runCurrent();assertFalse(editor.uiState.value.dirty)
+        val original = editor.uiState.value.value
+        editor.update(original.copy(theme = HomeTheme.RED));runCurrent()
+        val subscription = backgroundScope.launch { editor.uiState.collect() };runCurrent();subscription.cancel()
+        assertTrue(editor.uiState.value.dirty);assertEquals(original, editor.uiState.value.committed)
+        editor.discard();assertFalse(editor.uiState.value.dirty)
+        assertEquals(original, editor.uiState.value.value);assertEquals(0, repository.writes)
+        editor.reset();assertEquals(profile, editor.uiState.value.value.profileId)
+    }
+    @Test fun failureKeepsTheCommittedBaselineUntilARetryActuallyFinishes() = runTest(dispatcher) {
+        val repository = Repository().apply { failWrite = true }
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("retry-draft", it) }
+        runCurrent();val original = editor.uiState.value.committed
+        editor.update(editor.uiState.value.value.copy(columns = 5));editor.save();advanceTimeBy(21);runCurrent()
+        assertTrue(editor.uiState.value.dirty);assertEquals(original, editor.uiState.value.committed)
+        assertNotNull(editor.uiState.value.error)
+        repository.failWrite = false;editor.save();runCurrent()
+        assertTrue(editor.uiState.value.saving);assertTrue(editor.uiState.value.dirty)
+        advanceTimeBy(21);runCurrent()
+        assertFalse(editor.uiState.value.dirty);assertTrue(editor.uiState.value.saved)
+        assertEquals(5, editor.uiState.value.committed?.columns)
+    }
+    @Test fun editsAndDiscardAreIgnoredWhileAnAcceptedSaveIsRunning() = runTest(dispatcher) {
+        val repository = Repository()
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("busy-draft", it) }
+        runCurrent();val selected = editor.uiState.value.value.copy(theme = HomeTheme.RED)
+        editor.update(selected);editor.save();editor.discard();editor.update(selected.copy(columns = 5))
+        advanceTimeBy(21);runCurrent()
+        assertEquals(selected, repository.values.value);assertEquals(selected, editor.uiState.value.committed)
+        assertFalse(editor.uiState.value.dirty);assertEquals(1, repository.writes)
+    }
+
+    @Test fun reloadingAfterAnExternalRestorePublishesItsNewBaselineWithoutWriting() = runTest(dispatcher) {
+        val repository = Repository()
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("restore-refresh", it) }
+        runCurrent();assertFalse(editor.uiState.value.dirty)
+        val restored = HomeAppearance(language = HomeLanguage.GERMAN, theme = HomeTheme.RED, columns = 5)
+        repository.values.value = restored
+        editor.load();runCurrent()
+        assertEquals(restored, editor.uiState.value.value);assertEquals(restored, editor.uiState.value.committed)
+        assertFalse(editor.uiState.value.dirty);assertEquals(0, repository.writes)
+    }
 }

@@ -1,19 +1,14 @@
 package com.yourapp.iptv.ui.screen.settings
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.yourapp.iptv.R
-import com.yourapp.iptv.ui.component.common.AppButton
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.yourapp.iptv.ui.screen.parental.LocalParentalSession
+import com.yourapp.iptv.viewmodel.HomeAppearanceSettingsViewModel
+import com.yourapp.iptv.viewmodel.ProfilesViewModel
 import com.yourapp.iptv.viewmodel.SettingsViewModel
 
 @Composable
@@ -25,27 +20,44 @@ fun SettingsScreen(
     onSubscriptions: () -> Unit = {},
     onBackup: () -> Unit = {},
     onDiagnostics: () -> Unit = {},
-    onParental: () -> Unit = {}
+    onParental: () -> Unit = {},
+    onProfiles: () -> Unit = {},
+    appearanceModel: HomeAppearanceSettingsViewModel = hiltViewModel(key = "settings-home-editor"),
+    profilesModel: ProfilesViewModel = hiltViewModel()
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(stringResource(R.string.ui_settings_title), style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary)
-        AppButton(stringResource(R.string.subscription_title), onSubscriptions)
-        state.subscriptions.firstOrNull { it.id == state.activeSubscriptionId }?.let { active ->
-            Text(stringResource(R.string.subscription_current,
-                active.name.ifBlank { stringResource(R.string.subscription_default) }),
-                style = MaterialTheme.typography.bodyMedium)
+    val account by viewModel.uiState.collectAsStateWithLifecycle()
+    val editor by appearanceModel.uiState.collectAsStateWithLifecycle()
+    val profiles by profilesModel.people.collectAsStateWithLifecycle()
+    val labels = SettingsLabels(LocalParentalSession.current.language)
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner, appearanceModel, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val current = appearanceModel.uiState.value
+                if (!current.dirty && !current.saving) appearanceModel.load()
+                val settings = viewModel.uiState.value
+                if (!settings.isLoading && !settings.isSaving) viewModel.loadSavedSettings()
+            }
         }
-        AppButton(stringResource(R.string.theme_settings_title), onHomeAppearance)
-        AppButton(stringResource(R.string.ui_player_title), onPlayerAppearance)
-        AppUpdateSection()
-        AppButton(stringResource(R.string.parental_title), onParental)
-        AppButton(stringResource(R.string.backup_title), onBackup)
-        AppButton(stringResource(R.string.diagnostics_title), onDiagnostics)
-        StartupPlaybackSetting()
-        StorageManagementSection()
-        if (onBack != null) AppButton(stringResource(R.string.ui_back), onBack)
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+    // Each destination retains its original PIN gate and navigation owner.
+    val navigate: (SettingsAction) -> Unit = { action -> when (action) {
+        SettingsAction.SUBSCRIPTIONS -> onSubscriptions()
+        SettingsAction.PROFILES -> onProfiles()
+        SettingsAction.PLAYER -> onPlayerAppearance()
+        SettingsAction.BACKUP -> onBackup()
+        SettingsAction.DIAGNOSTICS -> onDiagnostics()
+        SettingsAction.PARENTAL -> onParental()
+        SettingsAction.BACK -> onBack?.invoke()
+        SettingsAction.CAPTIONS -> Unit
+    } }
+    SettingsWorkspace(labels, profiles.catalog.active.name.takeIf { profiles.ready && !profiles.failed }.orEmpty(),
+        editor.dirty, editor.saving, editor.saved, editor.error != null,
+        canSave = !editor.loading && !editor.failed, onSave = appearanceModel::save,
+        onReset = appearanceModel::reset, onDiscard = appearanceModel::discard, onAction = navigate) { category, first, action ->
+        if (category == SettingsCategory.APPEARANCE) SettingsAppearancePanel(editor, labels, first, appearanceModel::update, appearanceModel::load, onPlayerText = { action(SettingsAction.PLAYER) })
+        else SettingsSection(category, labels, first, account, viewModel::loadSavedSettings, action)
     }
 }

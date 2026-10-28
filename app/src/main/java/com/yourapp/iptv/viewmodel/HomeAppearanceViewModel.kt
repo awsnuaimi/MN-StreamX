@@ -72,8 +72,10 @@ class HomeAppearanceViewModel @Inject constructor(private val repository: HomeAp
 data class HomeAppearanceEditorState(
     val value: HomeAppearance = HomeAppearance(), val loading: Boolean = true,
     val saving: Boolean = false, val failed: Boolean = false,
-    val saved: Boolean = false, val error: String? = null
-)
+    val saved: Boolean = false, val error: String? = null, val committed: HomeAppearance? = null
+) {
+    val dirty: Boolean get() = !loading && !failed && committed != null && value != committed
+}
 
 @HiltViewModel
 class HomeAppearanceSettingsViewModel @Inject constructor(private val repository: HomeAppearanceRepository) : ViewModel() {
@@ -85,7 +87,10 @@ class HomeAppearanceSettingsViewModel @Inject constructor(private val repository
         if (state.value.saving || loadJob?.isActive == true) return
         state.value = state.value.copy(loading = true, failed = false, error = null)
         loadJob = viewModelScope.launch {
-            try { state.value = HomeAppearanceEditorState(repository.observe().first().normalized(), loading = false) }
+            try {
+                val loaded = repository.observe().first().normalized()
+                state.value = HomeAppearanceEditorState(loaded, loading = false, committed = loaded)
+            }
             catch (error: CancellationException) { throw error }
             catch (_: Exception) { state.value = state.value.copy(loading = false, failed = true, error = "تعذر قراءة مظهر الرئيسية.") }
         }
@@ -95,12 +100,13 @@ class HomeAppearanceSettingsViewModel @Inject constructor(private val repository
         state.value = state.value.copy(value = value.normalized(), error = null, saved = false)
     }
     fun reset() = update(HomeAppearance(profileId = state.value.value.profileId))
+    fun discard() { state.value.committed?.let(::update) }
     fun save() {
         val current = state.value
         if (current.loading || current.saving || current.failed) return
         state.value = current.copy(saving = true, saved = false, error = null)
         viewModelScope.launch {
-            try { repository.save(current.value.normalized()); state.value = state.value.copy(saving = false, saved = true) }
+            try { repository.save(current.value.normalized()); state.value = state.value.copy(saving = false, saved = true, committed = current.value.normalized()) }
             catch (error: CancellationException) { throw error }
             catch (_: Exception) { state.value = state.value.copy(saving = false, error = "تعذر الحفظ. أعد المحاولة.") }
         }
