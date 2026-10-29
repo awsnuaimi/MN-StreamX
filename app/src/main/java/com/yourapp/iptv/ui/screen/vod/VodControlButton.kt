@@ -1,13 +1,17 @@
 package com.yourapp.iptv.ui.screen.vod
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -17,34 +21,36 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 internal enum class VodGlyph { PLAY, PAUSE, BACK, REWIND, FORWARD, NEXT, AUDIO, SUBTITLES, SPEED, DISPLAY, RESTART, AUTO }
 
+/** Neutral player chrome stays readable over video in every application theme. */
 @Composable
 internal fun VodControlButton(label: String, glyph: VodGlyph, onClick: () -> Unit, modifier: Modifier = Modifier,
     enabled: Boolean = true, value: String? = null, prominent: Boolean = false) {
     var focused by remember { mutableStateOf(false) }
-    val accent = MaterialTheme.colorScheme.primary
-    val solid = enabled && (focused || prominent)
-    Button(onClick,modifier.heightIn(min = if (value == null) 48.dp else 66.dp)
-        .onFocusChanged { focused = it.isFocused },enabled = enabled,shape = RoundedCornerShape(14.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp,vertical = 8.dp),
-        border = BorderStroke(if (focused) 3.dp else 1.dp,if (focused && prominent) Color.White else if (solid) accent else Color.White.copy(alpha = .24f)),
-        colors = ButtonDefaults.buttonColors(containerColor = if (solid) accent else Color(0xD91A263B),
-            contentColor = if (solid) MaterialTheme.colorScheme.onPrimary else Color.White,
-            disabledContainerColor = Color(0x991A263B),disabledContentColor = Color.White.copy(alpha = .38f))) {
-        if (value == null) Row(verticalAlignment = Alignment.CenterVertically,horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            VodControlIcon(glyph,Modifier.size(22.dp));Text(label,maxLines = 1,overflow = TextOverflow.Ellipsis)
-        } else Column(horizontalAlignment = Alignment.CenterHorizontally,verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically,horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                VodControlIcon(glyph,Modifier.size(18.dp))
-                Text(label,style = MaterialTheme.typography.labelLarge,maxLines = 1,overflow = TextOverflow.Ellipsis)
+    val filled = enabled && (focused || prominent)
+    val background by animateColorAsState(if (filled) Color.White else Color(0xE0141B25),tween(140),label = "vod-pill")
+    Button(onClick,modifier.heightIn(min = if (value == null) 44.dp else 54.dp)
+        .focusProperties { canFocus = enabled }.onFocusChanged { focused = it.isFocused },enabled = enabled,shape = CircleShape,
+        contentPadding = PaddingValues(horizontal = 13.dp,vertical = 8.dp),
+        border = BorderStroke(if (focused) 2.dp else 1.dp,if (focused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .13f)),
+        colors = ButtonDefaults.buttonColors(containerColor = background,contentColor = if (filled) Color(0xFF111820) else Color.White,
+            disabledContainerColor = Color(0xB0141B25),disabledContentColor = Color.White.copy(alpha = .36f))) {
+        Row(verticalAlignment = Alignment.CenterVertically,horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Box(Modifier.size(if (value == null) 20.dp else 28.dp).background(
+                if (filled) Color.Black.copy(alpha = .06f) else Color.White.copy(alpha = .07f),CircleShape),contentAlignment = Alignment.Center) {
+                VodControlIcon(glyph,Modifier.size(if (value == null) 18.dp else 17.dp))
             }
-            Text(value,style = MaterialTheme.typography.bodySmall,maxLines = 1,overflow = TextOverflow.Ellipsis)
+            Column(Modifier.weight(1f,fill = false),verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(label,fontSize = if (value == null) 13.sp else 12.sp,maxLines = 1,overflow = TextOverflow.Ellipsis)
+                value?.let { Text(it,fontSize = 10.sp,lineHeight = 12.sp,color = LocalContentColor.current.copy(alpha = .67f),
+                    maxLines = 1,overflow = TextOverflow.Ellipsis) }
+            }
         }
     }
 }
-
 @Composable
 internal fun VodControlIcon(glyph: VodGlyph, modifier: Modifier = Modifier) {
     val ink = LocalContentColor.current
@@ -59,7 +65,10 @@ internal fun VodControlIcon(glyph: VodGlyph, modifier: Modifier = Modifier) {
         }
         when (glyph) {
             VodGlyph.PLAY -> triangle(.35f)
-            VodGlyph.PAUSE -> { line(.35f,.25f,.35f,.75f);line(.65f,.25f,.65f,.75f) }
+            VodGlyph.PAUSE -> {
+                drawRoundRect(ink,Offset(w*.28f,h*.2f),androidx.compose.ui.geometry.Size(w*.14f,h*.6f),androidx.compose.ui.geometry.CornerRadius(w*.04f))
+                drawRoundRect(ink,Offset(w*.58f,h*.2f),androidx.compose.ui.geometry.Size(w*.14f,h*.6f),androidx.compose.ui.geometry.CornerRadius(w*.04f))
+            }
             VodGlyph.REWIND -> { triangle(.48f,true);triangle(.83f,true) }
             VodGlyph.FORWARD -> { triangle(.17f);triangle(.52f) }
             VodGlyph.NEXT -> { triangle(.25f);line(.8f,.22f,.8f,.78f) }

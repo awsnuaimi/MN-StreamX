@@ -66,6 +66,7 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
     val chrome = remember { VodControlsState() }
     var display by rememberSaveable { mutableStateOf(VodDisplayMode.FIT) }
     var seekFeedback by remember { mutableStateOf<Pair<Long,Long>?>(null) }
+    var dockFraction by remember { mutableFloatStateOf(.34f) }
     var seekEpoch by remember { mutableIntStateOf(0) }
     var cancelled by rememberSaveable { mutableStateOf(false) }
     var active by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
@@ -187,23 +188,16 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
                 VodDisplayMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 VodDisplayMode.STRETCH -> AspectRatioFrameLayout.RESIZE_MODE_FILL
             }
-            view.subtitleView?.setBottomPaddingFraction(if (chrome.shown) .48f else .08f)
+            view.subtitleView?.setBottomPaddingFraction(if (chrome.shown) dockFraction else .08f)
             view.keepScreenOn = active && snapshot.playWhenReady && !snapshot.ended && !snapshot.failed
         }, onRelease = { view -> view.player = null; view.keepScreenOn = false; if (video.view === view) video.view = null },
             modifier = Modifier.fillMaxSize())
         val density = LocalDensity.current
         CompositionLocalProvider(LocalDensity provides Density(density.density,density.fontScale*appearance.textSize.scale)) {
-        if (snapshot.buffering && !snapshot.failed) Column(Modifier.align(Alignment.Center),horizontalAlignment = Alignment.CenterHorizontally,
+        if (snapshot.buffering && !snapshot.failed && (!chrome.shown || current == null)) Column(Modifier.align(Alignment.Center),horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             CircularProgressIndicator();Text(labels.buffering(),color = Color.White)
         }
-        seekFeedback?.let { (delta,position) -> Surface(Modifier.align(Alignment.Center).testTag("vod-seek-feedback"),
-            color = Color.Black.copy(alpha = .8f),contentColor = Color.White,shape = MaterialTheme.shapes.large) {
-            Column(Modifier.padding(18.dp),horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (delta < 0) labels.rewind() else labels.forward(),style = MaterialTheme.typography.titleLarge)
-                Text(VodSeek.time(position))
-            }
-        } }
         if (chrome.shown && current != null) VodPlayerControls(item,snapshot,labels,autoNext,countdown,
             VodPlayerActions(back = { current.save(); onBack() },toggle = { touch(); current.toggle() },
                 step = ::step,seek = { touch(); current.seekTo(it) },
@@ -214,7 +208,8 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
                 speed = { open(VodPlayerPanel.SPEED,VodControlTarget.SPEED) },
                 display = { open(VodPlayerPanel.DISPLAY,VodControlTarget.DISPLAY) },
                 scrubbing = { chrome.scrubbing = it;if (it) touch() }),playFocus,display,chrome.restore,chrome.focusEpoch,
-                manageFocus = chrome.panel == null && !snapshot.failed)
+                manageFocus = chrome.panel == null && !snapshot.failed,showHints = appearance.showHints,seekFeedback = seekFeedback,
+                onDockFraction = { dockFraction = (it+.02f).coerceIn(.12f,.72f) })
         if (snapshot.failed) Surface(Modifier.align(Alignment.Center).widthIn(max = 620.dp),shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(24.dp),verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(labels.failed())

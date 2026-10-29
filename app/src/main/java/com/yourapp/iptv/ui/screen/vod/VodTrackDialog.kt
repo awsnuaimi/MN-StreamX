@@ -15,7 +15,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.yourapp.iptv.player.vod.VodTrackChoice
 import com.yourapp.iptv.player.vod.VodTrackList
-import com.yourapp.iptv.ui.component.common.AppButton
 
 @Composable
 internal fun VodTrackDialog(title: String, tracks: VodTrackList, subtitles: Boolean, labels: VodPlaybackLabels,
@@ -31,23 +30,21 @@ internal fun VodTrackDialog(title: String, tracks: VodTrackList, subtitles: Bool
     fun focus(index: Int) = if (index == selected) Modifier.focusRequester(initial) else Modifier
     // New dialog windows may start in touch mode; TV choices still need an initial focus.
     Dialog(onDismissRequest = onClose) {
-        Surface(shape = MaterialTheme.shapes.large,modifier = Modifier.widthIn(max = 680.dp).fillMaxWidth().heightIn(max = 440.dp)) {
-            Column(Modifier.padding(20.dp).testTag("vod-track-dialog"),verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(title,style = MaterialTheme.typography.titleLarge)
+        VodCinemaPanel(Modifier.widthIn(max = 600.dp).fillMaxWidth().heightIn(max = 440.dp).testTag("vod-track-dialog")) {
+                VodPanelTitle(title,if (subtitles) VodGlyph.SUBTITLES else VodGlyph.AUDIO)
                 if (tracks.choices.isEmpty()) Text(labels.none())
                 LazyColumn(Modifier.weight(1f,fill = false).heightIn(max = 280.dp),state = scroll,
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item { AppButton((if (tracks.automatic) "✓ " else "")+labels.automatic(),{ onSelect(null) },
+                    item { VodChoiceRow(labels.automatic(),tracks.automatic,{ onSelect(null) },
                         Modifier.fillMaxWidth().focusProperties { canFocus = true }.then(focus(0)).testTag("vod-track-auto")) }
-                    if (subtitles) item { AppButton((if (tracks.disabled) "✓ " else "")+labels.off(),onOff,
+                    if (subtitles) item { VodChoiceRow(labels.off(),tracks.disabled,onOff,
                         Modifier.fillMaxWidth().focusProperties { canFocus = true }.then(focus(1)).testTag("vod-track-off")) }
                     itemsIndexed(tracks.choices) { index,choice ->
-                        AppButton((if (choice.chosen) "✓ " else "")+choice.name,{ onSelect(choice) },
+                        VodChoiceRow(choice.name,choice.chosen,{ onSelect(choice) },
                             Modifier.fillMaxWidth().focusProperties { canFocus = true }.then(focus(index+offset)).testTag("vod-track-$index"))
                     }
                 }
-                AppButton(labels.close(),onClose,Modifier.focusProperties { canFocus = true }.testTag("vod-track-close"))
-            }
+                VodControlButton(labels.close(),VodGlyph.BACK,onClose,Modifier.focusProperties { canFocus = true }.testTag("vod-track-close"))
         }
         LaunchedEffect(selected,tracks.choices.map { it.group to it.index }) {
             scroll.scrollToItem(selected)

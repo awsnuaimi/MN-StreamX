@@ -53,33 +53,38 @@ class VodPlayerControlsTest {
     private var next = 0
     private var automatic: Boolean? = null
     private var cancelled = 0
-    private fun show(language: HomeLanguage = HomeLanguage.GERMAN, countdown: Int? = null, fontScale: Float = 1f, movie: Boolean = false) {
+    private var dockFraction = 0f
+    private var previewScale by mutableFloatStateOf(1f)
+    private fun show(language: HomeLanguage = HomeLanguage.GERMAN, countdown: Int? = null, fontScale: Float = 1f, movie: Boolean = false, bright: Boolean = false, theme: HomeTheme = HomeTheme.RED, hints: Boolean = false, feedback: Pair<Long,Long>? = null) {
+        previewScale = fontScale
         compose.setContent {
             val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density,fontScale)) {
-            IPTVAppTheme(theme = HomeTheme.RED) {
+            CompositionLocalProvider(LocalDensity provides Density(density.density,previewScale)) {
+            IPTVAppTheme(theme = theme) {
                 LocalizedResources(language) {
                     val input = LocalInputModeManager.current
                     SideEffect { input.requestInputMode(InputMode.Keyboard) }
-                    Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    Box(Modifier.fillMaxSize().background(if (bright) Color.White else Color.Black)) {
                         VodPlayerControls(if (movie) item.copy(kind = VodKind.MOVIE,seriesId = null,next = null) else item,snapshot.value,VodPlaybackLabels(language),countdown != null,countdown,
                             VodPlayerActions({}, {}, { delta ->
                                 steps.add(delta);snapshot.value = snapshot.value.copy(position = snapshot.value.position + delta)
-                            }, {}, {}, {}, {}, { next++ },{ automatic = it },{ cancelled++ },{}),remember { FocusRequester() })
+                            }, {}, {}, {}, {}, { next++ },{ automatic = it },{ cancelled++ },{}),remember { FocusRequester() },showHints = hints,seekFeedback = feedback,onDockFraction = { dockFraction = it })
                     }
                 }
             }
         } }
     }
-    @Test fun remoteDownAndUpKeepTheFocusBetweenTheMainActionAndAudioChoice() {
+    @Test fun remoteFocusFollowsTransportTimelineAndToolsVertically() {
         show()
         compose.onNodeWithTag("vod-toggle").performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag("vod-toggle").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithTag("vod-timeline").assertIsFocused()
+        compose.onNodeWithTag("vod-timeline").performKeyInput { pressKey(Key.DirectionDown) }
         compose.onNodeWithTag("vod-audio").assertIsFocused()
         compose.onNodeWithTag("vod-audio").performKeyInput { pressKey(Key.DirectionUp) }
-        compose.onNodeWithTag("vod-toggle").assertIsFocused()
-        compose.onNodeWithTag("vod-toggle").performKeyInput { pressKey(Key.DirectionUp) }
         compose.onNodeWithTag("vod-timeline").assertIsFocused()
+        compose.onNodeWithTag("vod-timeline").performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithTag("vod-toggle").assertIsFocused()
     }
     @Test fun theRemoteTimelineSeeksTenSecondsPerPressWithoutAlsoApplyingTheDefaultSliderStep() {
         show()
@@ -190,6 +195,73 @@ class VodPlayerControlsTest {
             compose.onNodeWithTag(it).assertIsDisplayed()
         }
         export("movie-en")
+    }
+    @Test fun neutralChromeAndRoundTransportStayLegibleOverBrightVideoInTheLightTheme() {
+        show(HomeLanguage.GERMAN,movie = true,bright = true,theme = HomeTheme.LIGHT)
+        compose.onNodeWithTag("vod-toggle").performSemanticsAction(SemanticsActions.RequestFocus)
+        listOf("vod-toggle","vod-timeline","vod-audio","vod-remaining").forEach { compose.onNodeWithTag(it).assertIsDisplayed() }
+        val bounds = compose.onNodeWithTag("vod-toggle").fetchSemanticsNode().boundsInRoot
+        assertEquals(bounds.width,bounds.height,1f)
+        compose.onNodeWithTag("vod-hint").assertDoesNotExist()
+        checkBrightSceneContrast()
+        export("cinema-bright-de")
+    }
+    @Test fun optionalRemoteHintsAreShownOnlyWhenEnabled() {
+        show(HomeLanguage.ENGLISH,movie = true,hints = true)
+        compose.onNodeWithTag("vod-hint").assertIsDisplayed()
+    }
+    @Test fun disabledSeekingMovesFromPlayToAudioWithoutFocusingTheDisabledTimeline() {
+        snapshot.value = snapshot.value.copy(seekable = false,duration = -1)
+        show()
+        compose.onNodeWithTag("vod-toggle").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithTag("vod-toggle").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithTag("vod-audio").assertIsFocused()
+    }
+    @Test @Config(qualifiers = "w640dp-h360dp-mdpi") fun smallTvKeepsEveryToolReachableWithTheRemote() {
+        show(HomeLanguage.ARABIC,fontScale = 1.6f)
+        compose.onNodeWithTag("vod-auto-next").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithTag("vod-auto-next").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(true,automatic) }
+        compose.onNodeWithTag("vod-toggle").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithTag("vod-toggle").assertIsDisplayed()
+    }
+    @Test fun seekFeedbackSitsBelowTransportInsteadOfCoveringThePlayButton() {
+        show(HomeLanguage.ENGLISH,movie = true,feedback = 10000L to 70000L)
+        val action = compose.onNodeWithTag("vod-toggle").fetchSemanticsNode().boundsInRoot
+        val feedback = compose.onNodeWithTag("vod-seek-feedback").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue(feedback.top >= action.bottom)
+        compose.onNodeWithText("+10 seconds · 01:10").assertIsDisplayed()
+    }
+    @Test fun subtitleClearanceUsesTheMeasuredDockAndAdaptsToLargerText() {
+        show(HomeLanguage.ENGLISH,movie = true)
+        var before = 0f
+        compose.runOnIdle { before = dockFraction;assertTrue(before > 0f && before < 1f);previewScale = 1.6f }
+        compose.runOnIdle { assertTrue(dockFraction > before);assertTrue(dockFraction < 1f) }
+    }
+    private fun checkBrightSceneContrast() {
+        val root = compose.onNodeWithTag("vod-controls",true).fetchSemanticsNode().boundsInRoot
+        val timeline = compose.onNodeWithTag("vod-timeline").fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithTag("vod-title").fetchSemanticsNode().boundsInRoot
+        fun owner(view: View): View? {
+            if (view.javaClass.name == "androidx.compose.ui.platform.AndroidComposeView") return view
+            if (view is ViewGroup) for (i in 0 until view.childCount) owner(view.getChildAt(i))?.let { return it }
+            return null
+        }
+        compose.runOnIdle {
+            val bitmap = Bitmap.createBitmap(root.width.toInt(),root.height.toInt(),Bitmap.Config.ARGB_8888)
+            try {
+                val canvas = Canvas(bitmap);canvas.translate(-root.left,-root.top)
+                requireNotNull(owner(compose.activity.window.decorView)).draw(canvas)
+                fun brightness(x: Int,y: Int): Float {
+                    val pixel = bitmap.getPixel(x,y)
+                    return (android.graphics.Color.red(pixel)*.2126f+android.graphics.Color.green(pixel)*.7152f+
+                        android.graphics.Color.blue(pixel)*.0722f)/255f
+                }
+                assertTrue(brightness(8,(root.height/3).toInt()) > .9f)
+                assertTrue(brightness((root.width-10).toInt(),(title.center.y-root.top).toInt()) < .4f)
+                assertTrue(brightness((timeline.right-root.left-24).toInt(),(timeline.top-root.top+10).toInt()) < .4f)
+            } finally { bitmap.recycle() }
+        }
     }
     private fun options() {
         val state = VodControlsState()
