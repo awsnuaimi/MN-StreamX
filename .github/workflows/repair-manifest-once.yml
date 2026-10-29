@@ -1,0 +1,46 @@
+name: Repair manifest providers (one-time)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out full repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Recover lost providers without replacing branding
+        run: python3 tools/restore_manifest_providers.py --apply
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Run the full unit-test suite before committing
+        run: gradle --no-daemon :app:testDebugUnitTest
+
+      - name: Commit recovered manifest only after tests pass
+        run: |
+          if git diff --quiet -- app/src/main/AndroidManifest.xml; then
+            echo 'No manifest changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/AndroidManifest.xml
+          git commit -m 'fix: restore Android providers while preserving MN StreamX branding'
+          git push origin HEAD:main
