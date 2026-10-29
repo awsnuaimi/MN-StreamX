@@ -2,7 +2,6 @@ package com.yourapp.iptv.ui.screen.home
 
 import androidx.compose.ui.res.stringResource
 import com.yourapp.iptv.R
-import com.yourapp.iptv.ui.component.organization.FolderBrowser
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.layout.*
@@ -62,8 +61,6 @@ fun HomeScreen(
         HomeDashboardSelection.project(state.channels, ids)
     }
     val savedAppearance by appearanceViewModel.appearance.collectAsStateWithLifecycle()
-    val nightSaving by appearanceViewModel.nightSaving.collectAsStateWithLifecycle()
-    val layoutError by appearanceViewModel.channelLayoutError.collectAsStateWithLifecycle()
     val appearance = savedAppearance
     if (appearance == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -167,19 +164,12 @@ fun HomeScreen(
                 HomeSidebar(appearance, labels, selected, state.isLoading || state.isRefreshing,
                     sidebarFocus, { section -> lastSidebarFocus = section.name }, ::select,
                     dashboardFocus = dashboardFocus,
-                    organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
+                    liveBrowser = !dashboardVisible, organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
-                Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = if (dashboardVisible) 30.dp else 12.dp,
-                    vertical = if (dashboardVisible) 20.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    if (!dashboardVisible) {
-                        key(state.browseScope) {
-                            HomeChannelToolbar(labels.section(selected), state.visibleChannels.size, state.channels.size,
-                                labels, state.query, viewModel::updateQuery, appearance.channelLayout,
-                                appearanceViewModel::setChannelLayout, saving = nightSaving, saveError = layoutError)
-                        }
-                        ParentalHomeControl()
-                    }
+                Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = if (dashboardVisible) 30.dp else 0.dp,
+                    vertical = if (dashboardVisible) 20.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (!dashboardVisible) ParentalHomeControl()
                     if (state.isRefreshing && state.channels.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
                     FavoriteFeedback(favorites, viewModel::retryFavorites)
                     if (state.organization.readFailed) Text(stringResource(R.string.org_read_warning),
@@ -201,39 +191,23 @@ fun HomeScreen(
                                 }, onLive = { select(HomeSection.LIVE) }, onMovies = onMovies, onSeries = onSeries,
                                 onGuide = { onOpenGuide(null, null, "", false) }, onHistory = onHistory)
                         } }
-                        else -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                        val categoryWidth = (maxWidth * 0.22f).coerceIn(128.dp, 176.dp)
-                        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            val categoryModifier = Modifier.width(categoryWidth).fillMaxHeight()
-                            val chooseGroup: (String?) -> Unit = { group ->
-                                initialFocusDone = true
-                                if (group == null) viewModel.selectAllGroups() else viewModel.selectGroup(group)
-                            }
-                            if (state.organization.enabled) FolderBrowser(state.organization, state.selectedGroup,
-                                categoryModifier, restoreFocusOnNavigation = state.gridRestore == null, onSelect = chooseGroup)
-                            else HomeCategories(state.groups, state.selectedGroup, labels, categoryModifier, chooseGroup)
-                            if (state.visibleChannels.isEmpty()) Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Text(labels.text("لا توجد قنوات تطابق الاختيار.", "No matching channels.", "Keine passenden Sender."))
-                                    AppButton(labels.text("مسح التصفية", "Clear filters", "Filter löschen"), viewModel::clearFilters)
-                                }
-                            } else key(state.browseScope, state.selectedGroup, state.favoritesOnly, state.query) {
-                                HomeLiveChannelGrid(state.visibleChannels, state.selectedChannelId, { channel ->
+                        else -> key(state.browseScope) {
+                            LiveTvBrowserScene(state, appearance, labels, viewModel::updateQuery,
+                                onGroup = { group ->
+                                    initialFocusDone = true
+                                    if (group == null) viewModel.selectAllGroups() else viewModel.selectGroup(group)
+                                }, onPlay = { channel ->
                                     initialFocusDone = true
                                     launchedFromDashboard = false
                                     viewModel.selectChannel(channel.id)
                                     onPlayChannel(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
-                                }, Modifier.weight(1f).fillMaxHeight(), columns = appearance.columns,
-                                    showGroup = state.selectedGroup == null, restore = state.gridRestore,
-                                    layout = appearance.channelLayout, showLogos = appearance.showChannelLogos,
-                                    language = appearance.language, owner = state.browseScope,
-                                    onBrowsePosition = { id, position ->
-                                        initialFocusDone = true
-                                        viewModel.onBrowsePosition(state.browseScope, state.selectedGroup,
-                                            state.favoritesOnly, id, position)
-                                    }, onRestoreHandled = viewModel::onGridRestoreHandled)
-                            }
-                        }
+                                }, onFavorite = { viewModel.toggleFavorite(it.id, state.browseScope) }, canFavorite = favorites.canToggle,
+                                onPosition = { id, position ->
+                                    initialFocusDone = true
+                                    viewModel.onBrowsePosition(state.browseScope, state.selectedGroup,
+                                        state.favoritesOnly, id, position)
+                                }, onRestored = viewModel::onGridRestoreHandled,
+                                modifier = Modifier.weight(1f).fillMaxWidth())
                         }
                     }
                 }

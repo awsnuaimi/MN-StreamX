@@ -20,10 +20,10 @@ import com.yourapp.iptv.domain.model.HomeAppearance
 internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selected: HomeSection,
     loading: Boolean, focusRequesters: Map<HomeSection, FocusRequester>,
     onFocused: (HomeSection) -> Unit, onSelect: (HomeSection) -> Unit,
-    dashboardFocus: FocusRequester? = null, modifier: Modifier = Modifier, organizationReady: Boolean = true) {
-    val colors = HomeTvPalettes.forTheme(appearance.theme, appearance.isNightMode)
+    dashboardFocus: FocusRequester? = null, modifier: Modifier = Modifier, organizationReady: Boolean = true, liveBrowser: Boolean = false) {
+    val colors = if (liveBrowser) liveTvColors(appearance) else HomeTvPalettes.forTheme(appearance.theme, appearance.isNightMode)
     var more by remember { mutableStateOf(false) }
-    val expanded = appearance.expandedSidebar
+    val expanded = appearance.expandedSidebar && !liveBrowser
     Column(modifier.width(if (expanded) 180.dp else 66.dp).fillMaxHeight().background(colors.sidebar)
         .focusGroup().padding(horizontal = 12.dp, vertical = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(if (expanded) "MN StreamX" else "X", color = colors.accent, style = MaterialTheme.typography.titleLarge)

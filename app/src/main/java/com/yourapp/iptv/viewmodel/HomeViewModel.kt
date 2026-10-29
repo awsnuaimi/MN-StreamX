@@ -15,8 +15,7 @@ import com.yourapp.iptv.domain.model.HomeBrowseSession
 import com.yourapp.iptv.domain.model.HomeGridPosition
 import com.yourapp.iptv.domain.model.HomeGridRestore
 import com.yourapp.iptv.domain.model.HomeSessionResolver
-import com.yourapp.iptv.domain.repository.HomeSessionRepository
-import com.yourapp.iptv.domain.repository.HomeStartupRepository
+import com.yourapp.iptv.domain.repository.HomeSessionRepositoryimport com.yourapp.iptv.domain.repository.HomeStartupRepository
 import com.yourapp.iptv.domain.model.ChannelFavorites
 import com.yourapp.iptv.domain.model.PlaybackQueue
 import com.yourapp.iptv.domain.repository.FavoriteRepository
@@ -102,6 +101,16 @@ class HomeViewModel @Inject constructor(
     }
 
     fun retryFavorites() = favoriteController.retry()
+
+    fun toggleFavorite(channelId: String, expectedScope: String) {
+        val current = state.value
+        if (current.browseScope != expectedScope) return
+        val channel = current.visibleChannels.firstOrNull { it.id == channelId } ?: return
+        val source = ProfileScope.source(current.browseScope) ?: return
+        val access = parental.state.value
+        if (access.profileId != ProfileScope.profile(current.browseScope) || !access.allows(source, channel)) return
+        favoriteController.toggle(channel.id)
+    }
 
     fun configureHomeSession(enabled: Boolean) = session.configure(enabled)
     fun flushBrowseSession() = session.flush()

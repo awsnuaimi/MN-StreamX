@@ -104,6 +104,44 @@ class HomeViewModelTest {
         assertEquals(2, model.uiState.value.visibleChannels.size)
     }
 
+    @Test fun browserFavoriteUsesTheVisibleChannelAndExistingSaveFeedback() = runTest(dispatcher) {
+        val favorites = FakeFavoriteRepository()
+        val model = HomeViewModel(settings("https://unit.test/list.m3u"), FakePlaylists(), dispatcher, favorites)
+        advanceUntilIdle()
+        model.updateQuery("Beta"); advanceUntilIdle()
+        model.toggleFavorite("a", model.uiState.value.browseScope); advanceUntilIdle(); assertEquals(0, favorites.writes)
+        model.toggleFavorite("b", "stale-render-owner"); advanceUntilIdle(); assertEquals(0, favorites.writes)
+        model.toggleFavorite("b", model.uiState.value.browseScope); advanceUntilIdle()
+        assertEquals(setOf("b"), favorites.ids.value); assertEquals(1, favorites.writes)
+        assertTrue(model.favoriteState.value.canToggle)
+    }
+
+    @Test fun browserFavoriteChecksRawSourceRulesForNondefaultProfiles() = runTest(dispatcher) {
+        val account = AppSettings(m3uUrl = "https://unit.test/list.m3u", profileId = "11111111-1111-4111-8111-111111111111")
+        val raw = com.yourapp.iptv.domain.model.PlaylistCacheKey.of(account)
+        val access = kotlinx.coroutines.flow.MutableStateFlow(com.yourapp.iptv.domain.parental.ParentalState(
+            ready = true, configured = true, profileId = account.profileId,
+            rules = com.yourapp.iptv.domain.parental.ParentalRules(groups = mapOf(raw to setOf("News")))))
+        val control = object : com.yourapp.iptv.domain.parental.ParentalControl by com.yourapp.iptv.domain.parental.ParentalControl.Disabled {
+            override val state = access
+        }
+        val favorites = FakeFavoriteRepository()
+        var destination: String? = null
+        val repository = object : com.yourapp.iptv.domain.repository.FavoriteRepository by favorites {
+            override suspend fun toggleFavorite(channelId: String, sourceKey: String?) {
+                destination = sourceKey; favorites.toggleFavorite(channelId, sourceKey)
+            }
+        }
+        val model = HomeViewModel(source(account), FakePlaylists(), dispatcher, repository, parental = control)
+        advanceUntilIdle()
+        model.toggleFavorite("a", model.uiState.value.browseScope); advanceUntilIdle(); assertEquals(0, favorites.writes)
+        access.value = access.value.copy(unlocked = true, epoch = 1)
+        model.toggleFavorite("a", model.uiState.value.browseScope); advanceUntilIdle(); assertEquals(1, favorites.writes)
+        assertEquals(com.yourapp.iptv.domain.profile.ProfileScope.of(account), destination)
+        access.value = access.value.copy(profileId = "default", epoch = 2)
+        model.toggleFavorite("b", model.uiState.value.browseScope); advanceUntilIdle(); assertEquals(1, favorites.writes)
+    }
+
     private fun settings(url: String) = source(AppSettings(m3uUrl = url))
 
     private fun source(value: AppSettings) = object : SettingsRepository {
