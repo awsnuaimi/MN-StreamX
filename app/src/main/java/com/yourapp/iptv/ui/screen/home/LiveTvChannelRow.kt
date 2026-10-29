@@ -28,7 +28,7 @@ import com.yourapp.iptv.ui.presentation.LiveChannelRow
 @Composable
 internal fun LiveTvChannelRow(row: LiveChannelRow, program: ChannelProgramInfo, badge: String?,
     active: Boolean, colors: HomeTvPalette, labels: HomeLabels, onClick: () -> Unit, onLongClick: () -> Unit,
-    modifier: Modifier = Modifier, narrow: Boolean = false) {
+    modifier: Modifier = Modifier, narrow: Boolean = false, showLogos: Boolean = true, preferredChannelId: String? = null) {
     val shape = if (active) HomeHeroShape else RoundedCornerShape(10.dp)
     Row(modifier.fillMaxWidth().clip(shape).background(if (active) colors.focused else colors.surface)
         .then(if (active) Modifier.border(1.5.dp, colors.accent, shape) else Modifier)
@@ -39,12 +39,7 @@ internal fun LiveTvChannelRow(row: LiveChannelRow, program: ChannelProgramInfo, 
         .semantics { selected = active }
         .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-        val swatches = listOf(0xFF259D91, 0xFFE8A331, 0xFFD54145, 0xFF2D6EE4, 0xFFBF3897, 0xFF8859D4, 0xFF259D91, 0xFFD54145)
-        val swatch = Color(swatches[row.colorIndex % swatches.size])
-        Box(Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(swatch), contentAlignment = Alignment.Center) {
-            Text(row.title.codePoints().findFirst().orElse('?'.code).let { String(Character.toChars(it)) },
-                color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        }
+        LiveTvChannelLogo(row, preferredChannelId, colors, showLogos)
         Column(Modifier.weight(if (narrow) 0.55f else 0.76f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(row.title, color = colors.text, fontSize = 14.sp, lineHeight = 16.sp,
                 fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,

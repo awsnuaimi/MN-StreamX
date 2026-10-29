@@ -2,6 +2,7 @@ package com.yourapp.iptv.ui.screen.home
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.iptv.domain.model.*
@@ -16,7 +17,8 @@ internal fun LiveTvBrowserScene(state: HomeUiState, appearance: HomeAppearance, 
     onQuery: (String) -> Unit, onGroup: (String?) -> Unit, onPlay: (Channel) -> Unit,
     onFavorite: (Channel) -> Unit, canFavorite: Boolean,
     onPosition: (String, HomeGridPosition) -> Unit, onRestored: (Long) -> Unit,
-    modifier: Modifier = Modifier, model: HomeGuideViewModel = hiltViewModel(key = "live-reference-guide")) {
+    modifier: Modifier = Modifier, model: HomeGuideViewModel = hiltViewModel(key = "live-reference-guide"),
+    sidebarFocus: FocusRequester? = null, entryFocus: FocusRequester? = null) {
     val guides by model.uiState.collectAsStateWithLifecycle()
     val access = LocalParentalSession.current.state
     DisposableEffect(model) { onDispose { model.bind(emptyList()) } }
@@ -25,6 +27,6 @@ internal fun LiveTvBrowserScene(state: HomeUiState, appearance: HomeAppearance, 
             onTranslate = { channel ->
                 if (HomeChannelPresentation.kind(captions) == HomeTranslationKind.GENERATED) onPlay(channel) else setup()
             }, onFavorite = onFavorite, canFavorite = canFavorite, onPosition = onPosition,
-            onRestored = onRestored, onGuideChannels = { model.bind(it, HomeGuideViewModel.MAX_BROWSER_CHANNELS) }, modifier = modifier)
+            onRestored = onRestored, onGuideChannels = { model.bind(it, HomeGuideViewModel.MAX_BROWSER_CHANNELS) }, modifier = modifier, sidebarFocus = sidebarFocus, entryFocus = entryFocus)
     }
 }

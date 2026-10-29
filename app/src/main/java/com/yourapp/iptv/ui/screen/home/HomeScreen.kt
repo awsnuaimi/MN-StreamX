@@ -98,6 +98,7 @@ fun HomeScreen(
     }
     val sidebarFocus = remember { HomeSection.entries.associateWith { FocusRequester() } }
     val dashboardFocus = remember { FocusRequester() }
+    val liveContentFocus = remember { FocusRequester() }
     var lastSidebarFocus by rememberSaveable { mutableStateOf(HomeSection.DASHBOARD.name) }
     fun restoreSidebarFocus() {
         val target = HomeFocusPolicy.restore(lastSidebarFocus, state.isLoading || state.isRefreshing,
@@ -164,6 +165,7 @@ fun HomeScreen(
                 HomeSidebar(appearance, labels, selected, state.isLoading || state.isRefreshing,
                     sidebarFocus, { section -> lastSidebarFocus = section.name }, ::select,
                     dashboardFocus = dashboardFocus,
+                    browserFocus = liveContentFocus.takeIf { !dashboardVisible && !state.isLoading && !state.needsSource && state.channels.isNotEmpty() },
                     liveBrowser = !dashboardVisible, organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
@@ -207,7 +209,8 @@ fun HomeScreen(
                                     viewModel.onBrowsePosition(state.browseScope, state.selectedGroup,
                                         state.favoritesOnly, id, position)
                                 }, onRestored = viewModel::onGridRestoreHandled,
-                                modifier = Modifier.weight(1f).fillMaxWidth())
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                sidebarFocus = sidebarFocus.getValue(selected), entryFocus = liveContentFocus)
                         }
                     }
                 }

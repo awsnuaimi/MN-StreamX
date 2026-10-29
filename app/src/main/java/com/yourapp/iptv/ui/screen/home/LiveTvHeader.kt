@@ -22,12 +22,14 @@ import com.yourapp.iptv.ui.presentation.LiveChannelSort
 
 @Composable
 internal fun LiveTvHeader(title: String, visible: Int, total: Int, query: String, onQuery: (String) -> Unit,
-    sort: LiveChannelSort, onSort: (LiveChannelSort) -> Unit, labels: HomeLabels, colors: HomeTvPalette) {
+    sort: LiveChannelSort, onSort: (LiveChannelSort) -> Unit, labels: HomeLabels, colors: HomeTvPalette,
+    categories: FocusRequester? = null, entry: FocusRequester? = null) {
     var search by rememberSaveable { mutableStateOf(false) }
     var sorting by remember { mutableStateOf(false) }
     var requestField by remember { mutableStateOf(false) }
     var returnFocus by remember { mutableStateOf(false) }
-    val button = remember { FocusRequester() }; val field = remember { FocusRequester() }
+    val defaultButton = remember { FocusRequester() }; val button = entry ?: defaultButton
+    val field = remember { FocusRequester() }
     val sortButton = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val shown = search || query.isNotEmpty()
@@ -37,7 +39,7 @@ internal fun LiveTvHeader(title: String, visible: Int, total: Int, query: String
         if (shown && requestField) { withFrameNanos { }; field.requestFocus(); requestField = false }
         if (!shown && returnFocus) { withFrameNanos { }; button.requestFocus(); returnFocus = false }
     }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().focusProperties { categories?.let { down = it } }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val compact = maxWidth < 560.dp || LocalDensity.current.fontScale > 1.4f
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,

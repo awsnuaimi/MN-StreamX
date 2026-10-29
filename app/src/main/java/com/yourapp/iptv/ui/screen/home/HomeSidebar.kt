@@ -20,7 +20,8 @@ import com.yourapp.iptv.domain.model.HomeAppearance
 internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selected: HomeSection,
     loading: Boolean, focusRequesters: Map<HomeSection, FocusRequester>,
     onFocused: (HomeSection) -> Unit, onSelect: (HomeSection) -> Unit,
-    dashboardFocus: FocusRequester? = null, modifier: Modifier = Modifier, organizationReady: Boolean = true, liveBrowser: Boolean = false) {
+    dashboardFocus: FocusRequester? = null, modifier: Modifier = Modifier, organizationReady: Boolean = true, liveBrowser: Boolean = false,
+    browserFocus: FocusRequester? = null) {
     val colors = if (liveBrowser) liveTvColors(appearance) else HomeTvPalettes.forTheme(appearance.theme, appearance.isNightMode)
     var more by remember { mutableStateOf(false) }
     val expanded = appearance.expandedSidebar && !liveBrowser
@@ -32,7 +33,7 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
             for (section in HomeFocusPolicy.rail.filter { it != HomeSection.SETTINGS }) {
                 Box {
                     RailButton(section, expanded, selected, labels, colors, focusRequesters.getValue(section),
-                        dashboardFocus, appearance.sidebarOnRight, onFocused) {
+                        if (selected == HomeSection.DASHBOARD) dashboardFocus else browserFocus, appearance.sidebarOnRight, onFocused) {
                         if (section == HomeSection.MORE) more = true else onSelect(section)
                     }
                     if (section == HomeSection.MORE) DropdownMenu(expanded = more, onDismissRequest = {
@@ -50,7 +51,7 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
             }
         }
         RailButton(HomeSection.SETTINGS, expanded, selected, labels, colors,
-            focusRequesters.getValue(HomeSection.SETTINGS), dashboardFocus, appearance.sidebarOnRight, onFocused) {
+            focusRequesters.getValue(HomeSection.SETTINGS), if (selected == HomeSection.DASHBOARD) dashboardFocus else browserFocus, appearance.sidebarOnRight, onFocused) {
             onSelect(HomeSection.SETTINGS)
         }
     }
@@ -63,7 +64,7 @@ private fun RailButton(section: HomeSection, expanded: Boolean, selected: HomeSe
     var focused by remember { mutableStateOf(false) }
     val active = selected == section
     Surface(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 42.dp)
-        .focusRequester(requester).then(if (dashboard != null && selected == HomeSection.DASHBOARD)
+        .focusRequester(requester).then(if (dashboard != null)
             Modifier.focusProperties { if (sidebarOnRight) left = dashboard else right = dashboard } else Modifier)
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused(section) }
         .testTag("rail-${section.name}").semantics { contentDescription = labels.section(section); this.selected = active },
