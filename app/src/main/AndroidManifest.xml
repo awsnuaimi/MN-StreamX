@@ -6,9 +6,6 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-
-    <!-- الأذونات الأساسية -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- The cloud provider consumes the player's decoded PCM, never a microphone. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
@@ -21,7 +18,7 @@
     <application
         android:name=".IptvApplication"
         android:usesCleartextTraffic="true"
-        android:banner="@drawable/tv_banner"
+        android:banner="@drawable/mn_streamx_tv_banner"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -32,26 +29,9 @@
         android:theme="@style/Theme.IPTVPlayer"
         tools:targetApi="31">
 
-        <provider
-            android:name=".update.UpdateFileProvider"
-            android:authorities="${applicationId}.updates"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/update_paths" />
-        </provider>
-
-        <provider
-            android:name=".diagnostics.DiagnosticFileProvider"
-            android:authorities="${applicationId}.diagnostics"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/diagnostic_paths" />
-        </provider>
-
         <activity
             android:name=".MainActivity"
+            android:banner="@drawable/mn_streamx_tv_banner"
             android:exported="true"
             android:theme="@style/Theme.IPTVPlayer"
             android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|smallestScreenSize|uiMode"
