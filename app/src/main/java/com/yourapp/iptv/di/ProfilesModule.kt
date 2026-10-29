@@ -22,7 +22,7 @@ object ProfilesModule {
         database: AppDatabase): ProfileRepository {
         val app = context.applicationContext
         val cleaner = ProfileCleaner(database.profileFavoriteDao(),listOf(app.watchHistoryStore,app.vodProgressStore,
-            app.searchHistoryStore,app.homeSessionStore))
+            app.searchHistoryStore,app.homeSessionStore,app.organizationStore))
         return StoredProfiles(app.profilesStore,DeviceProfileCipher(),pin,CoroutineScope(SupervisorJob() + Dispatchers.IO),
             seed = { HomeAppearanceCodec.decode(app.homeAppearanceStore.data.first()) to
                 PlayerAppearanceCodec.decode(app.playerAppearanceStore.data.first()) },purge = cleaner::purge)

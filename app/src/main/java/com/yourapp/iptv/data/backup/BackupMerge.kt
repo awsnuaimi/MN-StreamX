@@ -40,6 +40,9 @@ internal object BackupMerge {
         incoming.areas[area].orEmpty().forEach { (name, value) ->
             when {
                 area in PortablePreferences.global && options.settings -> old[name] = value
+                area == BackupStore.ORGANIZATION && name.startsWith("live_") -> {
+                    if (options.settings) old[name] = value
+                }
                 area == BackupStore.ORGANIZATION && options.folders -> {
                     val key = name.removePrefix("source_")
                     val local = OrganizationCodec.decode(old[name]?.text, key)

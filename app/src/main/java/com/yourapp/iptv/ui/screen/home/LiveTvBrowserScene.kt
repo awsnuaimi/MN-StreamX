@@ -11,6 +11,8 @@ import com.yourapp.iptv.ui.presentation.HomeTranslationKind
 import com.yourapp.iptv.ui.screen.parental.LocalParentalSession
 import com.yourapp.iptv.ui.state.HomeUiState
 import com.yourapp.iptv.viewmodel.HomeGuideViewModel
+import com.yourapp.iptv.viewmodel.LiveTvPreferencesViewModel
+import com.yourapp.iptv.ui.state.LiveTvPreferencesState
 
 @Composable
 internal fun LiveTvBrowserScene(state: HomeUiState, appearance: HomeAppearance, labels: HomeLabels,
@@ -18,7 +20,10 @@ internal fun LiveTvBrowserScene(state: HomeUiState, appearance: HomeAppearance, 
     onFavorite: (Channel) -> Unit, canFavorite: Boolean,
     onPosition: (String, HomeGridPosition) -> Unit, onRestored: (Long) -> Unit,
     modifier: Modifier = Modifier, model: HomeGuideViewModel = hiltViewModel(key = "live-reference-guide"),
-    sidebarFocus: FocusRequester? = null, entryFocus: FocusRequester? = null) {
+    sidebarFocus: FocusRequester? = null, entryFocus: FocusRequester? = null, preferences: LiveTvPreferencesViewModel = hiltViewModel()) {
+    val personal by preferences.state.collectAsStateWithLifecycle()
+    LaunchedEffect(state.browseScope) { preferences.bind(state.browseScope) }
+    val scoped = personal.takeIf { it.scope == state.browseScope } ?: LiveTvPreferencesState(state.browseScope)
     val guides by model.uiState.collectAsStateWithLifecycle()
     val access = LocalParentalSession.current.state
     DisposableEffect(model) { onDispose { model.bind(emptyList()) } }
@@ -27,6 +32,8 @@ internal fun LiveTvBrowserScene(state: HomeUiState, appearance: HomeAppearance, 
             onTranslate = { channel ->
                 if (HomeChannelPresentation.kind(captions) == HomeTranslationKind.GENERATED) onPlay(channel) else setup()
             }, onFavorite = onFavorite, canFavorite = canFavorite, onPosition = onPosition,
-            onRestored = onRestored, onGuideChannels = { model.bind(it, HomeGuideViewModel.MAX_BROWSER_CHANNELS) }, modifier = modifier, sidebarFocus = sidebarFocus, entryFocus = entryFocus)
+            onRestored = onRestored, onGuideChannels = { model.bind(it, HomeGuideViewModel.MAX_BROWSER_CHANNELS) }, modifier = modifier, sidebarFocus = sidebarFocus, entryFocus = entryFocus,
+            preferences = scoped, onPreference = { preferences.change(state.browseScope, it) },
+            onPreferencesRetry = { preferences.bind(state.browseScope, retry = true) })
     }
 }

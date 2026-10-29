@@ -4,10 +4,12 @@ import com.yourapp.iptv.domain.model.Channel
 import java.text.Collator
 import java.text.Normalizer
 import java.util.Locale
+import java.security.MessageDigest
 
 internal enum class LiveChannelSort { PROVIDER, NAME, FAVORITES }
-internal data class LiveChannelRow(val key: String, val title: String, val variants: List<Channel>, val colorIndex: Int = 0) {
-    fun channel(preferred: String?): Channel = variants.firstOrNull { it.id == preferred } ?: variants.first()
+internal data class LiveChannelRow(val key: String, val title: String, val variants: List<Channel>, val colorIndex: Int = 0, val preferenceKey: String = key) {
+    fun channel(preferred: String?, defaults: Map<String, String> = emptyMap()): Channel =
+        variants.firstOrNull { it.id == defaults[preferenceKey] } ?: variants.firstOrNull { it.id == preferred } ?: variants.first()
     val qualities: List<String> get() = variants.mapNotNull(HomeChannelPresentation::quality).distinct()
     val favorite: Boolean get() = variants.any { it.isFavorite }
     override fun toString() = "LiveChannelRow(variants=${variants.size})"
@@ -31,11 +33,19 @@ internal object LiveChannelRows {
                 Normalizer.normalize(title(channel), Normalizer.Form.NFKC).lowercase(Locale.ROOT))
             groups.getOrPut(key) { mutableListOf() }.add(channel)
         }
-        val rows = groups.values.mapIndexed { index, group ->
+        val digest = MessageDigest.getInstance("SHA-256")
+        val rows = groups.entries.mapIndexed { index, (family, group) ->
             val variants = group.distinctBy { it.id }.sortedBy {
                 rank.indexOf(HomeChannelPresentation.quality(it)).takeIf { n -> n >= 0 } ?: Int.MAX_VALUE
             }
-            LiveChannelRow(group.first().id, title(group.first()), variants, index)
+            val identity = buildString { family.forEach { append(it.length); append(':'); append(it) } }
+            val key = buildString(64) {
+                val hex = "0123456789abcdef"
+                digest.digest(identity.toByteArray(Charsets.UTF_8)).forEach { byte ->
+                    val n = byte.toInt() and 255; append(hex[n ushr 4]); append(hex[n and 15])
+                }
+            }
+            LiveChannelRow(group.first().id, title(group.first()), variants, index, key)
         }
         val collator = Collator.getInstance(locale)
         return when (sort) {

@@ -10,7 +10,8 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.*import com.yourapp.iptv.domain.model.*
+import androidx.compose.ui.unit.*
+import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.ui.presentation.*
 import kotlinx.coroutines.flow.*
 
@@ -23,7 +24,7 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
     categoryFocus: FocusRequester, watchFocus: FocusRequester,
     showDetail: Boolean, modifier: Modifier = Modifier, showLogos: Boolean = true,
     navigation: LiveTvListNavigation = remember { LiveTvListNavigation() },
-    sidebarFocus: FocusRequester? = null, ready: Boolean = true) {
+    sidebarFocus: FocusRequester? = null, ready: Boolean = true, preferredQualities: Map<String, String> = emptyMap()) {
     val list = rememberLazyListState()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -32,16 +33,16 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
     val spacingPx = with(density) { 5.dp.roundToPx() }
     var focusedId by remember { mutableStateOf<String?>(null) }
     var restoring by remember { mutableStateOf(false) }
-    var focusKey by remember { mutableStateOf<String?>(null) }
     var restoredId by remember { mutableStateOf<String?>(null) }
     var geometry by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    val targetFocus = remember { FocusRequester() }
+    val mounted = remember { mutableStateMapOf<String, FocusRequester>() }
     val currentRows by rememberUpdatedState(rows)
     val currentActive by rememberUpdatedState(activeKey)
     val visibleCallback by rememberUpdatedState(onVisible)
     val positionCallback by rememberUpdatedState(onPosition)
     val restoredCallback by rememberUpdatedState(onRestored)
     val preferred by rememberUpdatedState(selectedChannelId)
+    val defaults by rememberUpdatedState(preferredQualities)
     val viewport by remember { derivedStateOf { list.layoutInfo.let { it.viewportEndOffset - it.viewportStartOffset } } }
     val selectedIndex = rows.indexOfFirst { row -> row.variants.any { it.id == selectedChannelId } }
 
@@ -55,14 +56,14 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
         if (!selected && (!reflow || !navigation.ownsFocus)) return@LaunchedEffect
         val index = if (selected) selectedIndex else rows.indexOfFirst { it.key == activeKey }.coerceAtLeast(0)
         val position = if (selected) restore?.position else HomeGridPosition(
-            rows.getOrNull(list.firstVisibleItemIndex)?.channel(selectedChannelId)?.id, list.firstVisibleItemScrollOffset, 1)
+            rows.getOrNull(list.firstVisibleItemIndex)?.channel(selectedChannelId, preferredQualities)?.id, list.firstVisibleItemScrollOffset, 1)
         navigation.request(rows[index].key, position, if (selected) restore?.token else null, instant = true)
     }
     LaunchedEffect(navigation, rows, ready, rowPx) {
         navigation.requests.collectLatest { request ->
             if (request == null || !ready || rows.isEmpty()) return@collectLatest
-            val index = rows.indexOfFirst { it.key == (request.key ?: currentActive) }.takeIf { it >= 0 } ?: 0
-            focusKey = rows[index].key
+            val index = rows.indexOfFirst { it.key == (request.key ?: currentActive) }.takeIf { it >= 0 }
+                ?: rows.indexOfFirst { it.key == currentActive }.takeIf { it >= 0 } ?: 0
             restoring = true
             try {
                 snapshotFlow { list.layoutInfo.totalItemsCount == rows.size && viewport > 0 }.first { it }
@@ -85,10 +86,9 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
                         if (delta != 0) list.animateScrollBy(delta.toFloat())
                     }
                 }
-                snapshotFlow { list.layoutInfo.visibleItemsInfo.any { it.index == index } }.first { it }
-                withFrameNanos { }
+                snapshotFlow { list.layoutInfo.visibleItemsInfo.any { it.index == index } && mounted[rows[index].key] != null }.first { it }
                 if (!navigation.current(request.revision)) return@collectLatest
-                targetFocus.requestFocus()
+                mounted[rows[index].key]?.requestFocus()
                 if (rows[index].variants.any { it.id == preferred }) restoredId = preferred
                 request.token?.let(restoredCallback)
                 navigation.finish(request.revision)
@@ -130,7 +130,7 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
     LaunchedEffect(list) {
         snapshotFlow { list.layoutInfo.visibleItemsInfo.filter {
             it.offset < list.layoutInfo.viewportEndOffset && it.offset + it.size > list.layoutInfo.viewportStartOffset
-        }.mapNotNull { currentRows.getOrNull(it.index)?.channel(preferred) } }
+        }.mapNotNull { currentRows.getOrNull(it.index)?.channel(preferred, defaults) } }
             .distinctUntilChanged().collect { visibleCallback(it) }
     }
     DisposableEffect(list) { onDispose { visibleCallback(emptyList()) } }
@@ -139,7 +139,7 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
             focusedId?.takeUnless { restoring || list.isScrollInProgress }) }
             .filter { it.third != null }.distinctUntilChanged().collect { (index, offset, id) ->
                 if (currentRows.none { row -> row.variants.any { it.id == id } }) return@collect
-                val anchor = currentRows.getOrNull(index)?.channel(preferred)?.id ?: return@collect
+                val anchor = currentRows.getOrNull(index)?.channel(preferred, defaults)?.id ?: return@collect
                 positionCallback(id!!, HomeGridPosition(anchor, offset, 1))
             }
     }
@@ -149,13 +149,18 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
             .testTag(if (ready) "live-channel-list" else "live-channel-list-loading"),
             verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(vertical = 1.dp)) {
             itemsIndexed(rows, key = { _, row -> row.key }, contentType = { _, _ -> "live-reference-row" }) { _, row ->
-                val channel = row.channel(selectedChannelId)
+                val channel = row.channel(selectedChannelId, preferredQualities)
+                val rowFocus = remember(row.key) { FocusRequester() }
+                DisposableEffect(row.key, rowFocus) {
+                    mounted[row.key] = rowFocus
+                    onDispose { if (mounted[row.key] === rowFocus) mounted.remove(row.key) }
+                }
                 LiveTvChannelRow(row, program(channel), badge(channel), row.key == activeKey, colors, labels,
                     { onWatch(channel) }, { onMenu(row) }, Modifier.height(rowHeight)
                         .testTag("live-channel-${row.key}")
-                        .then(if (row.key == focusKey) Modifier.focusRequester(targetFocus) else Modifier)
+                        .focusRequester(rowFocus)
                         .onFocusChanged { if (it.isFocused) { focusedId = channel.id; onFocused(channel) } },
-                    narrow, showLogos = showLogos, preferredChannelId = selectedChannelId)
+                    narrow, showLogos = showLogos, preferredChannelId = channel.id)
             }
         }
     }

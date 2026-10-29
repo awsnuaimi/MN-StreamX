@@ -27,6 +27,11 @@ class SettingsDataStore internal constructor(
         emitAll(store.data.map(::read).distinctUntilChanged())
     }.flowOn(Dispatchers.IO)
 
+    /** Read only, without entering AppDataGate again. Caller already owns the application write gate. */
+    internal suspend fun committedSettings(): AppSettings = store.data.first().let { values ->
+        (if (values[accounts] == null) LegacySettingsCodec.read(values) else read(values)).active.settings
+    }
+
     override fun observeSettings(): Flow<AppSettings> = observeSubscriptions().map { it.active.settings }.distinctUntilChanged()
 
     override suspend fun saveSettings(settings: AppSettings) { modify { old ->

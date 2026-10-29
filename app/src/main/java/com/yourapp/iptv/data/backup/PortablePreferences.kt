@@ -20,7 +20,7 @@ internal object PortablePreferences {
             val original = requireNotNull(stores[area])
             if (area in global) canonicalGlobal(area, original)
             else BackupPreferenceCodec.values(original).filterKeys { name ->
-                if (area == BackupStore.ORGANIZATION) name in organizationKeys
+                if (area == BackupStore.ORGANIZATION) (name in organizationKeys || personalKey(name, keys))
                 else name.removePrefix(prefix(area)).let { it in keys && name == prefix(area) + it }
             }.mapValues { (name, value) -> canonicalRecord(area, name, value) }
         }
@@ -35,15 +35,17 @@ internal object PortablePreferences {
             if (area in global) {
                 require(values == canonicalGlobal(area, BackupPreferenceCodec.preferences(values)))
             } else {
-                require(values.size <= Subscriptions.LIMIT * (if (area == BackupStore.ORGANIZATION) 1 else profiles.size))
+                require(values.size <= Subscriptions.LIMIT * (if (area == BackupStore.ORGANIZATION) 1 + profiles.size else profiles.size))
                 values.forEach { (name, value) ->
-                    require(if (area == BackupStore.ORGANIZATION) name in organizationKeys
+                    require(if (area == BackupStore.ORGANIZATION) (name in organizationKeys || personalKey(name, keys))
                         else name.startsWith(prefix(area)) && name.removePrefix(prefix(area)) in keys)
                     canonicalRecord(area, name, value)
                 }
             }
         }
     }
+    private fun personalKey(name: String, scopes: Set<String>) =
+        name.startsWith("live_") && name.removePrefix("live_") in scopes
     fun sourceKeys(accounts: Subscriptions, profiles: List<UserProfile> = UserProfiles().entries) =
         profiles.flatMap { person -> accounts.entries.filter { it.settings.hasSelectedSource() }
             .map { ProfileScope.key(person.id,PlaylistCacheKey.of(it.settings)) } }.toSet()
@@ -68,6 +70,8 @@ internal object PortablePreferences {
     }
     fun canonicalRecord(area: BackupStore, name: String, value: BackupValue): BackupValue {
         require(value.type == BackupValueType.STRING)
+        if (area == BackupStore.ORGANIZATION && name.startsWith("live_"))
+            return BackupValue(BackupValueType.STRING, LiveTvPreferencesCodec.encode(LiveTvPreferencesCodec.decode(value.text)))
         val root = record(value.text, if (area == BackupStore.ORGANIZATION) 8 * 1024 * 1024 else 64 * 1024)
         val text = when (area) {
             BackupStore.ORGANIZATION -> OrganizationCodec.encode(OrganizationCodec.decode(value.text, name.removePrefix("source_")))

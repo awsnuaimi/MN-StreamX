@@ -67,7 +67,8 @@ internal class EncryptedBackupRepository(
             val candidate = Staged(token, clock(), value)
             prepared = candidate
             staged.set(candidate)
-            fun count(area: BackupStore, array: String) = value.areas[area].orEmpty().values.sumOf {
+            fun count(area: BackupStore, array: String) = value.areas[area].orEmpty()
+                .filterKeys { area != BackupStore.ORGANIZATION || !it.startsWith("live_") }.values.sumOf {
                 JsonParser.parseString(it.text).asJsonObject.getAsJsonArray(array).size()
             }
             BackupPreview(token, value.createdAt, BackupMerge.usefulEntries(value.subscriptions).map { it.name },

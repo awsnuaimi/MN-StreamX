@@ -23,7 +23,7 @@ import com.yourapp.iptv.ui.presentation.LiveChannelSort
 @Composable
 internal fun LiveTvHeader(title: String, visible: Int, total: Int, query: String, onQuery: (String) -> Unit,
     sort: LiveChannelSort, onSort: (LiveChannelSort) -> Unit, labels: HomeLabels, colors: HomeTvPalette,
-    categories: FocusRequester? = null, entry: FocusRequester? = null) {
+    categories: FocusRequester? = null, entry: FocusRequester? = null, onManage: (() -> Unit)? = null, canSort: Boolean = true) {
     var search by rememberSaveable { mutableStateOf(false) }
     var sorting by remember { mutableStateOf(false) }
     var requestField by remember { mutableStateOf(false) }
@@ -55,8 +55,10 @@ internal fun LiveTvHeader(title: String, visible: Int, total: Int, query: String
                 LiveTvPill(labels.text("بحث", "Search", "Suchen"), colors,
                     { if (shown) close() else { search = true; requestField = true } },
                     Modifier.focusRequester(button).testTag("live-search"))
+                if (onManage != null) LiveTvPill(labels.text("المخفي", "Hidden", "Ausgeblendet"), colors, onManage,
+                    Modifier.testTag("live-hidden"))
                 Box {
-                    LiveTvPill(labels.text("الترتيب", "Sort", "Sortieren"), colors, { sorting = true },
+                    LiveTvPill(labels.text("الترتيب", "Sort", "Sortieren"), colors, { if (canSort) sorting = true },
                         Modifier.focusRequester(sortButton).testTag("live-sort"))
                     DropdownMenu(sorting, { sorting = false; sortButton.requestFocus() }) {
                         LiveChannelSort.entries.forEach { value ->

@@ -14,7 +14,7 @@ internal class ProfileCleaner(private val favorites: ProfileFavoriteDao,
         favorites.removeNamespace(prefix)
         for (store in stores) store.updateData { prefs -> prefs.toMutablePreferences().apply {
             asMap().keys.filter { key ->
-                listOf("history_","vod_","search_","session_").any { key.name.startsWith(it + prefix) }
+                listOf("history_","vod_","search_","session_","live_").any { key.name.startsWith(it + prefix) }
             }.forEach { key -> remove(stringPreferencesKey(key.name)) }
         } }
     }
