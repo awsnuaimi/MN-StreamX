@@ -13,6 +13,7 @@ import com.yourapp.iptv.domain.organization.*
 import com.yourapp.iptv.ui.component.organization.organizationFolderLabels
 import com.yourapp.iptv.ui.presentation.FolderDisplayOrder
 import com.yourapp.iptv.ui.presentation.LiveChannelRows
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -22,13 +23,13 @@ private data class LiveCategory(val key: String?, val title: String, val count: 
 @Composable
 internal fun LiveTvCategories(groups: List<String>, channels: List<Channel>, tree: OrganizationTree,
     selected: String?, labels: HomeLabels, colors: HomeTvPalette, entry: FocusRequester,
-    onSelect: (String?) -> Unit) {
+    onSelect: (String?) -> Unit, projectionDispatcher: CoroutineDispatcher = Dispatchers.Default) {
     val names = organizationFolderLabels()
     val folder = tree.folder(FolderFilter.id(selected))
     val parent = if (folder != null && tree.children(folder.id).isNotEmpty()) folder.id else folder?.parentId
-    val input = remember(groups, channels, tree, parent, names) { Any() }
+    val input = remember(groups, channels, tree, parent, names, projectionDispatcher) { Any() }
     val result by produceState<Pair<Any, List<LiveCategory>>?>(null, input) {
-        value = input to withContext(Dispatchers.Default) {
+        value = input to withContext(projectionDispatcher) {
             if (tree.enabled) {
                 val children = tree.children(parent).filter { (tree.counts[it.id] ?: 0) > 0 }
                 val titles = children.associate { it.id to it.name.ifBlank { names[it.label ?: FolderLabel.OTHER].orEmpty() } }

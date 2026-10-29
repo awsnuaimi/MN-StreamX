@@ -28,11 +28,15 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w960dp-h540dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class, ExperimentalCoroutinesApi::class)
 class LiveTvReferenceTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val channels = listOf("TTV", "TV4", "TV6", "TVN", "TVN 7", "TVN STYLE", "TVN FABULA", "TVP 1")
@@ -54,7 +58,9 @@ class LiveTvReferenceTest {
 
     private fun board(value: HomeUiState = state, guide: HomeGuideState = guides,
         language: HomeLanguage = HomeLanguage.GERMAN, scale: Float = 1f,
-        shown: () -> Boolean = { true }, onQuery: (String) -> Unit = {}, onGroup: (String?) -> Unit = {}) {
+        shown: () -> Boolean = { true }, onQuery: (String) -> Unit = {}, onGroup: (String?) -> Unit = {},
+        projectionDispatcher: CoroutineDispatcher? = null, awaitReady: Boolean = true,
+        valueProvider: () -> HomeUiState = { value }) {
         compose.setContent {
             IPTVAppTheme {
                 val input = LocalInputModeManager.current
@@ -68,19 +74,29 @@ class LiveTvReferenceTest {
                     Surface(Modifier.fillMaxSize().testTag("live-reference-board")) {
                         Row(Modifier.fillMaxSize()) {
                             HomeSidebar(appearance, labels, HomeSection.LIVE, false, focus, {}, {}, liveBrowser = true)
-                            if (shown()) LiveTvBrowser(value, appearance, labels, guide, 7, captions,
+                            if (shown()) LiveTvBrowser(valueProvider(), appearance, labels, guide, 7, captions,
                                 onQuery, onGroup, { played = it.id }, { translated = it.id }, { favorite = it.id }, true,
-                                { id, item -> position = id to item }, { restored = it }, { bound += it }, Modifier.weight(1f))
+                                { id, item -> position = id to item }, { restored = it }, { bound += it }, Modifier.weight(1f),
+                                projectionDispatcher = projectionDispatcher ?: Dispatchers.Main.immediate)
                         }
                     }
                 }
             }
         }
-        if (shown()) compose.waitUntil(10_000) { compose.onAllNodesWithTag("live-channel-${value.visibleChannels.firstOrNull()?.id}")
-            .fetchSemanticsNodes().isNotEmpty() }
+        if (shown() && awaitReady) awaitList()
         compose.waitForIdle()
     }
-    private fun focus(tag: String) { compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.RequestFocus) { it() } }
+    private fun awaitList() {
+        // Lazy content is ready even when item zero is outside the composed viewport.
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("live-channel-list").fetchSemanticsNodes().size == 1 }
+        compose.waitForIdle()
+    }
+    private fun focus(tag: String) {
+        if (tag.startsWith("live-channel-")) {
+            compose.onNodeWithTag("live-channel-list").performScrollToNode(hasTestTag(tag))
+        }
+        compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+    }
     private fun preview(name: String) {
         val destination = System.getProperty("mnx.preview.dir") ?: return
         compose.runOnIdle {
@@ -175,6 +191,32 @@ class LiveTvReferenceTest {
         compose.onNodeWithTag("live-channel-7").assertIsDisplayed().assertIsFocused()
         preview("live-tv-reference-ar-large.png")
     }
+    @Test fun arabicRestorationCanStartAtTheEndWhileTheFirstRowIsNotComposed() {
+        board(state.copy(selectedChannelId = "7", gridRestore = HomeGridRestore(92, HomeGridPosition("5", 0, 1))),
+            language = HomeLanguage.ARABIC, scale = 2f)
+        compose.onNodeWithTag("live-channel-7").assertIsDisplayed().assertIsFocused()
+        compose.onNodeWithTag("live-channel-0").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(92L, restored); assertNull(played) }
+    }
+
+    @Test fun queuedProjectionLoadsOnlyAfterItsWorkerRunsAndDropsThePreviousOwner() {
+        val worker = StandardTestDispatcher()
+        var current by mutableStateOf(state)
+        board(projectionDispatcher = worker, awaitReady = false, valueProvider = { current })
+        compose.onNodeWithTag("live-channel-list").assertDoesNotExist()
+        compose.runOnIdle {
+            val channel = channels[0].copy(id = "new", name = "New owner HD", streamUrl = "https://synthetic.invalid/new")
+            current = state.copy(channels = listOf(channel), visibleChannels = listOf(channel), browseScope = "new-owner")
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("live-channel-list").assertDoesNotExist()
+        worker.scheduler.runCurrent()
+        awaitList()
+        compose.onNodeWithTag("live-channel-new").assertIsDisplayed()
+        compose.onNodeWithTag("live-channel-0").assertDoesNotExist()
+        compose.onNodeWithText("Programme 0", substring = true).assertDoesNotExist()
+    }
+
     @Test fun hierarchyExposesTheParentAndUsesStableFolderIdentifiers() {
         val folders = listOf(ChannelFolder("pl", name = "Poland"), ChannelFolder("general", "pl", name = "General"))
         val tree = OrganizationTree(true, folders, mapOf("pl" to 8, "general" to 8))

@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.ui.presentation.*
 import com.yourapp.iptv.ui.state.*
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -28,12 +29,13 @@ internal fun LiveTvBrowser(state: HomeUiState, appearance: HomeAppearance, label
     onQuery: (String) -> Unit, onGroup: (String?) -> Unit, onPlay: (Channel) -> Unit,
     onTranslate: (Channel) -> Unit, onFavorite: (Channel) -> Unit, canFavorite: Boolean,
     onPosition: (String, HomeGridPosition) -> Unit, onRestored: (Long) -> Unit,
-    onGuideChannels: (List<Channel>) -> Unit, modifier: Modifier = Modifier) {
+    onGuideChannels: (List<Channel>) -> Unit, modifier: Modifier = Modifier,
+    projectionDispatcher: CoroutineDispatcher = Dispatchers.Default) {
     val colors = liveTvColors(appearance)
     var sort by rememberSaveable(state.browseScope) { mutableStateOf(LiveChannelSort.PROVIDER) }
-    val input = remember(state.visibleChannels, sort, appearance.language) { Any() }
+    val input = remember(state.visibleChannels, sort, appearance.language, projectionDispatcher) { Any() }
     val projected by produceState<Pair<Any, List<LiveChannelRow>>?>(null, input) {
-        value = input to withContext(Dispatchers.Default) {
+        value = input to withContext(projectionDispatcher) {
             LiveChannelRows.project(state.visibleChannels, sort, Locale.forLanguageTag(when (appearance.language) {
                 HomeLanguage.ARABIC -> "ar"; HomeLanguage.ENGLISH -> "en"; HomeLanguage.GERMAN -> "de"
             }))
@@ -62,7 +64,7 @@ internal fun LiveTvBrowser(state: HomeUiState, appearance: HomeAppearance, label
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         LiveTvHeader(labels.section(if (state.favoritesOnly) HomeSection.FAVORITES else HomeSection.LIVE),
             state.visibleChannels.size, state.channels.size, state.query, onQuery, sort, { sort = it }, labels, colors)
-        LiveTvCategories(state.groups, state.channels, state.organization, state.selectedGroup, labels, colors, categories, onGroup)
+        LiveTvCategories(state.groups, state.channels, state.organization, state.selectedGroup, labels, colors, categories, onGroup, projectionDispatcher)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val detail = maxWidth >= 680.dp && LocalDensity.current.fontScale <= 1.6f
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
