@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.ui.state.LiveTvPreferencesState
 
 @Composable
-internal fun LiveTvPreferenceStatus(state: LiveTvPreferencesState, labels: HomeLabels, retry: () -> Unit) {
+internal fun LiveTvPreferenceStatus(state: LiveTvPreferencesState, labels: HomeLabels, retry: () -> Unit, retryModifier: Modifier = Modifier) {
     if (state.saving || state.error) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (state.saving) {
             CircularProgressIndicator(Modifier.size(20.dp))
@@ -18,7 +18,7 @@ internal fun LiveTvPreferenceStatus(state: LiveTvPreferencesState, labels: HomeL
         } else {
             Text(labels.text("تعذّر حفظ الاختيار. لم يُطبّق التغيير.", "Preference could not be saved. Change was not applied.",
                 "Auswahl konnte nicht gespeichert werden. Änderung wurde nicht übernommen."), Modifier.weight(1f))
-            TextButton(onClick = retry, modifier = Modifier.testTag("live-preferences-retry")) {
+            TextButton(onClick = retry, modifier = retryModifier.testTag("live-preferences-retry")) {
                 Text(labels.text("إعادة تحميل", "Reload", "Neu laden"))
             }
         }

@@ -33,7 +33,9 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
             for (section in HomeFocusPolicy.rail.filter { it != HomeSection.SETTINGS }) {
                 Box {
                     RailButton(section, expanded, selected, labels, colors, focusRequesters.getValue(section),
-                        if (selected == HomeSection.DASHBOARD) dashboardFocus else browserFocus, appearance.sidebarOnRight, onFocused) {
+                        if (selected == HomeSection.DASHBOARD) dashboardFocus else browserFocus, appearance.sidebarOnRight, onFocused,
+                        previous = HomeFocusPolicy.rail.indexOf(section).let { HomeFocusPolicy.rail.getOrNull(it - 1) }?.let(focusRequesters::getValue),
+                        next = HomeFocusPolicy.rail.indexOf(section).let { HomeFocusPolicy.rail.getOrNull(it + 1) }?.let(focusRequesters::getValue)) {
                         if (section == HomeSection.MORE) more = true else onSelect(section)
                     }
                     if (section == HomeSection.MORE) DropdownMenu(expanded = more, onDismissRequest = {
@@ -51,7 +53,9 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
             }
         }
         RailButton(HomeSection.SETTINGS, expanded, selected, labels, colors,
-            focusRequesters.getValue(HomeSection.SETTINGS), if (selected == HomeSection.DASHBOARD) dashboardFocus else browserFocus, appearance.sidebarOnRight, onFocused) {
+            focusRequesters.getValue(HomeSection.SETTINGS),
+            if (selected == HomeSection.DASHBOARD) dashboardFocus else browserFocus,
+            appearance.sidebarOnRight, onFocused, previous = focusRequesters.getValue(HomeSection.MORE)) {
             onSelect(HomeSection.SETTINGS)
         }
     }
@@ -60,12 +64,12 @@ internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selecte
 @Composable
 private fun RailButton(section: HomeSection, expanded: Boolean, selected: HomeSection, labels: HomeLabels,
     colors: HomeTvPalette, requester: FocusRequester, dashboard: FocusRequester?, sidebarOnRight: Boolean,
-    onFocused: (HomeSection) -> Unit, onClick: () -> Unit) {
+    onFocused: (HomeSection) -> Unit, previous: FocusRequester? = null, next: FocusRequester? = null, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val active = selected == section
     Surface(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 42.dp)
-        .focusRequester(requester).then(if (dashboard != null)
-            Modifier.focusProperties { if (sidebarOnRight) left = dashboard else right = dashboard } else Modifier)
+        .focusRequester(requester).homeFocusLinks(up = previous, down = next,
+            left = dashboard.takeIf { sidebarOnRight }, right = dashboard.takeUnless { sidebarOnRight })
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused(section) }
         .testTag("rail-${section.name}").semantics { contentDescription = labels.section(section); this.selected = active },
         color = when { active -> colors.accent; focused -> colors.focused; else -> colors.sidebar },

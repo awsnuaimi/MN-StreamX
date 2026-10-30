@@ -20,7 +20,8 @@ internal fun LiveTvBrowserScene(state: HomeUiState, appearance: HomeAppearance, 
     onFavorite: (Channel) -> Unit, canFavorite: Boolean,
     onPosition: (String, HomeGridPosition) -> Unit, onRestored: (Long) -> Unit,
     modifier: Modifier = Modifier, model: HomeGuideViewModel = hiltViewModel(key = "live-reference-guide"),
-    sidebarFocus: FocusRequester? = null, entryFocus: FocusRequester? = null, preferences: LiveTvPreferencesViewModel = hiltViewModel()) {
+    sidebarFocus: FocusRequester? = null, entryFocus: FocusRequester? = null, preferences: LiveTvPreferencesViewModel = hiltViewModel(),
+    headerFocus: FocusRequester? = null, aboveHeader: FocusRequester? = null) {
     val personal by preferences.state.collectAsStateWithLifecycle()
     LaunchedEffect(state.browseScope) { preferences.bind(state.browseScope) }
     val scoped = personal.takeIf { it.scope == state.browseScope } ?: LiveTvPreferencesState(state.browseScope)
@@ -34,6 +35,6 @@ internal fun LiveTvBrowserScene(state: HomeUiState, appearance: HomeAppearance, 
             }, onFavorite = onFavorite, canFavorite = canFavorite, onPosition = onPosition,
             onRestored = onRestored, onGuideChannels = { model.bind(it, HomeGuideViewModel.MAX_BROWSER_CHANNELS) }, modifier = modifier, sidebarFocus = sidebarFocus, entryFocus = entryFocus,
             preferences = scoped, onPreference = { preferences.change(state.browseScope, it) },
-            onPreferencesRetry = { preferences.bind(state.browseScope, retry = true) })
+            onPreferencesRetry = { preferences.bind(state.browseScope, retry = true) }, headerEntry = headerFocus, aboveHeader = aboveHeader)
     }
 }

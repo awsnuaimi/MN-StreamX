@@ -15,6 +15,8 @@ import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,8 +36,24 @@ internal fun liveTvTime(time: Long): String = SimpleDateFormat("HH:mm", Locale.g
 internal fun LiveTvDetail(row: LiveChannelRow, channel: Channel, program: ChannelProgramInfo,
     nowMillis: Long, colors: HomeTvPalette, labels: HomeLabels, translated: Boolean, target: String,
     watch: FocusRequester, backToList: FocusRequester, onWatch: () -> Unit, onTranslation: () -> Unit,
-    modifier: Modifier = Modifier) {
+    modifier: Modifier = Modifier, sidebarOnRight: Boolean? = null, above: FocusRequester? = null) {
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val sidebarRight = sidebarOnRight ?: (direction == androidx.compose.ui.unit.LayoutDirection.Rtl)
+    val translation = remember { FocusRequester() }
+    var watchTop by remember { mutableFloatStateOf(Float.NaN) }
+    var translationTop by remember { mutableFloatStateOf(Float.NaN) }
+    val stacked = watchTop.isFinite() && translationTop.isFinite() && translationTop > watchTop + 1f
+    fun routes(isTranslation: Boolean): Modifier {
+        fun target(arrow: HomeDpad): FocusRequester? = when (HomeDpadPolicy.detail(arrow, isTranslation, stacked,
+            direction == androidx.compose.ui.unit.LayoutDirection.Rtl, sidebarRight)) {
+            HomeDpadPolicy.DetailTarget.OTHER -> if (isTranslation) watch else translation
+            HomeDpadPolicy.DetailTarget.LIST -> backToList
+            HomeDpadPolicy.DetailTarget.HEADER -> above
+            HomeDpadPolicy.DetailTarget.STAY -> null
+        }
+        return Modifier.homeFocusLinks(target(HomeDpad.UP), target(HomeDpad.DOWN),
+            target(HomeDpad.LEFT), target(HomeDpad.RIGHT))
+    }
     val frame = rememberChannelFrame(channel)
     var loaded by remember(channel.id, channel.streamUrl) { mutableStateOf(false) }
     Column(modifier.clip(RoundedCornerShape(12.dp)).background(colors.selected)
@@ -84,9 +102,8 @@ internal fun LiveTvDetail(row: LiveChannelRow, channel: Channel, program: Channe
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                     var focused by remember { mutableStateOf(false) }
                     Surface(onClick = onWatch, modifier = Modifier.focusRequester(watch)
-                        .focusProperties { canFocus = true
-                            if (androidx.compose.ui.unit.LayoutDirection.Ltr == direction) left = backToList else right = backToList
-                        }.onFocusChanged { focused = it.isFocused }.testTag("live-watch"),
+                        .then(routes(false)).focusProperties { canFocus = true }
+                        .onGloballyPositioned { watchTop = it.positionInParent().y }.onFocusChanged { focused = it.isFocused }.testTag("live-watch"),
                         shape = HomeHeroShape, color = colors.accent,
                         border = if (focused) BorderStroke(1.dp, colors.text) else null) {
                         Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
@@ -97,7 +114,8 @@ internal fun LiveTvDetail(row: LiveChannelRow, channel: Channel, program: Channe
                 }
                 LiveTvPill(if (translated) labels.text("مع الترجمة · $target", "With translation · $target", "Mit Übersetzung · $target")
                     else labels.text("إعداد الترجمة", "Set up translation", "Übersetzung einrichten"),
-                    colors, onTranslation, Modifier.testTag("live-translation"), compact = true)
+                    colors, onTranslation, Modifier.focusRequester(translation).then(routes(true))
+                        .onGloballyPositioned { translationTop = it.positionInParent().y }.testTag("live-translation"), compact = true)
             }
         }
     }

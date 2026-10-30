@@ -99,6 +99,23 @@ fun HomeScreen(
     val sidebarFocus = remember { HomeSection.entries.associateWith { FocusRequester() } }
     val dashboardFocus = remember { FocusRequester() }
     val liveContentFocus = remember { FocusRequester() }
+    val liveHeaderFocus = remember { FocusRequester() }
+    val messageFocus = remember { FocusRequester() }
+    val parentalFocus = remember { FocusRequester() }
+    val favoriteRetryFocus = remember { FocusRequester() }
+    val loadingOnly = !state.needsSource && state.isLoading && state.visibleChannels.isEmpty()
+    val messageVisible = state.needsSource || (!loadingOnly && state.channels.isEmpty() && !liveLocked)
+    val browserVisible = !dashboardVisible && !loadingOnly && !messageVisible
+    val contentFocus = when {
+        loadingOnly -> null
+        messageVisible -> messageFocus
+        dashboardVisible -> dashboardFocus
+        else -> liveContentFocus
+    }
+    val lowerFocus = if (browserVisible) liveHeaderFocus else contentFocus
+    val parentalVisible = !dashboardVisible && parental.state.configured
+    val favoriteRetryVisible = favorites.errorMessage != null && !favorites.isSaving
+    val aboveContent = if (favoriteRetryVisible) favoriteRetryFocus else parentalFocus.takeIf { parentalVisible }
     var lastSidebarFocus by rememberSaveable { mutableStateOf(HomeSection.DASHBOARD.name) }
     fun restoreSidebarFocus() {
         val target = HomeFocusPolicy.restore(lastSidebarFocus, state.isLoading || state.isRefreshing,
@@ -164,25 +181,36 @@ fun HomeScreen(
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 HomeSidebar(appearance, labels, selected, state.isLoading || state.isRefreshing,
                     sidebarFocus, { section -> lastSidebarFocus = section.name }, ::select,
-                    dashboardFocus = dashboardFocus,
-                    browserFocus = liveContentFocus.takeIf { !dashboardVisible && !state.isLoading && !state.needsSource && state.channels.isNotEmpty() },
+                    dashboardFocus = contentFocus, browserFocus = contentFocus,
                     liveBrowser = !dashboardVisible, organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = if (dashboardVisible) 30.dp else 0.dp,
                     vertical = if (dashboardVisible) 20.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    if (!dashboardVisible) ParentalHomeControl()
+                    if (parentalVisible) Box(Modifier.focusRequester(parentalFocus).homeFocusLinks(
+                        down = if (favoriteRetryVisible) favoriteRetryFocus else lowerFocus,
+                        left = sidebarFocus.getValue(selected).takeUnless { appearance.sidebarOnRight },
+                        right = sidebarFocus.getValue(selected).takeIf { appearance.sidebarOnRight })) { ParentalHomeControl() }
                     if (state.isRefreshing && state.channels.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    FavoriteFeedback(favorites, viewModel::retryFavorites)
+                    if (favorites.errorMessage != null) Box(Modifier.focusRequester(favoriteRetryFocus).homeFocusLinks(
+                        up = parentalFocus.takeIf { parentalVisible }, down = lowerFocus,
+                        left = sidebarFocus.getValue(selected).takeUnless { appearance.sidebarOnRight },
+                        right = sidebarFocus.getValue(selected).takeIf { appearance.sidebarOnRight })) {
+                        FavoriteFeedback(favorites, viewModel::retryFavorites)
+                    }
                     if (state.organization.readFailed) Text(stringResource(R.string.org_read_warning),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     when {
                         state.needsSource -> HomeMessage(labels.text("أدخل مصدر القنوات من الإعدادات.", "Add a source in settings.", "Quelle in Einstellungen hinzufügen."),
-                            labels.section(HomeSection.SETTINGS), onSettings)
+                            labels.section(HomeSection.SETTINGS), onSettings, Modifier.focusRequester(messageFocus).homeFocusLinks(up = aboveContent,
+                                left = sidebarFocus.getValue(selected).takeUnless { appearance.sidebarOnRight },
+                                right = sidebarFocus.getValue(selected).takeIf { appearance.sidebarOnRight }))
                         state.isLoading && state.visibleChannels.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                         state.channels.isEmpty() && !liveLocked -> HomeMessage(labels.text("لا توجد قنوات محمّلة.", "No channels loaded.", "Keine Sender geladen."),
-                            labels.section(HomeSection.REFRESH), viewModel::refresh)
+                            labels.section(HomeSection.REFRESH), viewModel::refresh, Modifier.focusRequester(messageFocus).homeFocusLinks(up = aboveContent,
+                                left = sidebarFocus.getValue(selected).takeUnless { appearance.sidebarOnRight },
+                                right = sidebarFocus.getValue(selected).takeIf { appearance.sidebarOnRight }))
                         dashboardVisible -> Box(Modifier.weight(1f).fillMaxWidth()) { key(state.browseScope) {
                             HomeDashboardScene(labels, appearance, profileName, dashboardData, state.channels,
                                 state.browseScope, dashboardFocus, onProfiles, onSearch,
@@ -210,7 +238,8 @@ fun HomeScreen(
                                         state.favoritesOnly, id, position)
                                 }, onRestored = viewModel::onGridRestoreHandled,
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                                sidebarFocus = sidebarFocus.getValue(selected), entryFocus = liveContentFocus)
+                                sidebarFocus = sidebarFocus.getValue(selected), entryFocus = liveContentFocus,
+                                headerFocus = liveHeaderFocus, aboveHeader = aboveContent)
                         }
                     }
                 }
@@ -220,11 +249,11 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeMessage(text: String, action: String, onAction: () -> Unit) {
+private fun HomeMessage(text: String, action: String, onAction: () -> Unit, actionModifier: Modifier = Modifier) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(text, style = MaterialTheme.typography.titleMedium)
-            AppButton(action, onAction)
+            AppButton(action, onAction, actionModifier)
         }
     }
 }

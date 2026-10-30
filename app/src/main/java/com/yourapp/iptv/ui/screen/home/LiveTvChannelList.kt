@@ -27,10 +27,12 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
     showDetail: Boolean, modifier: Modifier = Modifier, showLogos: Boolean = true,
     navigation: LiveTvListNavigation = remember { LiveTvListNavigation() },
     sidebarFocus: FocusRequester? = null, ready: Boolean = true, preferredQualities: Map<String, String> = emptyMap(),
-    index: LiveChannelIndex = remember(rows) { LiveChannelIndex(rows) }) {
+    index: LiveChannelIndex = remember(rows) { LiveChannelIndex(rows) },
+    sidebarOnRight: Boolean? = null, emptyEntry: FocusRequester? = null) {
     val list = rememberLazyListState()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
+    val sidebarRight = sidebarOnRight ?: (direction == LayoutDirection.Rtl)
     val rowHeight = (44f * density.fontScale.coerceAtLeast(1f)).dp
     val rowPx = with(density) { rowHeight.roundToPx() }.coerceAtLeast(1)
     val spacingPx = with(density) { 5.dp.roundToPx() }
@@ -114,14 +116,24 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
             else -> 0
         }
         val horizontal = event.key == Key.DirectionLeft || event.key == Key.DirectionRight
-        if (!ready || rows.isEmpty() || (delta == 0 && !horizontal)) false
+        if (delta == 0 && !horizontal) false
         else if (event.type == KeyEventType.KeyUp) true
         else if (event.type != KeyEventType.KeyDown) false
-        else {
+        else if (event.nativeKeyEvent.isCanceled) true
+        else if (!ready || rows.isEmpty()) {
+            when {
+                event.key == Key.DirectionUp -> { navigation.cancel(); categoryFocus.requestFocus() }
+                event.key == Key.DirectionDown && emptyEntry != null -> emptyEntry.requestFocus()
+                horizontal && HomeDpadPolicy.towardSidebar(homeDirection(event.key)!!, sidebarRight) -> {
+                    navigation.cancel(); sidebarFocus?.requestFocus()
+                }
+            }
+            true
+        } else {
             val pending = navigation.requests.value?.key
             val position = index.keyPosition(pending ?: activeKey).coerceAtLeast(0)
             if (horizontal) {
-                val details = if (direction == LayoutDirection.Ltr) Key.DirectionRight else Key.DirectionLeft
+                val details = if (sidebarRight) Key.DirectionLeft else Key.DirectionRight
                 navigation.cancel()
                 if (event.key == details && showDetail) watchFocus.requestFocus()
                 else if (event.key != details && sidebarFocus != null) sidebarFocus.requestFocus()

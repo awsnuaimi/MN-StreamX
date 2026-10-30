@@ -1,13 +1,7 @@
 package com.yourapp.iptv.ui.screen.home
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.*
-import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.organization.*
 import com.yourapp.iptv.ui.component.organization.organizationFolderLabels
@@ -24,7 +18,8 @@ private data class LiveCategory(val key: String?, val title: String, val count: 
 internal fun LiveTvCategories(groups: List<String>, channels: List<Channel>, tree: OrganizationTree,
     selected: String?, labels: HomeLabels, colors: HomeTvPalette, entry: FocusRequester,
     onSelect: (String?) -> Unit, projectionDispatcher: CoroutineDispatcher = Dispatchers.Default,
-    listEntry: FocusRequester? = null, header: FocusRequester? = null) {
+    listEntry: FocusRequester? = null, header: FocusRequester? = null,
+    sidebar: FocusRequester? = null, sidebarOnRight: Boolean = false) {
     val names = organizationFolderLabels()
     val folder = tree.folder(FolderFilter.id(selected))
     val parent = if (folder != null && tree.children(folder.id).isNotEmpty()) folder.id else folder?.parentId
@@ -44,28 +39,18 @@ internal fun LiveTvCategories(groups: List<String>, channels: List<Channel>, tre
         }
     }
     val entries = result?.takeIf { it.first === input }?.second.orEmpty()
-    val list = rememberLazyListState()
-    val vertical = Modifier.focusProperties { listEntry?.let { down = it }; header?.let { up = it } }
-    val activeIndex = entries.indexOfFirst { it.key == selected }.let { if (it < 0) 0 else it + if (parent == null) 1 else 2 }
-    LaunchedEffect(selected, entries) { if (entries.isNotEmpty()) list.animateScrollToItem(activeIndex) }
-    LazyRow(state = list, modifier = Modifier.fillMaxWidth().testTag("live-categories"),
-        horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 2.dp)) {
-        if (parent != null) item("@parent") {
-            LiveTvPill(labels.text("‹ رجوع", "‹ Back", "‹ Zurück"), colors,
-                { onSelect(tree.folder(parent)?.parentId?.let(FolderFilter::of)) }, vertical.testTag("live-category-parent"))
-        }
-        item("@all") {
-            val active = FolderFilter.id(selected) == parent && (tree.enabled || selected == null)
-            LiveTvPill(labels.text("الكل", "All", "Alle"), colors,
-                { onSelect(parent?.let(FolderFilter::of)) }, vertical
-                    .then(if (activeIndex == 0) Modifier.focusRequester(entry) else Modifier)
-                    .testTag("live-category-all").semantics { this.selected = active }, active)
-        }
-        itemsIndexed(entries, key = { _, item -> item.key.orEmpty() }) { index, item ->
-            val active = item.key == selected
-            LiveTvPill("${item.title} · ${item.count}", colors, { onSelect(item.key) }, vertical
-                .then(if (index + (if (parent == null) 1 else 2) == activeIndex) Modifier.focusRequester(entry) else Modifier)
-                .testTag("live-category-${item.key}").semantics { this.selected = active }, active)
+    val targets = buildList {
+        if (parent != null) add(LiveTvCategoryTarget("@parent", "live-category-parent",
+            labels.text("‹ رجوع", "‹ Back", "‹ Zurück"), false) {
+            onSelect(tree.folder(parent)?.parentId?.let(FolderFilter::of))
+        })
+        add(LiveTvCategoryTarget("@all", "live-category-all", labels.text("الكل", "All", "Alle"),
+            FolderFilter.id(selected) == parent && (tree.enabled || selected == null)) { onSelect(parent?.let(FolderFilter::of)) })
+        entries.forEach { item ->
+            add(LiveTvCategoryTarget("group:${item.key}", "live-category-${item.key}",
+                "${item.title} · ${item.count}", item.key == selected) { onSelect(item.key) })
         }
     }
+    val activeIndex = targets.indexOfFirst { it.selected }.coerceAtLeast(0)
+    LiveTvCategoryFocus(targets, activeIndex, colors, entry, header, listEntry, sidebar, sidebarOnRight)
 }

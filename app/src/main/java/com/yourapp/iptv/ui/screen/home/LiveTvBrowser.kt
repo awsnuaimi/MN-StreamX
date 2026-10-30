@@ -14,6 +14,8 @@ import androidx.compose.ui.focus.*
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
@@ -41,7 +43,7 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     sidebarFocus: FocusRequester? = null, entryFocus: FocusRequester? = null,
     preferences: LiveTvPreferencesState = LiveTvPreferencesState(ready = true),
     onPreference: (((LiveTvPreferences) -> LiveTvPreferences) -> Unit)? = null,
-    onPreferencesRetry: () -> Unit = {}) {
+    onPreferencesRetry: () -> Unit = {}, headerEntry: FocusRequester? = null, aboveHeader: FocusRequester? = null) {
     val colors = liveTvColors(appearance)
     LaunchedEffect(catalog.browseScope, catalog.selectedGroup, preferences.value.hiddenGroups, preferences.value.hiddenFolders) {
         val selected = catalog.selectedGroup
@@ -84,7 +86,31 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     val categories = remember { FocusRequester() }; val watch = remember { FocusRequester() }
     val defaultEntry = remember { FocusRequester() }
     val entry = entryFocus ?: defaultEntry
-    val headerFocus = remember { FocusRequester() }
+    val defaultHeader = remember { FocusRequester() }; val headerFocus = headerEntry ?: defaultHeader
+    val hiddenFocus = remember { FocusRequester() }
+    val statusFocus = remember { FocusRequester() }
+    val emptyFocus = remember { FocusRequester() }
+    val contentDirection = LocalLayoutDirection.current
+    val fallbackKind = when {
+        !preferences.ready && preferences.error -> "retry"
+        projected?.first !== input -> "loading"
+        rows.isEmpty() -> "empty"
+        else -> "none"
+    }
+    var fallbackReady by remember(input, fallbackKind) { mutableStateOf(false) }
+    var listFocused by remember { mutableStateOf(false) }
+    val hasStatusRetry = preferences.error && !preferences.saving
+    var statusFocused by remember { mutableStateOf(false) }
+    var previousStatus by remember { mutableStateOf(hasStatusRetry) }
+    val restoreStatus = previousStatus && !hasStatusRetry && statusFocused
+    SideEffect { previousStatus = hasStatusRetry; if (restoreStatus) headerFocus.requestFocus() }
+    var restoreHidden by remember { mutableStateOf(false) }
+    LaunchedEffect(manage, restoreHidden) {
+        if (!manage && restoreHidden) {
+            (if (preferences.ready) hiddenFocus else headerFocus).requestFocus()
+            restoreHidden = false
+        }
+    }
     val navigation = remember { LiveTvListNavigation() }
     val numeric = remember(input, catalog.selectedGroup, catalog.query, catalog.favoritesOnly, accessEpoch) { LiveTvNumberEntry() }
     val numberRows = rowIndex.numberedRows
@@ -93,6 +119,9 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
         jump = { row -> entry.requestFocus(); navigation.request(row.key, instant = true) },
         play = { row -> navigation.cancel(); onPlay(row.channel(focused, preferences.value.preferredQualities)) })
     LiveTvNumberLifetime(numeric, navigation::cancel)
+    LaunchedEffect(fallbackReady, listFocused, rows.isEmpty()) {
+        if (fallbackReady && listFocused && rows.isEmpty()) emptyFocus.requestFocus()
+    }
     LaunchedEffect(menuKey, manage) { if (menuKey != null || manage) numeric.clear() }
     var detailsFocused by remember { mutableStateOf(false) }
     var observedInput by remember { mutableStateOf(input) }
@@ -112,42 +141,51 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
         if (appearance.theme == HomeTheme.DARK_BLUE && !appearance.isNightMode) Color(0xFF112B56) else colors.background,
         colors.background, colors.background))).padding(start = 30.dp, end = 30.dp, top = 16.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        LiveTvPreferenceStatus(preferences, labels, onPreferencesRetry)
+        LiveTvPreferenceStatus(preferences, labels, onPreferencesRetry,
+            Modifier.focusRequester(statusFocus).onFocusChanged { statusFocused = it.isFocused }.homeFocusLinks(up = aboveHeader, down = headerFocus,
+                left = sidebarFocus.takeUnless { appearance.sidebarOnRight }, right = sidebarFocus.takeIf { appearance.sidebarOnRight }))
         LiveTvHeader(labels.section(if (state.favoritesOnly) HomeSection.FAVORITES else HomeSection.LIVE),
             state.visibleChannels.size, state.channels.size, state.query, onQuery, sort, { value -> if (onPreference == null) localSort = value else onPreference { it.copy(sort = LiveTvSort.valueOf(value.name)) } }, labels, colors, categories, headerFocus,
-            onManage = onPreference?.takeIf { preferences.ready }?.let { { manage = true } }, canSort = preferences.ready && !preferences.saving)
-        LiveTvCategories(state.groups, state.channels, state.organization, state.selectedGroup, labels, colors, categories, onGroup, projectionDispatcher, entry, headerFocus)
+            onManage = onPreference?.takeIf { preferences.ready }?.let { { manage = true } }, canSort = preferences.ready && !preferences.saving,
+            sidebar = sidebarFocus, sidebarOnRight = appearance.sidebarOnRight,
+            above = if (hasStatusRetry) statusFocus else aboveHeader, manageEntry = hiddenFocus)
+        LiveTvCategories(state.groups, state.channels, state.organization, state.selectedGroup, labels, colors, categories, onGroup, projectionDispatcher, entry, headerFocus, sidebarFocus, appearance.sidebarOnRight)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().onPreviewKeyEvent(numberKeys)
             .onFocusChanged { if (!it.hasFocus) numeric.clear() }.focusGroup()) {
             val detail = maxWidth >= 680.dp && LocalDensity.current.fontScale <= 1.6f
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Box(Modifier.weight(if (detail) 2.04f else 1f).fillMaxHeight()
-                    .onPreviewKeyEvent(navigation::handle).focusRequester(entry)
-                    .onFocusChanged {
-                        navigation.ownsFocus = it.hasFocus
-                        if (it.isFocused) navigation.enter() else if (!it.hasFocus) navigation.cancel()
-                    }.focusable().testTag("live-list-entry")) {
-                    LiveTvChannelList(rows, state.selectedChannelId, active?.key, state.gridRestore, labels, colors,
-                        program, { HomeChannelPresentation.badge(it, captions) }, { focused = it.id; lastIndex = rowIndex.channelPosition(it.id).coerceAtLeast(0) }, onPlay,
-                        { focused = it.channel(focused, preferences.value.preferredQualities).id; menuKey = it.key }, { visible = it }, onPosition, onRestored,
-                        categories, watch, detail, Modifier.fillMaxSize(), appearance.showChannelLogos,
-                        navigation, sidebarFocus, ready = projected?.first === input, preferredQualities = preferences.value.preferredQualities, index = rowIndex)
-                    if (!preferences.ready && preferences.error) Column(Modifier.align(Alignment.Center)) {
-                        Text(labels.text("تعذّر تحميل تفضيلات القائمة.", "Cannot load list preferences.", "Listeneinstellungen konnten nicht geladen werden."))
-                        TextButton(onClick = onPreferencesRetry) { Text(labels.text("إعادة المحاولة", "Retry", "Erneut versuchen")) }
-                    } else if (projected?.first !== input) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    } else if (rows.isEmpty()) Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(labels.text("لا توجد قنوات تطابق الاختيار.", "No matching channels.", "Keine passenden Sender."), color = colors.text)
-                        LiveTvPill(labels.text("مسح التصفية", "Clear filters", "Filter löschen"), colors,
-                            { onQuery(""); onGroup(null) })
+            val detailAvailable = detail && active != null && channel != null
+            var previousDetail by remember { mutableStateOf(detailAvailable) }
+            val restoreDetail = previousDetail && !detailAvailable && detailsFocused
+            SideEffect { previousDetail = detailAvailable; if (restoreDetail) entry.requestFocus() }
+            CompositionLocalProvider(LocalLayoutDirection provides if (appearance.sidebarOnRight) LayoutDirection.Rtl else LayoutDirection.Ltr) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    CompositionLocalProvider(LocalLayoutDirection provides contentDirection) {
+                        Box(Modifier.weight(if (detail) 2.04f else 1f).fillMaxHeight()
+                            .onPreviewKeyEvent(navigation::handle).focusRequester(entry)
+                            .onFocusChanged {
+                                navigation.ownsFocus = it.hasFocus; listFocused = it.hasFocus
+                                if (it.isFocused) navigation.enter() else if (!it.hasFocus) navigation.cancel()
+                            }.focusable().testTag("live-list-entry")) {
+                            LiveTvChannelList(rows, state.selectedChannelId, active?.key, state.gridRestore, labels, colors,
+                                program, { HomeChannelPresentation.badge(it, captions) }, { focused = it.id; lastIndex = rowIndex.channelPosition(it.id).coerceAtLeast(0) }, onPlay,
+                                { focused = it.channel(focused, preferences.value.preferredQualities).id; menuKey = it.key }, { visible = it }, onPosition, onRestored,
+                                categories, watch, detailAvailable, Modifier.fillMaxSize(), appearance.showChannelLogos,
+                                navigation, sidebarFocus, ready = projected?.first === input, preferredQualities = preferences.value.preferredQualities, index = rowIndex,
+                                sidebarOnRight = appearance.sidebarOnRight, emptyEntry = emptyFocus.takeIf { fallbackReady })
+                            if (fallbackKind != "none") key(input, fallbackKind) {
+                                LiveTvEmptyFocus(fallbackKind, labels, colors, emptyFocus, categories, sidebarFocus, appearance.sidebarOnRight,
+                                    { fallbackReady = it }, onPreferencesRetry, { onQuery(""); onGroup(null) }, Modifier.align(Alignment.Center))
+                            }
+                        }
+                    }
+                    CompositionLocalProvider(LocalLayoutDirection provides contentDirection) {
+                        if (detail && active != null && channel != null) LiveTvDetail(active, channel, program(channel),
+                            guides.forChannel(channel, state.browseScope, accessEpoch).nowMillis, colors, labels, translated,
+                            captions.settings.target.tag.uppercase(Locale.ROOT), watch, entry, { onPlay(channel) },
+                            { onTranslate(channel) }, Modifier.weight(1f).fillMaxHeight().onFocusChanged { detailsFocused = it.hasFocus }.focusGroup(),
+                            sidebarOnRight = appearance.sidebarOnRight, above = categories)
                     }
                 }
-                if (detail && active != null && channel != null) LiveTvDetail(active, channel, program(channel),
-                    guides.forChannel(channel, state.browseScope, accessEpoch).nowMillis, colors, labels, translated,
-                    captions.settings.target.tag.uppercase(Locale.ROOT), watch, entry, { onPlay(channel) },
-                    { onTranslate(channel) }, Modifier.weight(1f).fillMaxHeight().onFocusChanged { detailsFocused = it.hasFocus }.focusGroup())
             }
             if (numeric.active) LiveTvNumberOverlay(numeric, numberRows[numeric.number], labels, colors,
                 Modifier.align(Alignment.TopEnd).padding(8.dp))
@@ -176,5 +214,5 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
             } }, preferredQualities = preferences.value.preferredQualities, saving = preferences.saving)
     }
     if (manage && onPreference != null) LiveTvHiddenDialog(catalog, preferences.value, labels, colors,
-        preferences.saving, onPreference) { manage = false; headerFocus.requestFocus() }
+        preferences.saving, onPreference) { manage = false; restoreHidden = true }
 }
