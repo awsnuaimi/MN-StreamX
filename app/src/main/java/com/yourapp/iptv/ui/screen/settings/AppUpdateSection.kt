@@ -99,11 +99,11 @@ internal fun AppUpdateCard(state: AppUpdateUiState, onUpdate: () -> Unit,
         state.issue?.let { Text(stringResource(updateIssueText(it)), color = MaterialTheme.colorScheme.error) }
         if (state.busy) {
             if (state.phase != AppUpdatePhase.DOWNLOADING) CircularProgressIndicator()
-            AppButton(stringResource(R.string.update_cancel), onCancel, Modifier.testTag("update-cancel"))
+            AppButton(stringResource(R.string.update_cancel), onCancel, settingsFocusTarget("update-cancel").testTag("update-cancel"))
         } else if (state.phase == AppUpdatePhase.READY) {
-            AppButton(stringResource(R.string.update_install), onInstall, Modifier.testTag("update-install"))
+            AppButton(stringResource(R.string.update_install), onInstall, settingsFocusTarget("update-install").testTag("update-install"))
         } else {
-            AppButton(stringResource(R.string.update_action), onUpdate, Modifier.testTag("update-action"))
+            AppButton(stringResource(R.string.update_action), onUpdate, settingsFocusTarget("update-action").testTag("update-action"))
         }
         Text(stringResource(R.string.update_confirmation_note), style = MaterialTheme.typography.bodySmall)
     }

@@ -30,11 +30,11 @@ internal fun StartupPlaybackSetting(viewModel: StartupPlaybackSettingsViewModel 
             state.enabled -> R.string.startup_turn_off
             else -> R.string.startup_turn_on
         }), viewModel::toggle,
-            modifier = Modifier.semantics { stateDescription = value },
+            modifier = settingsFocusTarget("startup-toggle", !state.isLoading && !state.isSaving && !state.readFailed).semantics { stateDescription = value },
             enabled = !state.isLoading && !state.isSaving && !state.readFailed)
         if (state.readFailed) {
             Text(stringResource(R.string.startup_read_error), color = MaterialTheme.colorScheme.error)
-            AppButton(stringResource(R.string.startup_retry), viewModel::load)
+            AppButton(stringResource(R.string.startup_retry), viewModel::load, modifier = settingsFocusTarget("startup-retry"))
         }
         if (state.saveFailed) Text(stringResource(R.string.startup_save_error), color = MaterialTheme.colorScheme.error)
     }

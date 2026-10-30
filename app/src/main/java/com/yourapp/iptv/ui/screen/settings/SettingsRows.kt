@@ -18,12 +18,13 @@ import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 @Composable
 internal fun SettingsActionRow(title: String, summary: String = "", value: String = "",
     category: SettingsCategory, modifier: Modifier = Modifier, enabled: Boolean = true,
-    checked: Boolean? = null, glyph: String = "", onClick: () -> Unit) {
+    checked: Boolean? = null, glyph: String = "", focusKey: String = glyph, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    Surface(onClick = onClick, enabled = enabled,
-        modifier = modifier.tvFocusIndicator(MaterialTheme.shapes.medium).fillMaxWidth().heightIn(min = 44.dp).onFocusChanged { focused = it.isFocused }
+    val binding = LocalSettingsFocus.current
+    Surface(onClick = { binding?.activate(focusKey);onClick() }, enabled = enabled,
+        modifier = modifier.then(settingsFocusTarget(focusKey, enabled)).tvFocusIndicator(MaterialTheme.shapes.medium).fillMaxWidth().heightIn(min = 44.dp).onFocusChanged { focused = it.isFocused }
             .semantics { if (checked != null) toggleableState = if (checked) androidx.compose.ui.state.ToggleableState.On else androidx.compose.ui.state.ToggleableState.Off },
         color = if (focused) colors.primaryContainer else colors.surfaceContainerLow,
         contentColor = colors.onSurface, shape = MaterialTheme.shapes.medium,

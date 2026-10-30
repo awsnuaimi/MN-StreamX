@@ -35,9 +35,9 @@ fun StorageManagementSection(viewModel: StorageManagementViewModel = hiltViewMod
             Text(stringResource(R.string.storage_available, formatSize(snapshot.freeBytes)))
             Text(stringResource(R.string.storage_downloaded, formatSize(snapshot.modelBytes)))
         }
-        AppButton(stringResource(R.string.storage_refresh), viewModel::refresh, enabled = !state.busy)
+        AppButton(stringResource(R.string.storage_refresh), viewModel::refresh, modifier = settingsFocusTarget("storage-refresh", !state.busy), enabled = !state.busy)
         AppButton(stringResource(R.string.storage_delete_button), { confirmation = true },
-            modifier = Modifier.fillMaxWidth(), enabled = !state.busy && modelBytes > 0L)
+            modifier = settingsFocusTarget("storage-delete", !state.busy && modelBytes > 0L).fillMaxWidth(), enabled = !state.busy && modelBytes > 0L)
         if (state.busy) Text(stringResource(R.string.storage_working))
         if (state.blocked) Text(stringResource(R.string.storage_busy), color = MaterialTheme.colorScheme.error)
         if (state.failure) Text(stringResource(R.string.storage_error), color = MaterialTheme.colorScheme.error)

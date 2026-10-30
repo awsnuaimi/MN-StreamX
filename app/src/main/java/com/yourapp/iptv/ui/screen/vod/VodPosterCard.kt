@@ -12,11 +12,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.yourapp.iptv.domain.model.VodItem
+import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 
 @Composable
-internal fun VodPosterCard(item: VodItem, onClick: () -> Unit) {
+internal fun VodPosterCard(item: VodItem, modifier: Modifier = Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+    Surface(onClick = onClick, modifier = modifier.tvFocusIndicator().fillMaxWidth().onFocusChanged { focused = it.isFocused },
         color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
         border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
         shape = RoundedCornerShape(10.dp)) {

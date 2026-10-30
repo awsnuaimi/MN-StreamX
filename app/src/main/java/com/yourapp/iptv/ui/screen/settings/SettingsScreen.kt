@@ -56,7 +56,7 @@ fun SettingsScreen(
     SettingsWorkspace(labels, profiles.catalog.active.name.takeIf { profiles.ready && !profiles.failed }.orEmpty(),
         editor.dirty, editor.saving, editor.saved, editor.error != null,
         canSave = !editor.loading && !editor.failed, onSave = appearanceModel::save,
-        onReset = appearanceModel::reset, onDiscard = appearanceModel::discard, onAction = navigate) { category, first, action ->
+        onReset = appearanceModel::reset, onDiscard = appearanceModel::discard, onAction = navigate, focusScope = editor.value.profileId) { category, first, action ->
         if (category == SettingsCategory.APPEARANCE) SettingsAppearancePanel(editor, labels, first, appearanceModel::update, appearanceModel::load, onPlayerText = { action(SettingsAction.PLAYER) })
         else SettingsSection(category, labels, first, account, viewModel::loadSavedSettings, action)
     }

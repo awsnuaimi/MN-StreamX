@@ -1,7 +1,6 @@
 package com.yourapp.iptv.ui.screen.search
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,11 +9,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -32,7 +28,9 @@ import com.yourapp.iptv.ui.screen.vod.VodDetailsDialog
 import com.yourapp.iptv.ui.screen.vod.VodLabels
 import com.yourapp.iptv.ui.state.SearchUiState
 import com.yourapp.iptv.viewmodel.*
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import com.yourapp.iptv.ui.component.common.*
 
 @Composable
 fun SearchScreen(onBack: () -> Unit, onSettings: () -> Unit, onOpenLive: () -> Unit,
@@ -98,107 +96,145 @@ internal data class SearchActions(
 
 @Composable
 internal fun SearchContent(state: SearchUiState, labels: SearchLabels, actions: SearchActions, restoreRequest: Int = 0) {
-    val queryFocus = remember { FocusRequester() }
-    val resultsFocus = remember { FocusRequester() }
+    val focus = rememberContextFocus("search:${state.sourceKey}")
     val keyboard = LocalSoftwareKeyboardController.current
     val list = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    var selectedKey by rememberSaveable(state.sourceKey) { mutableStateOf<String?>(null) }
-    var restore by remember { mutableIntStateOf(0) }
-    LaunchedEffect(state.sourceKey, restoreRequest) {
-        val selected = selectedKey
-        if (selected == null) {
-            withFrameNanos { }
-            runCatching { queryFocus.requestFocus() }
-        } else {
-            val section = when { selected.startsWith("movie-") -> 1; selected.startsWith("series-") -> 2; else -> 0 }
-            if (list.layoutInfo.totalItemsCount > section) list.scrollToItem(section)
-            withFrameNanos { }
-            restore++
+    val lanes = remember(state.query) { listOf("channel", "movie", "series").map { "$it:${state.query.length}:${state.query}" } }
+    val contexts = (lanes + lanes.map { "$it-actions" } + listOf("controls", "history")).toSet()
+    focus.Resume(contexts, "controls", "query")
+    val controlKeys = buildList {
+        add("back"); add("query")
+        if (state.sourceKey != null && SearchText.normalized(state.query).isNotBlank()) add("submit")
+        if (state.query.isNotEmpty()) add("clear")
+        if (state.sourceError) add("retry-source")
+        if (state.needsSource) add("settings")
+        if (state.historyError) add("history-error")
+    }
+    focus.Restore("controls", controlKeys)
+    val channelKeys = state.channels.map { "channel-${it.id}" }
+    val movieKeys = state.movies.results.map { "movie-${it.id}" }
+    val seriesKeys = state.series.results.map { "series-${it.id}" }
+    focus.Maintain(lanes[0], channelKeys, !state.channelsLoading && !state.channelsSearching)
+    focus.Maintain(lanes[1], movieKeys, state.movies.loaded && !state.movies.loading && !state.movies.searching)
+    focus.Maintain(lanes[2], seriesKeys, state.series.loaded && !state.series.loading && !state.series.searching)
+    val pending = focus.pending
+    LaunchedEffect(pending, lanes) {
+        val section = lanes.indexOfFirst { pending?.context == it || pending?.context == "$it-actions" }
+        if (section >= 0) withTimeoutOrNull(1500) {
+            snapshotFlow { list.layoutInfo.totalItemsCount }.first { it > section }
+            if (focus.pending == pending) list.scrollToItem(section)
         }
     }
+    LaunchedEffect(restoreRequest) {
+        if (restoreRequest > 0) focus.restore(contexts, "controls", "query")
+    }
+    val historyKeys = state.history.map { "history:$it" }
+    val showHistory = SearchText.normalized(state.query).isBlank()
+    if (showHistory) focus.Restore("history", (listOf("clear-history") + historyKeys).takeIf { historyKeys.isNotEmpty() }.orEmpty(),
+        onEmpty = { focus.request("controls", "query") }, scrollTo = { list.scrollToItem(if (it == 0) 1 else it + 1) })
+    fun enterResults() {
+        keyboard?.hide()
+        val sourceAction = when { state.sourceError -> "retry-source"; state.needsSource -> "settings"; else -> null }
+        if (sourceAction != null) { focus.request("controls", sourceAction); return }
+        if (showHistory) {
+            if (historyKeys.isNotEmpty()) focus.request("history", historyKeys.first())
+            return
+        }
+        val available = buildList {
+            if (channelKeys.isNotEmpty() && !state.channelsLoading && !state.channelsSearching) add(lanes[0])
+            if (state.channelsError || state.channelsMissing) add("${lanes[0]}-actions")
+            if (movieKeys.isNotEmpty() && !state.movies.loading) add(lanes[1])
+            if (state.movies.error || state.movies.canScan || state.movies.scanning) add("${lanes[1]}-actions")
+            if (seriesKeys.isNotEmpty() && !state.series.loading) add(lanes[2])
+            if (state.series.error || state.series.canScan || state.series.scanning) add("${lanes[2]}-actions")
+        }
+        val last = focus.bookmarks.entries().lastOrNull { it.first in available }?.first
+        (last ?: available.firstOrNull() ?: lanes[0].takeIf { state.channelsLoading || state.channelsSearching })?.let { focus.request(it) }
+    }
     fun submit() { keyboard?.hide(); actions.onSubmit() }
-    Column(Modifier.fillMaxSize().padding(16.dp).testTag("search-page"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().then(focus.inputModifier()).padding(16.dp).testTag("search-page"),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(onClick = actions.onBack) { Text(labels.back()) }
+            Button(actions.onBack, focus.target("controls", "back", 0).tvFocusIndicator().testTag("search-back")) { Text(labels.back()) }
             Text(labels.title(), style = MaterialTheme.typography.headlineSmall)
         }
         Text(labels.scope(), style = MaterialTheme.typography.bodySmall)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(state.query, {
-                selectedKey = null
-                actions.onQuery(it)
-            }, modifier = Modifier.weight(1f).focusRequester(queryFocus).testTag("search-query")
-                .onPreviewKeyEvent { event ->
-                    if (event.key == Key.DirectionDown && event.type == KeyEventType.KeyDown) {
-                        keyboard?.hide()
-                        scope.launch {
-                            if (list.layoutInfo.totalItemsCount > 0) list.scrollToItem(0)
-                            withFrameNanos { }
-                            runCatching { resultsFocus.requestFocus() }
+            OutlinedTextField(state.query, { focus.cancel(); actions.onQuery(it) },
+                modifier = Modifier.weight(1f).then(focus.target("controls", "query", 1)).testTag("search-query")
+                    .onPreviewKeyEvent { event ->
+                        if (event.key != Key.DirectionDown) false else {
+                            if (event.type == KeyEventType.KeyDown) enterResults()
+                            true
                         }
-                        true
-                    } else false
-                },
+                    },
                 label = { Text(labels.field()) }, singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }))
-            Button(onClick = ::submit, enabled = state.sourceKey != null && SearchText.normalized(state.query).isNotBlank(),
-                modifier = Modifier.testTag("search-submit")) { Text(labels.search()) }
-            if (state.query.isNotEmpty()) TextButton(onClick = { selectedKey = null; actions.onQuery("") }) { Text(labels.clearQuery()) }
+            Button(::submit, enabled = state.sourceKey != null && SearchText.normalized(state.query).isNotBlank(),
+                modifier = focus.target("controls", "submit", 2).tvFocusIndicator().testTag("search-submit")) { Text(labels.search()) }
+            if (state.query.isNotEmpty()) TextButton({
+                actions.onQuery(""); focus.request("controls", "query")
+            }, modifier = focus.target("controls", "clear", 3).tvFocusIndicator()) { Text(labels.clearQuery()) }
         }
         when {
             state.sourceLoading -> LinearProgressIndicator(Modifier.fillMaxWidth())
             state.sourceError -> {
                 Text(labels.sourceError(), color = MaterialTheme.colorScheme.error)
-                OutlinedButton(onClick = actions.onRetrySource) { Text(labels.retry()) }
+                OutlinedButton(actions.onRetrySource, focus.target("controls", "retry-source", 4).tvFocusIndicator()) { Text(labels.retry()) }
             }
             state.needsSource -> {
                 Text(labels.needsSource())
-                OutlinedButton(onClick = actions.onSettings) { Text(labels.settings()) }
+                OutlinedButton(actions.onSettings, focus.target("controls", "settings", 5).tvFocusIndicator()) { Text(labels.settings()) }
             }
         }
         if (state.historyError) {
             Text(labels.historyError(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = actions.onClearHistory) { Text(labels.clearHistory()) }
+            TextButton(actions.onClearHistory, focus.target("controls", "history-error", 6).tvFocusIndicator()) { Text(labels.clearHistory()) }
         }
-        LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth()
-            .focusRequester(resultsFocus).focusGroup().testTag("search-results"),
+        LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth().testTag("search-results"),
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            if (SearchText.normalized(state.query).isBlank()) {
+            if (showHistory) {
                 item(key = "start") { Text(labels.start()) }
                 if (state.history.isNotEmpty()) {
                     item(key = "recent") {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             Text(labels.recent(), style = MaterialTheme.typography.titleMedium)
-                            TextButton(onClick = actions.onClearHistory, modifier = Modifier.testTag("search-clear-history")) { Text(labels.clearHistory()) }
+                            TextButton(actions.onClearHistory, focus.target("history", "clear-history", 0)
+                                .tvFocusIndicator().testTag("search-clear-history")) { Text(labels.clearHistory()) }
                         }
                     }
                     items(state.history, key = { it }) { query ->
-                        OutlinedButton(onClick = { selectedKey = null; actions.onHistory(query) }, modifier = Modifier.fillMaxWidth()) { Text(query) }
+                        OutlinedButton({ actions.onHistory(query); focus.request("controls", "query") },
+                            Modifier.fillMaxWidth().then(focus.target("history", "history:$query", state.history.indexOf(query) + 1))
+                                .tvFocusIndicator()) { Text(query) }
                     }
                 }
             } else if (state.sourceKey != null) {
                 item(key = "channels") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("${labels.channels()} (${state.channels.size})", style = MaterialTheme.typography.titleMedium)
+                        val lane = lanes[0]
+                        val actionKeys = if (state.channelsError) listOf("retry") else if (state.channelsMissing) listOf("live") else emptyList()
+                        focus.Restore("$lane-actions", actionKeys, onEmpty = { focus.request("controls", "query") })
                         when {
                             state.channelsLoading || state.channelsSearching -> LinearProgressIndicator(Modifier.fillMaxWidth())
                             state.channelsError -> {
                                 Text(labels.failed(), color = MaterialTheme.colorScheme.error)
-                                OutlinedButton(onClick = actions.onReloadChannels) { Text(labels.retry()) }
+                                OutlinedButton(actions.onReloadChannels, focus.target("$lane-actions", "retry", 0).tvFocusIndicator()) { Text(labels.retry()) }
                             }
                             state.channelsMissing -> {
                                 Text(labels.missingChannels())
-                                OutlinedButton(onClick = actions.onOpenLive) { Text(labels.live()) }
+                                OutlinedButton(actions.onOpenLive, focus.target("$lane-actions", "live", 0).tvFocusIndicator()) { Text(labels.live()) }
                             }
-                            state.channels.isEmpty() -> Text(labels.noResults())
+                            state.channels.isEmpty() -> {
+                                focus.Restore(lane, emptyList(), onEmpty = { focus.request("controls", "query") })
+                                Text(labels.noResults())
+                            }
                             else -> {
                                 val rows = remember(state.channels) { state.channels.map {
                                     SearchResult("channel-${it.id}", it.name, it.group, it.logoUrl)
                                 } }
-                                SearchResultStrip(rows, selectedKey, restore) { index, key ->
-                                    selectedKey = key; actions.onChannel(state.channels[index])
-                                }
+                                SearchResultStrip(rows, focus, lane) { index, _ -> actions.onChannel(state.channels[index]) }
                             }
                         }
                         if (state.channelsMore) Text(labels.refine(), style = MaterialTheme.typography.bodySmall)
@@ -207,10 +243,11 @@ internal fun SearchContent(state: SearchUiState, labels: SearchLabels, actions: 
                 }
                 for (kind in VodKind.entries) item(key = kind.name) {
                     val lane = if (kind == VodKind.MOVIE) state.movies else state.series
+                    val context = lanes[if (kind == VodKind.MOVIE) 1 else 2]
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("${labels.kind(kind)} (${lane.results.size})", style = MaterialTheme.typography.titleMedium)
-                        SearchVodResults(lane, labels, if (kind == VodKind.MOVIE) "movie" else "series", selectedKey, restore,
-                            onPick = { item, key -> selectedKey = key; actions.onVod(kind, item) },
+                        SearchVodResults(lane, labels, if (kind == VodKind.MOVIE) "movie" else "series", focus, context,
+                            onPick = { item, _ -> actions.onVod(kind, item) },
                             onRetry = { actions.onRetry(kind) }, onScan = { actions.onScan(kind) }, onStop = { actions.onStop(kind) })
                     }
                 }

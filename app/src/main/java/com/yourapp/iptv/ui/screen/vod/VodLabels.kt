@@ -3,7 +3,7 @@ package com.yourapp.iptv.ui.screen.vod
 import com.yourapp.iptv.domain.model.HomeLanguage
 import com.yourapp.iptv.domain.model.VodKind
 
-internal class VodLabels(private val language: HomeLanguage) {
+internal class VodLabels(val language: HomeLanguage) {
     fun text(ar: String, en: String, de: String): String = when (language) {
         HomeLanguage.ARABIC -> ar
         HomeLanguage.ENGLISH -> en

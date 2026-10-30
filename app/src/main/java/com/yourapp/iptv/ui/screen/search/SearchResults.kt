@@ -9,38 +9,30 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.yourapp.iptv.ui.component.common.*
 import com.yourapp.iptv.domain.model.VodItem
 import com.yourapp.iptv.ui.state.SearchVodState
 
 internal data class SearchResult(val key: String, val title: String, val subtitle: String?, val image: String?)
 
 @Composable
-internal fun SearchResultStrip(results: List<SearchResult>, selectedKey: String?, restore: Int,
+internal fun SearchResultStrip(results: List<SearchResult>, focus: ContextFocus, context: String,
     onPick: (Int, String) -> Unit) {
     val list = rememberLazyListState()
-    val restoreFocus = remember { FocusRequester() }
-    LaunchedEffect(restore, selectedKey) {
-        val index = results.indexOfFirst { it.key == selectedKey }
-        if (restore > 0 && index >= 0) {
-            list.scrollToItem(index)
-            withFrameNanos { }
-            runCatching { restoreFocus.requestFocus() }
-        }
-    }
+    val keys = remember(results) { results.map { it.key } }
+    focus.Restore(context, keys, onEmpty = { focus.request("controls", "query") }, scrollTo = { list.scrollToItem(it) })
     LazyRow(state = list, modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         itemsIndexed(results, key = { _, item -> item.key }) { index, item ->
             var focused by remember(item.key) { mutableStateOf(false) }
-            Surface(onClick = { onPick(index, item.key) },
+            Surface(onClick = { focus.record(context, item.key, index); onPick(index, item.key) },
                 modifier = Modifier.width(276.dp).height(104.dp).testTag(item.key)
-                    .then(if (item.key == selectedKey) Modifier.focusRequester(restoreFocus) else Modifier)
+                    .then(focus.target(context, item.key, index)).tvFocusIndicator()
                     .onFocusChanged { focused = it.isFocused },
                 color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
                 border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
@@ -67,13 +59,24 @@ internal fun SearchResultStrip(results: List<SearchResult>, selectedKey: String?
 
 @Composable
 internal fun SearchVodResults(state: SearchVodState, labels: SearchLabels, prefix: String,
-    selectedKey: String?, restore: Int, onPick: (VodItem, String) -> Unit,
+    focus: ContextFocus, context: String, onPick: (VodItem, String) -> Unit,
     onRetry: () -> Unit, onScan: () -> Unit, onStop: () -> Unit) {
+    val actionContext = "$context-actions"
+    val actionKeys = when {
+        state.error -> listOf("retry")
+        state.scanning -> listOf("stop")
+        state.canScan -> listOf("scan")
+        else -> emptyList()
+    }
+    focus.Restore(actionContext, actionKeys, onEmpty = { focus.request("controls", "query") })
+    focus.Maintain(actionContext, actionKeys)
+    if (!state.loading && state.loaded && !state.searching && state.results.isEmpty())
+        focus.Restore(context, emptyList(), onEmpty = { focus.request("controls", "query") })
     when {
         state.unavailable -> Text(labels.unsupported())
         state.error -> {
             Text(labels.failed(), color = MaterialTheme.colorScheme.error)
-            OutlinedButton(onClick = onRetry) { Text(labels.retry()) }
+            OutlinedButton(onClick = onRetry, modifier = focus.target(actionContext, "retry", 0).tvFocusIndicator()) { Text(labels.retry()) }
         }
         state.loading || !state.loaded -> {
             LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -88,14 +91,14 @@ internal fun SearchVodResults(state: SearchVodState, labels: SearchLabels, prefi
             if (state.categoriesFailed > 0) Text(labels.failedCategories(state.categoriesFailed), color = MaterialTheme.colorScheme.error)
             if (state.results.isNotEmpty()) {
                 val rows = remember(state.results) { state.results.map { SearchResult("$prefix-${it.id}", it.name, it.year, it.poster) } }
-                SearchResultStrip(rows, selectedKey, restore) { index, key -> onPick(state.results[index], key) }
+                SearchResultStrip(rows, focus, context) { index, key -> onPick(state.results[index], key) }
             } else if (!state.searching) Text(if (state.categoryScoped && state.categoriesSearched == 0) labels.notSearched() else labels.noResults())
             if (state.more) Text(labels.refine(), style = MaterialTheme.typography.bodySmall)
             if (state.scanning) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
-                OutlinedButton(onClick = onStop, modifier = Modifier.testTag("$prefix-stop")) { Text(labels.stop()) }
+                OutlinedButton(onClick = onStop, modifier = focus.target(actionContext, "stop", 0).tvFocusIndicator().testTag("$prefix-stop")) { Text(labels.stop()) }
             } else if (state.canScan) {
-                OutlinedButton(onClick = onScan, modifier = Modifier.testTag("$prefix-scan")) { Text(labels.scan()) }
+                OutlinedButton(onClick = onScan, modifier = focus.target(actionContext, "scan", 0).tvFocusIndicator().testTag("$prefix-scan")) { Text(labels.scan()) }
             }
         }
     }

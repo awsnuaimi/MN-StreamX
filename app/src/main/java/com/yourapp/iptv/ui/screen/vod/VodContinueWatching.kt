@@ -3,7 +3,6 @@ package com.yourapp.iptv.ui.screen.vod
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -12,19 +11,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.VodProgressEntry
+import com.yourapp.iptv.ui.component.common.*
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
 
 /** Only bounded, locally saved metadata; no catalog or network request. */
 @Composable
 internal fun VodContinueWatching(
-    entries: List<VodProgressEntry>, labels: VodLabels, onPlay: (VodProgressEntry) -> Unit
+    entries: List<VodProgressEntry>, labels: VodLabels, focus: ContextFocus? = null, onPlay: (VodProgressEntry) -> Unit
 ) {
+    val list = rememberLazyListState()
+    val keys = entries.map { "${it.kind}-${it.id}" }
+    focus?.Restore("continued", keys, scrollTo = { list.scrollToItem(it) })
+    focus?.Maintain("continued", keys)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(labels.resume(), style = MaterialTheme.typography.titleMedium)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(entries, key = { "${it.kind}-${it.id}" }) { entry ->
+        LazyRow(state = list, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            itemsIndexed(entries, key = { _, it -> "${it.kind}-${it.id}" }) { index, entry ->
                 var focused by remember { mutableStateOf(false) }
-                Surface(onClick = { onPlay(entry) },
-                    modifier = Modifier.width(210.dp).onFocusChanged { focused = it.isFocused },
+                Surface(onClick = { focus?.record("continued", keys[index], index); onPlay(entry) },
+                    modifier = Modifier.width(210.dp).then(focus?.target("continued", keys[index], index) ?: Modifier)
+                        .tvFocusIndicator().onFocusChanged { focused = it.isFocused },
                     color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                     border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
                     shape = MaterialTheme.shapes.medium) {

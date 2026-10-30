@@ -32,7 +32,7 @@ internal fun SettingsAppearancePanel(state: HomeAppearanceEditorState, labels: S
     if (state.loading) { CircularProgressIndicator();return }
     if (state.failed) {
         SettingsActionRow(stringResource(R.string.ui_reload), stringResource(R.string.ui_home_read_error), category = c,
-            modifier = Modifier.focusRequester(first).testTag("settings-appearance-retry"), onClick = onRetry)
+            modifier = Modifier.focusRequester(first).then(settingsFocusTarget("settings-appearance-retry")).testTag("settings-appearance-retry"), onClick = onRetry)
         return
     }
     SettingsChoiceRow(stringResource(R.string.ui_language), value.language,
@@ -57,7 +57,7 @@ internal fun SettingsAppearancePanel(state: HomeAppearanceEditorState, labels: S
                         label = { Text((if (value.theme == theme) "✓ " else "") + stringResource(title)) },
                         leadingIcon = { Canvas(Modifier.size(13.dp)) { drawCircle(when (theme) {
                             HomeTheme.DARK_BLUE -> Color(0xFF21518A);HomeTheme.RED -> Color(0xFFFF3038);HomeTheme.LIGHT -> Color.White
-                        }) } }, modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.small).testTag("settings-theme-${theme.name}"))
+                        }) } }, modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.small).then(settingsFocusTarget("settings-theme-${theme.name}", enabled)).testTag("settings-theme-${theme.name}"))
                 }
             } }
             if (compact) Column {

@@ -27,14 +27,14 @@ internal fun SettingsSection(category: SettingsCategory, labels: SettingsLabels,
                 if (account.loadFailed) stringResource(R.string.ui_settings_read_error)
                 else if (name.isNotBlank()) stringResource(R.string.subscription_current, name)
                 else text("إضافة الاشتراكات وتعديلها", "Add and edit subscriptions", "Abos hinzufügen und bearbeiten"),
-                category = category, modifier = Modifier.focusRequester(first).testTag("settings-open-subscriptions")) { onAction(SettingsAction.SUBSCRIPTIONS) }
+                category = category, modifier = Modifier.focusRequester(first).testTag("settings-open-subscriptions"), focusKey = "settings-open-subscriptions") { onAction(SettingsAction.SUBSCRIPTIONS) }
             SettingsActionRow(text("إدارة الملفات الشخصية", "Manage profiles", "Profile verwalten"),
                 text("الأسماء والملفات العائلية", "Names and family profiles", "Namen und Familienprofile"), category = category,
-                modifier = Modifier.testTag("settings-open-profiles")) { onAction(SettingsAction.PROFILES) }
+                modifier = Modifier.testTag("settings-open-profiles"), focusKey = "settings-open-profiles") { onAction(SettingsAction.PROFILES) }
         }
         SettingsCategory.PLAYBACK -> {
             SettingsActionRow(stringResource(R.string.ui_player_title), stringResource(R.string.ui_player_hint), category = category,
-                modifier = Modifier.focusRequester(first).testTag("settings-open-player")) { onAction(SettingsAction.PLAYER) }
+                modifier = Modifier.focusRequester(first).testTag("settings-open-player"), focusKey = "settings-open-player") { onAction(SettingsAction.PLAYER) }
             StartupPlaybackSetting()
         }
         SettingsCategory.CAPTIONS -> HomeCaptionHost { state, open ->
@@ -45,18 +45,18 @@ internal fun SettingsSection(category: SettingsCategory, labels: SettingsLabels,
             }
             SettingsActionRow(stringResource(R.string.caption_title),
                 text("اللغة والطريقة والنماذج ومفاتيح الخدمة الخاصة بك", "Language, engine, models and your service credentials", "Sprache, Verfahren, Modelle und eigene Zugangsdaten"),
-                value, category, Modifier.focusRequester(first).testTag("settings-open-captions"), onClick = open)
+                value, category, Modifier.focusRequester(first).testTag("settings-open-captions"), focusKey = "settings-open-captions", onClick = open)
             Text(text("تطبّق الترجمة عند المشاهدة. فتح الإعدادات لا يشغّل الترجمة أو البث.",
                 "Translation runs during playback. Opening settings starts neither translation nor a stream.",
                 "Übersetzung läuft während der Wiedergabe. Einstellungen starten weder Übersetzung noch Stream."),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         SettingsCategory.PARENTAL -> SettingsActionRow(stringResource(R.string.parental_title),
-            labels.description(category), category = category, modifier = Modifier.focusRequester(first).testTag("settings-open-parental")) { onAction(SettingsAction.PARENTAL) }
+            labels.description(category), category = category, modifier = Modifier.focusRequester(first).testTag("settings-open-parental"), focusKey = "settings-open-parental") { onAction(SettingsAction.PARENTAL) }
         SettingsCategory.DATA -> {
             SettingsActionRow(stringResource(R.string.backup_title),
                 text("إنشاء نسخة مشفّرة أو استرجاع نسخة محفوظة", "Create an encrypted backup or restore a saved one", "Verschlüsselte Sicherung erstellen oder wiederherstellen"),
-                category = category, modifier = Modifier.focusRequester(first).testTag("settings-open-backup")) { onAction(SettingsAction.BACKUP) }
+                category = category, modifier = Modifier.focusRequester(first).testTag("settings-open-backup"), focusKey = "settings-open-backup") { onAction(SettingsAction.BACKUP) }
             StorageManagementSection()
         }
         SettingsCategory.UPDATES -> {
@@ -65,7 +65,7 @@ internal fun SettingsSection(category: SettingsCategory, labels: SettingsLabels,
         }
         SettingsCategory.HELP -> {
             SettingsActionRow(stringResource(R.string.diagnostics_title), labels.description(category), category = category,
-                modifier = Modifier.focusRequester(first).testTag("settings-open-diagnostics")) { onAction(SettingsAction.DIAGNOSTICS) }
+                modifier = Modifier.focusRequester(first).testTag("settings-open-diagnostics"), focusKey = "settings-open-diagnostics") { onAction(SettingsAction.DIAGNOSTICS) }
             Text(text("استخدم الأسهم للتنقل، وOK للاختيار، ورجوع للعودة إلى الأقسام. لا تبدأ الفحوص حتى تختار تشغيلها.",
                 "Use arrows to move, OK to select and Back to return to categories. Checks start only when requested.",
                 "Mit Pfeilen navigieren, mit OK auswählen und mit Zurück zu den Kategorien wechseln. Prüfungen starten nur auf Wunsch."),

@@ -21,16 +21,16 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.yourapp.iptv.domain.model.HomeLanguage
-import com.yourapp.iptv.ui.component.common.AppButton
-import com.yourapp.iptv.ui.component.common.rememberedFocusGroup
-import com.yourapp.iptv.ui.component.common.tvFocusIndicator
+import com.yourapp.iptv.ui.component.common.*
+import androidx.compose.ui.input.key.*
 
 /** UI navigation only. Draft persistence and protected destinations stay with their existing owners. */
 @Composable
 internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirty: Boolean, saving: Boolean,
     saved: Boolean, error: Boolean, canSave: Boolean, onSave: () -> Unit, onReset: () -> Unit, onDiscard: () -> Unit,
-    onAction: (SettingsAction) -> Unit,
+    onAction: (SettingsAction) -> Unit, focusScope: String = profileName,
     content: @Composable ColumnScope.(SettingsCategory, FocusRequester, (SettingsAction) -> Unit) -> Unit) {
+    val focus = rememberContextFocus("settings:$focusScope")
     var categoryName by rememberSaveable { mutableStateOf(SettingsCategory.APPEARANCE.name) }
     val selected = SettingsCategory.entries.firstOrNull { it.name == categoryName } ?: SettingsCategory.APPEARANCE
     var query by rememberSaveable { mutableStateOf("") }
@@ -39,24 +39,33 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
     var pending by remember { mutableStateOf<SettingsIntent?>(null) }
     var waitForSave by remember { mutableStateOf(false) }
     var contentFocused by remember { mutableStateOf(false) }
-    var initializedLayout by remember { mutableStateOf<Pair<Boolean, Boolean>?>(null) }
+    var initializedLayout by remember(focus) { mutableStateOf<Pair<Boolean, Boolean>?>(null) }
     val rail = remember { SettingsCategory.entries.associateWith { FocusRequester() } }
     val first = remember { FocusRequester() };val search = remember { FocusRequester() }
     val detailEntry = remember(selected) { FocusRequester() }
-    val saveFocus = remember { FocusRequester() };var restoreSaveFocus by remember { mutableStateOf(false) }
+    val detailContext = "detail:${selected.name}"
+    val contexts = setOf("rail", "tools", detailContext)
+    focus.Resume(contexts, "rail", selected.name, initial = false)
+    val toolKeys = listOf("search", "back") + (if (searchOpen) listOf("query") else emptyList()) +
+        if (selected == SettingsCategory.APPEARANCE && canSave && !saving) listOf("save", "reset") else emptyList()
+    val needsEditor = (focus.pending?.preferred ?: focus.bookmarks.get("tools")?.key) in listOf("save", "reset")
+    focus.Restore("tools", toolKeys, ready = !saving && (!needsEditor || canSave))
+    focus.Restore("rail", SettingsCategory.entries.map { it.name }, ready = !saving)
+    val saveFocus = remember { FocusRequester() }
     val searchButton = remember { FocusRequester() }
     val holder = rememberSaveableStateHolder()
     fun execute(intent: SettingsIntent) {
         pending = null;waitForSave = false
         when (intent) {
-            is SettingsIntent.Category -> { categoryName = intent.value.name;detailOpen = true;query = "";searchOpen = false }
+            is SettingsIntent.Category -> { categoryName = intent.value.name;detailOpen = true;query = "";searchOpen = false;focus.request("detail:${intent.value.name}") }
             is SettingsIntent.Action -> onAction(intent.value)
         }
     }
     fun request(intent: SettingsIntent) {
         if (saving) return
-        if (intent is SettingsIntent.Category && intent.value == selected) { detailOpen = true;query = "";searchOpen = false;return }
-        if (dirty) pending = intent else execute(intent)
+        if (intent is SettingsIntent.Category && intent.value == selected) { detailOpen = true;query = "";searchOpen = false;focus.request(detailContext);return }
+        if (intent is SettingsIntent.Category) focus.record("rail", intent.value.name, intent.value.ordinal)
+        if (dirty) { focus.cancel(); pending = intent } else execute(intent)
     }
     val action: (SettingsAction) -> Unit = { request(SettingsIntent.Action(it)) }
     LaunchedEffect(saved, waitForSave, saving, error) {
@@ -64,14 +73,9 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
             if (saved) pending?.let(::execute) else if (error) waitForSave = false
         }
     }
-    LaunchedEffect(saved, saving, error, restoreSaveFocus) {
-        if (restoreSaveFocus && !saving && (saved || error)) {
-            withFrameNanos { };runCatching { saveFocus.requestFocus() };restoreSaveFocus = false
-        }
-    }
     val direction = if (labels.language == HomeLanguage.ARABIC) LayoutDirection.Rtl else LayoutDirection.Ltr
     CompositionLocalProvider(LocalLayoutDirection provides direction) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("settings-workspace")) {
+        BoxWithConstraints(Modifier.fillMaxSize().then(focus.inputModifier()).background(MaterialTheme.colorScheme.background).testTag("settings-workspace")) {
             val wide = maxWidth.value / LocalDensity.current.fontScale.coerceAtLeast(1f) >= 620f
             val railWidth = (maxWidth * 0.29f).coerceIn(220.dp, 330.dp)
             fun returnToRail() {
@@ -97,18 +101,18 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
                         color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.testTag("settings-dirty"))
                     TextButton(onClick = { searchOpen = !searchOpen;if (!searchOpen) query = "" }, enabled = !saving,
-                        modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.medium).height(36.dp).focusRequester(searchButton).testTag("settings-search-toggle")) {
+                        modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.medium).height(36.dp).focusRequester(searchButton).then(focus.target("tools", "search", 0)).testTag("settings-search-toggle")) {
                         Text(labels.text("بحث", "Search", "Suchen"))
                     }
                     TextButton(onClick = { action(SettingsAction.BACK) }, enabled = !saving,
-                        modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.medium).height(36.dp).testTag("settings-back")) { Text(labels.back()) }
+                        modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.medium).height(36.dp).then(focus.target("tools", "back", 1)).testTag("settings-back")) { Text(labels.back()) }
                     if (wide) Text("MN StreamX", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                 }
                 if (searchOpen) {
-                    OutlinedTextField(query, { query = it.take(80) }, singleLine = true,
+                    OutlinedTextField(query, { focus.cancel(); query = it.take(80) }, singleLine = true,
                         label = { Text(labels.text("البحث في الإعدادات", "Search settings", "Einstellungen durchsuchen")) },
-                        modifier = Modifier.fillMaxWidth().focusRequester(search).testTag("settings-search"))
-                    LaunchedEffect(Unit) { withFrameNanos { };search.requestFocus() }
+                        modifier = Modifier.fillMaxWidth().focusRequester(search).then(focus.target("tools", "query", 4)).testTag("settings-search"))
+                    LaunchedEffect(Unit) { focus.request("tools", "query") }
                 }
                 val matches = SettingsCatalog.search(query, labels)
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -124,6 +128,8 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
                             matches.forEach { category ->
                                 key(category) { SettingsCategoryButton(category, selected == category, labels, rail.getValue(category),
                                     if (wide) detailEntry else null, enabled = !saving,
+                                    focusModifier = focus.target("rail", category.name, category.ordinal),
+                                    onEnter = { focus.request(detailContext) },
                                     onClick = { request(SettingsIntent.Category(category)) }) }
                             }
                         }
@@ -140,7 +146,14 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
                             }
                             Text(labels.description(selected), style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            var detailMounted by remember(focus, detailContext) { mutableStateOf(false) }
+                            LaunchedEffect(focus, detailContext) { withFrameNanos { }; detailMounted = true }
+                            val detailReady = detailMounted && !saving && (selected != SettingsCategory.APPEARANCE || canSave)
+                            focus.Restore(detailContext, focus.registered(detailContext), ready = detailReady,
+                                onEmpty = { runCatching { detailEntry.requestFocus() } })
+                            focus.Maintain(detailContext, focus.registered(detailContext), ready = detailReady)
                             holder.SaveableStateProvider(selected.name) {
+                                CompositionLocalProvider(LocalSettingsFocus provides SettingsFocusBinding(focus, detailContext)) {
                                 Column(Modifier.weight(1f).fillMaxWidth()
                                     .rememberedFocusGroup(detailEntry, first, scrollable = true) { direction ->
                                         val towardRail = if (labels.language == HomeLanguage.ARABIC) FocusDirection.Right else FocusDirection.Left
@@ -148,6 +161,7 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
                                     }.verticalScroll(rememberScrollState())
                                     .testTag("settings-options"),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)) { content(selected, first, action) }
+                                }
                             }
                             if (selected == SettingsCategory.APPEARANCE) {
                                 if (saved && !dirty) Text(labels.text("تم الحفظ", "Saved", "Gespeichert"),
@@ -155,10 +169,10 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
                                     modifier = Modifier.testTag("settings-saved"))
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SettingsFooterButton(if (saving) labels.text("جارٍ الحفظ…", "Saving…", "Speichern…") else labels.save(),
-                                        { restoreSaveFocus = true;onSave() }, enabled = canSave && !saving,
-                                        modifier = Modifier.weight(1f).focusRequester(saveFocus).testTag("settings-save"), primary = true)
+                                        { focus.record("tools", "save", 2);focus.request("tools", "save");onSave() }, enabled = canSave && !saving,
+                                        modifier = Modifier.weight(1f).focusRequester(saveFocus).then(focus.target("tools", "save", 2)).testTag("settings-save"), primary = true)
                                     SettingsFooterButton(labels.text("استعادة الافتراضي", "Restore defaults", "Standardwerte"), onReset,
-                                        enabled = canSave && !saving, modifier = Modifier.weight(1f).testTag("settings-reset"))
+                                        enabled = canSave && !saving, modifier = Modifier.weight(1f).then(focus.target("tools", "reset", 3)).testTag("settings-reset"))
                                 }
                             }
                         }
@@ -167,40 +181,36 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
                 Text("OK · " + labels.text("اختيار", "Select", "Auswählen") + "     ↩ · " + labels.back(),
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            LaunchedEffect(wide, detailOpen, canSave) {
+            LaunchedEffect(focus, wide, detailOpen, canSave) {
                 val layout = wide to detailOpen
                 if (initializedLayout == layout || (!wide && detailOpen && !canSave)) return@LaunchedEffect
-                withFrameNanos { }
                 runCatching {
-                    if (wide || !detailOpen) rail.getValue(selected).requestFocus() else detailEntry.requestFocus()
+                    if (initializedLayout == null) focus.restore(contexts, if (wide || !detailOpen) "rail" else detailContext, selected.name.takeIf { wide || !detailOpen })
+                    else focus.request(if (wide || !detailOpen) "rail" else detailContext, selected.name.takeIf { wide || !detailOpen })
                 }.onSuccess { initializedLayout = layout }
             }
         }
     }
     pending?.let { intent ->
-        AlertDialog(onDismissRequest = { if (!saving) { pending = null;waitForSave = false } },
-            title = { Text(labels.text("حفظ التغييرات؟", "Save changes?", "Änderungen speichern?")) },
-            text = { Text(if (error) labels.text("تعذّر الحفظ. يمكنك إعادة المحاولة أو البقاء هنا.", "Saving failed. Retry or stay here.", "Speichern fehlgeschlagen. Erneut versuchen oder hier bleiben.")
-                else labels.text("لديك تغييرات مظهر لم تُحفظ.", "Your appearance changes have not been saved.", "Deine Darstellungsänderungen sind noch nicht gespeichert.")) },
-            confirmButton = { TextButton({ waitForSave = true;onSave() }, enabled = !saving,
-                modifier = Modifier.testTag("settings-exit-save")) { Text(labels.save()) } },
-            dismissButton = { Row {
-                TextButton({ onDiscard();execute(intent) }, enabled = !saving, modifier = Modifier.testTag("settings-exit-discard")) {
-                    Text(labels.text("تجاهل", "Discard", "Verwerfen")) }
-                TextButton({ pending = null;waitForSave = false }, enabled = !saving, modifier = Modifier.testTag("settings-exit-stay")) {
-                    Text(labels.text("البقاء", "Stay", "Bleiben")) }
-            } })
+        SettingsExitPrompt(labels, saving, error,
+            onSave = { waitForSave = true;onSave() },
+            onDiscard = { onDiscard();execute(intent) },
+            onStay = { pending = null;waitForSave = false;focus.restore(contexts, "rail", selected.name) })
     }
 }
 
 @Composable
 private fun SettingsCategoryButton(category: SettingsCategory, selected: Boolean, labels: SettingsLabels,
-    requester: FocusRequester, content: FocusRequester?, enabled: Boolean, onClick: () -> Unit) {
+    requester: FocusRequester, content: FocusRequester?, enabled: Boolean, focusModifier: Modifier = Modifier, onEnter: () -> Unit = {}, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val colors = MaterialTheme.colorScheme
     Surface(onClick = onClick, enabled = enabled,
-        modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.medium).fillMaxWidth().heightIn(min = 42.dp).focusRequester(requester)
+        modifier = Modifier.then(focusModifier).tvFocusIndicator(MaterialTheme.shapes.medium).fillMaxWidth().heightIn(min = 42.dp).focusRequester(requester)
+            .onPreviewKeyEvent { event ->
+                if (content == null || event.key != if (rtl) Key.DirectionLeft else Key.DirectionRight) false
+                else { if (event.type == KeyEventType.KeyDown) onEnter();true }
+            }
             .focusProperties { if (content != null) { if (rtl) left = content else right = content } }
             .onFocusChanged { focused = it.isFocused }.testTag("settings-category-${category.name}")
             .semantics { this.selected = selected;contentDescription = labels.title(category) },

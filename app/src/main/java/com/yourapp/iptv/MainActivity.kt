@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.navigation.AppNavGraph
 import com.yourapp.iptv.ui.component.common.AppLanguageHost
+import com.yourapp.iptv.ui.component.common.FocusInputWindow
 import com.yourapp.iptv.ui.screen.backup.BackupStartupGate
 import com.yourapp.iptv.ui.screen.parental.ParentalNavigationStores
 import com.yourapp.iptv.ui.screen.parental.ParentalSessionHost
@@ -36,9 +37,11 @@ class MainActivity : ComponentActivity() {
     private val navigation: ParentalNavigationStores by viewModels()
     private var normalSession = false
     private var activityTiming: Long? = null
+    private var focusInput: FocusInputWindow? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        focusInput = FocusInputWindow.install(window)
         activityTiming = LoadTimings.beginActivity()
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         setContent {
@@ -118,6 +121,8 @@ class MainActivity : ComponentActivity() {
         if (normalSession) parental.foreground()
     }
     override fun onDestroy() {
+        focusInput?.close(window)
+        focusInput = null
         LoadTimings.cancelActivity(activityTiming)
         super.onDestroy()
     }
