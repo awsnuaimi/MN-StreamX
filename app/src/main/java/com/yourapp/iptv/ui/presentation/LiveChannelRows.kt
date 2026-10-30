@@ -7,7 +7,7 @@ import java.util.Locale
 import java.security.MessageDigest
 
 internal enum class LiveChannelSort { PROVIDER, NAME, FAVORITES }
-internal data class LiveChannelRow(val key: String, val title: String, val variants: List<Channel>, val colorIndex: Int = 0, val preferenceKey: String = key) {
+internal data class LiveChannelRow(val key: String, val title: String, val variants: List<Channel>, val colorIndex: Int = 0, val preferenceKey: String = key, val number: Int = 0) {
     fun channel(preferred: String?, defaults: Map<String, String> = emptyMap()): Channel =
         variants.firstOrNull { it.id == defaults[preferenceKey] } ?: variants.firstOrNull { it.id == preferred } ?: variants.first()
     val qualities: List<String> get() = variants.mapNotNull(HomeChannelPresentation::quality).distinct()

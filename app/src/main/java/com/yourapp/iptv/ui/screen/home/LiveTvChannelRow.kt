@@ -39,6 +39,10 @@ internal fun LiveTvChannelRow(row: LiveChannelRow, program: ChannelProgramInfo, 
         .semantics { selected = active }
         .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+        if (row.number > 0) Text(row.number.toString(), color = colors.muted, fontSize = 10.sp,
+            fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.widthIn(min = 16.dp)
+                .testTag("live-number-${row.key}"),
+            style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr))
         LiveTvChannelLogo(row, preferredChannelId, colors, showLogos)
         Column(Modifier.weight(if (narrow) 0.55f else 0.76f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(row.title, color = colors.text, fontSize = 14.sp, lineHeight = 16.sp,
