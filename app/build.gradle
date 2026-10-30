@@ -134,7 +134,12 @@ android {
     testOptions {
         unitTests.includeAndroidResources = true
         // Robolectric's real FileProvider read test closes an Android file descriptor on JDK 17.
-        unitTests.all { jvmArgs '--add-opens=java.base/java.io=ALL-UNNAMED' }
+        unitTests.all {
+            jvmArgs '--add-opens=java.base/java.io=ALL-UNNAMED'
+            // Isolate Robolectric/Compose's process-wide state between test classes.
+            forkEvery = 1
+            maxParallelForks = Math.min(2, Runtime.runtime.availableProcessors())
+        }
     }
 
     room {
