@@ -77,6 +77,25 @@ class HomeSessionResolverTest {
         assertTrue(empty.visible.isEmpty()); assertNull(empty.session.focusedChannelId)
     }
 
+    @Test fun explicitEmptyFavoritesKeepTheChosenCategoryInsteadOfSwitchingToAllChannels() {
+        val group = FolderFilter.of("news")
+        val result = HomeSessionResolver.restoreContext(HomeBrowseSession(group, "polish", true,
+            focusedChannelId = "removed"), rows, tree)
+        assertEquals(group, result.session.group)
+        assertTrue(result.session.favoritesOnly)
+        assertTrue(result.visible.isEmpty())
+        assertNull(result.session.focusedChannelId)
+    }
+
+    @Test fun contextRestorationChoosesAnAvailableChannelWithinTheRequestedCategory() {
+        val group = FolderFilter.of("news")
+        val result = HomeSessionResolver.restoreContext(HomeBrowseSession(group, "polish",
+            focusedChannelId = "gone", position = HomeGridPosition("gone", 50, 1)), rows, tree)
+        assertEquals(group, result.session.group)
+        assertEquals("a", result.session.focusedChannelId)
+        assertEquals(0, result.session.position.offsetPx)
+    }
+
     private fun channel(id: String, root: String, leaf: String) = Channel(id, id,
         streamUrl = "https://unit.test/$id", group = "raw-$leaf", folderIds = listOf(root, leaf))
 }

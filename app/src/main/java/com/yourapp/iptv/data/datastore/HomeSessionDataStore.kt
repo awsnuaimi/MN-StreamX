@@ -10,6 +10,7 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.yourapp.iptv.domain.model.HomeBrowseSession
+import com.yourapp.iptv.domain.model.HomeBrowseMemory
 import com.yourapp.iptv.domain.repository.HomeSessionRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -49,10 +50,11 @@ class HomeSessionDataStore(private val store: DataStore<Preferences>, scope: Cor
         if ((value.group?.length ?: 0) > 4096 || listOf(value.rootFolderId, value.focusedChannelId,
                 value.position.anchorId).any { (it?.length ?: 0) > 512 }) return
         synchronized(guard) {
-            if (latest[sourceKey] == value) return
-            latest.remove(sourceKey); latest[sourceKey] = value
+            val bounded = value.copy(bookmarks = value.bookmarks.takeLast(HomeBrowseMemory.LIMIT).filter { HomeBrowseMemory.valid(it) })
+            if (latest[sourceKey] == bounded) return
+            latest.remove(sourceKey); latest[sourceKey] = bounded
             while (latest.size > 256) latest.remove(latest.keys.first())
-            pending[sourceKey] = value
+            pending[sourceKey] = bounded
             while (pending.size > 256) pending.remove(pending.keys.first())
             signal.value = Signal(signal.value.revision + 1)
         }

@@ -19,5 +19,6 @@ data class HomeUiState(
     val isRefreshing: Boolean = false,
     val browseScope: String = "",
     val sessionReady: Boolean = false,
-    val gridRestore: HomeGridRestore? = null
+    val gridRestore: HomeGridRestore? = null,
+    val isFiltering: Boolean = false
 )

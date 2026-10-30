@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -23,7 +24,8 @@ internal data class LiveTvCategoryTarget(val key: String, val tag: String, val t
 @Composable
 internal fun LiveTvCategoryFocus(items: List<LiveTvCategoryTarget>, activeIndex: Int,
     colors: HomeTvPalette, entry: FocusRequester, header: FocusRequester?, listEntry: FocusRequester?,
-    sidebar: FocusRequester?, sidebarOnRight: Boolean, headerFallback: FocusRequester? = null) {
+    sidebar: FocusRequester?, sidebarOnRight: Boolean, headerFallback: FocusRequester? = null,
+    navigation: LiveTvListNavigation? = null) {
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -54,13 +56,18 @@ internal fun LiveTvCategoryFocus(items: List<LiveTvCategoryTarget>, activeIndex:
         if (inside) focus(activeIndex)
         else if (items.isNotEmpty()) list.scrollToItem(activeIndex.coerceIn(items.indices))
     }
+    // Root-to-chip handoff may briefly report Inactive. Confirm an exit after focus settles.
+    LaunchedEffect(inside, navigation) {
+        if (!inside) { withFrameNanos { }; if (!inside) navigation?.leftCategories() }
+    }
     DisposableEffect(Unit) { onDispose { job?.cancel() } }
     Box(Modifier.fillMaxWidth().focusRequester(entry).onFocusChanged {
+        navigation?.categoryFocus(it.hasFocus)
         inside = it.hasFocus
-        if (it.isFocused) focus(items.indexOfFirst { item -> item.key == lastKey }
-            .takeIf { index -> index >= 0 } ?: activeIndex)
+        if (it.isFocused) focus(if (navigation?.takeCategorySelection() == true) activeIndex else
+            items.indexOfFirst { item -> item.key == lastKey }.takeIf { index -> index >= 0 } ?: activeIndex)
         else if (!it.hasFocus) cancel()
-    }.homeDpadKeys { direction ->
+    }.onPreviewKeyEvent { navigation?.categoryKey(it) ?: false }.homeDpadKeys { direction ->
         val index = items.indexOfFirst { it.key == (pending ?: lastKey) }.takeIf { it >= 0 } ?: activeIndex
         when (direction) {
             HomeDpad.UP -> { cancel(); header?.restoreOrRequestFocus(headerFallback) }

@@ -55,12 +55,13 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
 
     var localSort by rememberSaveable(catalog.browseScope) { mutableStateOf(LiveChannelSort.PROVIDER) }
     val sort = if (onPreference == null) localSort else LiveChannelSort.valueOf(preferences.value.sort.name)
-    val input = remember(catalog.browseScope, catalog.visibleChannels, catalog.channels, catalog.groups, catalog.organization, sort,
+    val input = remember(catalog.browseScope, catalog.selectedGroup, catalog.query, catalog.favoritesOnly, catalog.isFiltering,
+        catalog.visibleChannels, catalog.channels, catalog.groups, catalog.organization, sort,
         preferences.value.hiddenChannels, preferences.value.hiddenGroups, preferences.value.hiddenFolders,
         preferences.ready, appearance.language, accessEpoch, projectionDispatcher) { Any() }
     val numbering = remember(catalog.browseScope) { LiveChannelNumbers() }
     val projected by produceState<Pair<Any, Pair<HomeUiState, LiveChannelIndex>>?>(null, input) {
-        if (preferences.ready) value = input to PerformanceJournal.measure(PerformanceStage.LIVE_PROJECT) {
+        if (preferences.ready && !catalog.isFiltering) value = input to PerformanceJournal.measure(PerformanceStage.LIVE_PROJECT) {
             withContext(projectionDispatcher) {
             val visible = LiveTvPersonalization.project(catalog, preferences.value)
             val numbers = numbering.forCatalog(catalog.channels)
@@ -114,7 +115,18 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
             restoreHidden = false
         }
     }
-    val navigation = remember { LiveTvListNavigation() }
+    val navigation = remember(catalog.browseScope, accessEpoch) { LiveTvListNavigation() }
+    val browseContext = remember(catalog.browseScope, catalog.selectedGroup, catalog.query, catalog.favoritesOnly, accessEpoch) { Any() }
+    SideEffect { navigation.bind(browseContext) }
+    var groupEntry by remember(catalog.browseScope, accessEpoch) { mutableStateOf<LiveTvGroupEntry?>(null) }
+    val selectGroup: (String?) -> Unit = { group -> groupEntry = LiveTvGroupEntry(group); onGroup(group) }
+    LaunchedEffect(groupEntry, input, projected?.first === input, catalog.isFiltering, catalog.selectedGroup) {
+        val intent = groupEntry ?: return@LaunchedEffect
+        if (catalog.selectedGroup == intent.group && !catalog.isFiltering && projected?.first === input) {
+            withFrameNanos { }
+            if (groupEntry == intent) { entry.requestFocus(); navigation.enter(); groupEntry = null }
+        }
+    }
     val numeric = remember(input, catalog.selectedGroup, catalog.query, catalog.favoritesOnly, accessEpoch) { LiveTvNumberEntry() }
     val numberRows = rowIndex.numberedRows
     val numberKeys = liveTvNumberKeys(numeric, numberRows, projected?.first === input,
@@ -142,7 +154,13 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     DisposableEffect(Unit) { onDispose { request(emptyList()) } }
     Column(modifier.fillMaxSize().background(Brush.linearGradient(listOf(
         if (appearance.theme == HomeTheme.DARK_BLUE && !appearance.isNightMode) Color(0xFF112B56) else colors.background,
-        colors.background, colors.background))).padding(start = 30.dp, end = 30.dp, top = 16.dp, bottom = 10.dp),
+        colors.background, colors.background))).onPreviewKeyEvent {
+            val key = it.nativeKeyEvent
+            if (key.action == android.view.KeyEvent.ACTION_DOWN && key.repeatCount == 0) groupEntry = null
+            if (key.action == android.view.KeyEvent.ACTION_DOWN && key.keyCode != android.view.KeyEvent.KEYCODE_DPAD_UP)
+                navigation.clearShortcut()
+            navigation.categoryHandoff(it)
+        }.padding(start = 30.dp, end = 30.dp, top = 16.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         LiveTvPreferenceStatus(preferences, labels, onPreferencesRetry,
             Modifier.focusRequester(statusFocus).onFocusChanged { statusFocused = it.isFocused }.homeFocusLinks(up = aboveHeader, down = headerFocus,
@@ -152,7 +170,7 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
             onManage = onPreference?.takeIf { preferences.ready }?.let { { manage = true } }, canSort = preferences.ready && !preferences.saving,
             sidebar = sidebarFocus, sidebarOnRight = appearance.sidebarOnRight,
             above = if (hasStatusRetry) statusFocus else aboveHeader, manageEntry = hiddenFocus, searchEntry = headerSearchFocus)
-        LiveTvCategories(state.groups, state.channels, state.organization, state.selectedGroup, labels, colors, categories, onGroup, projectionDispatcher, entry, headerFocus, sidebarFocus, appearance.sidebarOnRight, headerSearchFocus)
+        LiveTvCategories(state.groups, state.channels, state.organization, state.selectedGroup, labels, colors, categories, selectGroup, projectionDispatcher, entry, headerFocus, sidebarFocus, appearance.sidebarOnRight, headerSearchFocus, navigation)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().onPreviewKeyEvent(numberKeys)
             .onFocusChanged { if (!it.hasFocus) numeric.clear() }.focusGroup()) {
             val detail = maxWidth >= 680.dp && LocalDensity.current.fontScale <= 1.6f
@@ -166,8 +184,11 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
                         Box(Modifier.weight(if (detail) 2.04f else 1f).fillMaxHeight()
                             .onPreviewKeyEvent(navigation::handle).focusRequester(entry)
                             .onFocusChanged {
+                                val entering = it.hasFocus && !navigation.ownsFocus
                                 navigation.ownsFocus = it.hasFocus; listFocused = it.hasFocus
-                                if (it.isFocused) navigation.enter() else if (!it.hasFocus) navigation.cancel()
+                                if (it.isFocused) navigation.enter()
+                                else if (entering) navigation.clearShortcut()
+                                else if (!it.hasFocus) navigation.leave()
                             }.focusable().testTag("live-list-entry")) {
                             LiveTvChannelList(rows, state.selectedChannelId, active?.key, state.gridRestore, labels, colors,
                                 program, { HomeChannelPresentation.badge(it, captions) }, { focused = it.id; lastIndex = rowIndex.channelPosition(it.id).coerceAtLeast(0) }, onPlay,
@@ -194,8 +215,8 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
             if (numeric.active) LiveTvNumberOverlay(numeric, numberRows[numeric.number], labels, colors,
                 Modifier.align(Alignment.TopEnd).padding(8.dp))
         }
-        Text(labels.text("0–9 انتقال · CH± صفحات · OK مشاهدة / مطوّل خيارات", "0–9 Number · CH± Pages · OK Watch / Hold Options",
-            "0–9 Sendernummer · CH± Seiten · OK ansehen / halten: Optionen"), color = colors.muted, fontSize = 10.sp,
+        Text(labels.text("↑↑ القوائم · 0–9 انتقال · CH± صفحات · OK مشاهدة / مطوّل خيارات", "↑↑ Lists · 0–9 Number · CH± Pages · OK Watch / Hold Options",
+            "↑↑ Listen · 0–9 Sendernummer · CH± Seiten · OK ansehen / halten: Optionen"), color = colors.muted, fontSize = 10.sp,
             modifier = Modifier.testTag("live-browse-hint"))
     }
     BackHandler(numeric.active) { numeric.clear(); navigation.cancel() }
@@ -220,3 +241,5 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     if (manage && onPreference != null) LiveTvHiddenDialog(catalog, preferences.value, labels, colors,
         preferences.saving, onPreference) { manage = false; restoreHidden = true }
 }
+
+private data class LiveTvGroupEntry(val group: String?)

@@ -30,6 +30,16 @@ object HomeSessionResolver {
             visible = PlaybackQueue.filterChannels(channels, group)
         }
         if (visible.isEmpty() && group != null) { group = null; visible = channels }
+        return project(saved, visible, group, favorites, tree)
+    }
+
+    /** An explicit list choice keeps its filters, even when its old bookmark is unavailable. */
+    fun restoreContext(saved: HomeBrowseSession, channels: List<Channel>, tree: OrganizationTree): ResolvedHomeSession =
+        project(saved, PlaybackQueue.filterChannels(channels, saved.group, favoritesOnly = saved.favoritesOnly),
+            saved.group, saved.favoritesOnly, tree)
+
+    private fun project(saved: HomeBrowseSession, visible: List<Channel>, group: String?, favorites: Boolean,
+        tree: OrganizationTree): ResolvedHomeSession {
         val ids = visible.mapTo(HashSet(visible.size)) { it.id }
         val focused = saved.focusedChannelId?.takeIf { it in ids }
             ?: saved.position.anchorId?.takeIf { it in ids } ?: visible.firstOrNull()?.id
@@ -37,6 +47,6 @@ object HomeSessionResolver {
         val position = saved.position.copy(anchorId = anchor ?: focused,
             offsetPx = if (anchor == null) 0 else saved.position.offsetPx.coerceIn(0, 100_000))
         val root = FolderFilter.id(group)?.let { tree.path(it).firstOrNull()?.id }
-        return ResolvedHomeSession(HomeBrowseSession(group, root, favorites, focused, position), visible)
+        return ResolvedHomeSession(HomeBrowseSession(group, root, favorites, focused, position, saved.bookmarks), visible)
     }
 }

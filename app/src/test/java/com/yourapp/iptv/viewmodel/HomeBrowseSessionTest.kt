@@ -143,6 +143,55 @@ class HomeBrowseSessionTest {
         assertEquals(PlaylistCacheKey.of(settings.value.value), model.uiState.value.browseScope)
     }
 
+    @Test fun switchingCategoriesRestoresTheirOwnChannelsAndScrollPositionsWithoutStealingFocus() = runTest(dispatcher) {
+        sessions.result.complete(null)
+        val model = model(); model.configureHomeSession(true); runCurrent()
+        val a = FolderFilter.of(catalog.assignments.getValue("id-40").folderId)
+        val b = FolderFilter.of(catalog.assignments.getValue("id-50").folderId)
+        val positionA = HomeGridPosition("id-36", 12, 1)
+        val positionB = HomeGridPosition("id-45", 7, 1)
+        model.selectGroup(a); runCurrent()
+        model.onBrowsePosition(model.uiState.value.browseScope, a, false, "id-40", positionA)
+        model.selectGroup(b); runCurrent()
+        model.onBrowsePosition(model.uiState.value.browseScope, b, false, "id-50", positionB)
+        model.selectGroup(a); runCurrent()
+        assertEquals("id-40", model.uiState.value.selectedChannelId)
+        assertEquals(positionA, model.uiState.value.gridRestore?.position)
+        assertEquals(false, model.uiState.value.gridRestore?.takeFocus)
+        model.onBrowseInteraction(); runCurrent()
+        assertEquals("id-40", model.uiState.value.selectedChannelId)
+        assertNotNull(model.uiState.value.gridRestore)
+        model.selectGroup(b); runCurrent()
+        assertEquals("id-50", model.uiState.value.selectedChannelId)
+        assertEquals(positionB, model.uiState.value.gridRestore?.position)
+        assertEquals(2, sessions.writes.last().second.bookmarks.size)
+    }
+
+    @Test fun clearingSearchRestoresTheUnfilteredCategoryBookmark() = runTest(dispatcher) {
+        sessions.result.complete(null)
+        val model = model(); model.configureHomeSession(true); runCurrent()
+        val position = HomeGridPosition("id-36", 11, 1)
+        model.onBrowsePosition(model.uiState.value.browseScope, null, false, "id-40", position)
+        model.updateQuery("Channel 0"); runCurrent()
+        model.updateQuery(""); runCurrent()
+        assertEquals("id-40", model.uiState.value.selectedChannelId)
+        assertEquals(position, model.uiState.value.gridRestore?.position)
+    }
+
+    @Test fun perCategoryHistoryLoadsFromStorageButCannotCrossSources() = runTest(dispatcher) {
+        val a = FolderFilter.of(catalog.assignments.getValue("id-40").folderId)
+        val b = FolderFilter.of(catalog.assignments.getValue("id-50").folderId)
+        sessions.result.complete(HomeBrowseSession(a, focusedChannelId = "id-40",
+            bookmarks = listOf(HomeBrowseBookmark(b, focusedChannelId = "id-50"))))
+        val model = model(); model.configureHomeSession(true); runCurrent()
+        model.selectGroup(b); runCurrent()
+        assertEquals("id-50", model.uiState.value.selectedChannelId)
+        sessions.result = CompletableDeferred<HomeBrowseSession?>().apply { complete(null) }
+        settings.value.value = source.copy(m3uUrl = "https://unit.test/list-b"); runCurrent()
+        model.selectGroup(b); runCurrent()
+        assertNull(model.uiState.value.selectedChannelId)
+    }
+
     private fun model(favorites: FavoriteRepository = FakeFavoriteRepository()) = HomeViewModel(settings,
         object : PlaylistRepository {
             override suspend fun loadPlaylist(url: String): Playlist = error("Fresh catalog must not use the network")

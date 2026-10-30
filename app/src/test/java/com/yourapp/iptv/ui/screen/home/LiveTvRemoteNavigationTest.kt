@@ -74,14 +74,14 @@ class LiveTvRemoteNavigationTest {
         board(); focus("live-channel-0")
         compose.onNodeWithTag("live-channel-0").performKeyInput { repeat(30) { pressKey(Key.DirectionDown) } }
         focused("30")
-        compose.onNodeWithTag("live-channel-30").performKeyInput { repeat(10) { pressKey(Key.DirectionUp) } }
+        compose.onNodeWithTag("live-channel-30").performKeyInput { repeat(10) { advanceEventTime(350); pressKey(Key.DirectionUp) } }
         focused("20"); compose.runOnIdle { assertNull(played) }
     }
     @Test fun categoriesAndHeaderReturnToTheListThroughExplicitRoutes() {
         board(); focus("live-channel-0")
         compose.onNodeWithTag("live-channel-0").performKeyInput { pressKey(Key.DirectionUp) }
         compose.onNodeWithTag("live-category-PL| General").assertIsFocused()
-        compose.onNodeWithTag("live-category-PL| General").performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithTag("live-category-PL| General").performKeyInput { advanceEventTime(350); pressKey(Key.DirectionUp) }
         compose.onNodeWithTag("live-search").assertIsFocused()
         compose.onNodeWithTag("live-search").performKeyInput { pressKey(Key.DirectionDown) }
         compose.onNodeWithTag("live-category-PL| General").assertIsFocused()

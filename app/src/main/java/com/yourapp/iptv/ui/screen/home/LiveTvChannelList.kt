@@ -54,13 +54,14 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
     val viewport by remember { derivedStateOf { list.layoutInfo.let { it.viewportEndOffset - it.viewportStartOffset } } }
     val selectedIndex = index.channelPosition(selectedChannelId)
 
-    LaunchedEffect(selectedChannelId, restore?.token, rows, viewport, rowPx) {
+    LaunchedEffect(selectedChannelId, restore?.token, rows, viewport, rowPx, navigation.ownsFocus) {
         if (selectedChannelId == null) restoredId = null
         if (!ready || rows.isEmpty() || viewport <= 0) return@LaunchedEffect
         val dimensions = viewport to rowPx
         val reflow = geometry != null && geometry != dimensions
         geometry = dimensions
         val selected = selectedIndex >= 0 && (restoredId != selectedChannelId || restore != null)
+        if (selected && restore?.takeFocus == false && !navigation.ownsFocus) return@LaunchedEffect
         if (!selected && (!reflow || !navigation.ownsFocus)) return@LaunchedEffect
         val selectedTarget = if (selected) selectedIndex else index.keyPosition(activeKey).coerceAtLeast(0)
         val position = if (selected) restore?.position else HomeGridPosition(
@@ -110,6 +111,11 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
         }
     }
     val handler by rememberUpdatedState<(KeyEvent) -> Boolean>({ event ->
+        val key = event.nativeKeyEvent
+        if (key.isCanceled) navigation.clearShortcut()
+        if (event.key == Key.DirectionUp && event.type == KeyEventType.KeyUp) {
+            navigation.upShortcut.up(key.eventTime, key.isCanceled, key.deviceId)
+        } else if (event.type == KeyEventType.KeyDown && event.key != Key.DirectionUp) navigation.clearShortcut()
         val delta = when (event.key) {
             Key.DirectionUp -> -1; Key.DirectionDown -> 1
             Key.PageUp, Key.ChannelUp -> -LiveTvNavigationPolicy.visibleRows(viewport, rowPx, spacingPx)
@@ -133,13 +139,31 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
         } else {
             val pending = navigation.requests.value?.key
             val position = index.keyPosition(pending ?: activeKey).coerceAtLeast(0)
-            if (horizontal) {
+            val gesture = if (event.key == Key.DirectionUp && !key.isAltPressed && !key.isCtrlPressed && !key.isMetaPressed && !key.isShiftPressed)
+                navigation.upShortcut.down(key.eventTime, key.repeatCount > 0 || key.isLongPress, key.deviceId)
+                else LiveTvUpShortcut.Result.NORMAL
+            if (event.key == Key.DirectionUp && gesture == LiveTvUpShortcut.Result.NORMAL) navigation.clearShortcut()
+            if (gesture == LiveTvUpShortcut.Result.START) {
+                val origin = index.keyPosition(focusedKey ?: activeKey).takeIf { it >= 0 } ?: position
+                val anchor = rows.getOrNull(list.firstVisibleItemIndex)?.channel(preferred, defaults)?.id
+                navigation.origin(rows[origin].key, HomeGridPosition(anchor, list.firstVisibleItemScrollOffset, 1))
+            }
+            fun categories() {
+                val saved = navigation.categories()
+                val savedPosition = saved?.position
+                val origin = saved?.key?.let(index::keyPosition)?.takeIf { it >= 0 }
+                if (origin != null && savedPosition != null) positionCallback(rows[origin].channel(preferred, defaults).id, savedPosition)
+                categoryFocus.requestFocus()
+            }
+            if (gesture == LiveTvUpShortcut.Result.DOUBLE) {
+                categories()
+            } else if (horizontal) {
                 val details = if (sidebarRight) Key.DirectionLeft else Key.DirectionRight
                 navigation.cancel()
                 if (event.key == details && showDetail) { if (onEnterDetails != null) onEnterDetails() else watchFocus.requestFocus() }
                 else if (event.key != details && sidebarFocus != null) sidebarFocus.requestFocus()
             } else if (event.key == Key.DirectionUp && position == 0) {
-                navigation.cancel(); categoryFocus.requestFocus()
+                categories()
             } else {
                 val next = LiveTvNavigationPolicy.target(position, delta, rows.size)
                 if (next != position) navigation.request(rows[next].key)
@@ -184,7 +208,7 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
                         .testTag("live-channel-${row.key}")
                         .focusRequester(rowFocus)
                         .onFocusChanged {
-                            if (it.isFocused) { focusedKey = row.key; focusedId = channel.id; onFocused(channel) }
+                            if (it.isFocused) { navigation.focused(); focusedKey = row.key; focusedId = channel.id; onFocused(channel) }
                             else if (focusedKey == row.key) focusedKey = null
                         },
                     narrow, showLogos = showLogos, preferredChannelId = channel.id)

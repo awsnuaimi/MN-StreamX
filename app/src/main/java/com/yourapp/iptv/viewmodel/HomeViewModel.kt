@@ -12,6 +12,7 @@ import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.HomeStartupSnapshot
 import com.yourapp.iptv.domain.model.AppSettings
 import com.yourapp.iptv.domain.model.HomeBrowseSession
+import com.yourapp.iptv.domain.model.HomeBrowseMemory
 import com.yourapp.iptv.domain.model.HomeGridPosition
 import com.yourapp.iptv.domain.model.HomeGridRestore
 import com.yourapp.iptv.domain.model.HomeSessionResolver
@@ -62,7 +63,9 @@ class HomeViewModel @Inject constructor(
     private var reportedReady = false
     private var favoriteIds: Set<String>? = null
     private var pendingBrowse: HomeBrowseSession? = null
+    private var contextRestore = false
     private var browseDraft: HomeBrowseSession? = null
+    private val browseMemory = HomeBrowseMemory()
     private var restoreSequence = 0L
     private val session = HomeSessionController(viewModelScope, browseSessions, ::onSessionLoaded)
     private val favoriteController = FavoriteController(viewModelScope, favorites, onReset = { favoriteIds = null }) {
@@ -115,7 +118,7 @@ class HomeViewModel @Inject constructor(
 
     fun configureHomeSession(enabled: Boolean) = session.configure(enabled)
     fun flushBrowseSession() = session.flush()
-    fun onBrowseInteraction() = touchSession()
+    fun onBrowseInteraction() = touchSession(preserveContext = true)
 
     fun onGridRestoreHandled(token: Long) {
         state.update { if (it.gridRestore?.token == token) it.copy(gridRestore = null) else it }
@@ -125,23 +128,29 @@ class HomeViewModel @Inject constructor(
         focusedId: String, position: HomeGridPosition) {
         val current = state.value
         if (scope != current.browseScope || group != current.selectedGroup ||
-            favoritesOnly != current.favoritesOnly || current.query.isNotBlank() || current.channels.isEmpty()) return
+            favoritesOnly != current.favoritesOnly || current.query.isNotBlank() || current.isFiltering || current.channels.isEmpty()) return
+        val channel = current.visibleChannels.firstOrNull { it.id == focusedId } ?: return
+        if (PlaybackQueue.filterChannels(listOf(channel), group, favoritesOnly = favoritesOnly).isEmpty()) return
         touchSession()
-        browseDraft = browseContext().copy(focusedChannelId = focusedId, position = position)
+        browseDraft = browseMemory.remember(browseContext().copy(focusedChannelId = focusedId, position = position))
         session.remember(browseDraft!!)
     }
 
     private fun onSessionLoaded(value: HomeBrowseSession?) {
+        if (value != null) browseMemory.load(value)
+        contextRestore = false
         val discarded = pendingBrowse != null && value == null
         pendingBrowse = value
         state.update { it.copy(sessionReady = value == null) }
         if ((value != null || discarded) && state.value.channels.isNotEmpty()) filterChannels()
     }
 
-    private fun touchSession() {
+    private fun touchSession(preserveContext: Boolean = false) {
         session.interact()
+        if (preserveContext && ((contextRestore && state.value.isFiltering) || state.value.gridRestore?.takeFocus == false)) return
         val wasPending = pendingBrowse != null
         pendingBrowse = null
+        contextRestore = false
         if (!state.value.sessionReady || state.value.gridRestore != null)
             state.update { it.copy(sessionReady = true, gridRestore = null,
                 selectedChannelId = if (it.gridRestore != null) null else it.selectedChannelId) }
@@ -155,7 +164,11 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun rememberContext() {
-        browseDraft = browseContext()
+        val context = browseContext()
+        val saved = browseMemory.find(context.group, context.favoritesOnly)
+        pendingBrowse = saved.takeIf { state.value.query.isBlank() }
+        contextRestore = pendingBrowse != null
+        browseDraft = saved ?: browseMemory.decorate(context)
         if (state.value.query.isBlank()) session.remember(browseDraft!!)
     }
 
@@ -185,7 +198,7 @@ class HomeViewModel @Inject constructor(
     private fun resetSource(source: AppSettings?, error: String? = null) {
         filterJob?.cancel();filterJob = null
         organizer.clearChannels()
-        catalogTree = OrganizationTree();pendingBrowse = null;browseDraft = null
+        catalogTree = OrganizationTree();pendingBrowse = null;browseDraft = null;browseMemory.clear();contextRestore = false
         val selected = source?.hasSelectedSource() == true
         state.value = HomeUiState(isLoading = selected,needsSource = source != null && !selected,
             browseScope = source?.let(ProfileScope::of).orEmpty(),errorMessage = error)
@@ -205,8 +218,10 @@ class HomeViewModel @Inject constructor(
     }
 
     fun updateQuery(query: String) {
+        val leavingSearch = state.value.query.isNotBlank() && query.isBlank()
         touchSession()
         state.update { it.copy(query = query.take(200), selectedChannelId = null) }
+        if (leavingSearch) rememberContext()
         filterChannels()
     }
 
@@ -255,8 +270,8 @@ class HomeViewModel @Inject constructor(
         }
         if (state.value.query.isBlank()) {
             val current = state.value
-            browseDraft = (browseDraft?.takeIf { it.group == current.selectedGroup &&
-                it.favoritesOnly == current.favoritesOnly } ?: browseContext()).copy(focusedChannelId = current.selectedChannelId)
+            browseDraft = browseMemory.remember((browseDraft?.takeIf { it.group == current.selectedGroup &&
+                it.favoritesOnly == current.favoritesOnly } ?: browseContext()).copy(focusedChannelId = current.selectedChannelId))
             session.remember(browseDraft!!)
         }
         session.flush()
@@ -264,15 +279,18 @@ class HomeViewModel @Inject constructor(
 
     private fun filterChannels() {
         filterJob?.cancel()
+        state.update { it.copy(isFiltering = true) }
         val snapshot = state.value
         val ids = favoriteIds
         val topology = catalogTree
         val saved = pendingBrowse?.takeIf { snapshot.channels.isNotEmpty() &&
             (!it.favoritesOnly || ids != null || favoriteState.value.errorMessage != null) }
+        val restoreContext = contextRestore
         filterJob = viewModelScope.launch {
             val result = PerformanceJournal.measure(PerformanceStage.HOME_FILTER) { withContext(background) {
                 val marked = ChannelFavorites.apply(snapshot.channels, ids)
-                val restored = saved?.let { HomeSessionResolver.resolve(it, marked, topology) }
+                val restored = saved?.let { if (restoreContext) HomeSessionResolver.restoreContext(it, marked, topology)
+                    else HomeSessionResolver.resolve(it, marked, topology) }
                 val favorites = restored?.session?.favoritesOnly ?: snapshot.favoritesOnly
                 val group = if (restored != null) restored.session.group else snapshot.selectedGroup
                 val all = snapshot.query.isBlank() && !favorites
@@ -285,14 +303,14 @@ class HomeViewModel @Inject constructor(
             currentCoroutineContext().ensureActive()
             if (state.value.browseScope != snapshot.browseScope) return@launch
             val (marked, visible, tree, restored) = result
-            if (restored != null) { pendingBrowse = null; browseDraft = restored }
+            if (restored != null) { pendingBrowse = null; contextRestore = false; browseDraft = browseMemory.remember(restored) }
             state.update { current ->
-                current.copy(channels = marked, visibleChannels = visible, organization = tree,
+                current.copy(channels = marked, visibleChannels = visible, organization = tree, isFiltering = false,
                     isLoading = if (marked.isNotEmpty()) false else current.isLoading,
                     selectedGroup = if (restored != null) restored.group else current.selectedGroup,
                     favoritesOnly = restored?.favoritesOnly ?: current.favoritesOnly,
                     sessionReady = current.sessionReady || restored != null,
-                    gridRestore = if (restored != null) HomeGridRestore(++restoreSequence, restored.position) else current.gridRestore,
+                    gridRestore = if (restored != null) HomeGridRestore(++restoreSequence, restored.position, !restoreContext) else current.gridRestore,
                     selectedChannelId = restored?.focusedChannelId ?: current.selectedChannelId?.let { id ->
                         visible.firstOrNull { it.id == id }?.id ?: visible.firstOrNull()?.id
                     })

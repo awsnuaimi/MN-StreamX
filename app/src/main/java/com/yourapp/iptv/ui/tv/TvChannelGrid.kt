@@ -72,7 +72,7 @@ fun TvChannelGrid(channels: List<Channel>, selectedChannelId: String?, onChannel
             val targetIndex = if (restoreSelection) selectedIndex
                 else focused.takeIf { it >= 0 } ?: grid.firstVisibleItemIndex.coerceAtMost(channels.lastIndex)
             if (targetIndex < 0) return@LaunchedEffect
-            val takeFocus = restoreSelection || gridHasFocus
+            val takeFocus = (restoreSelection && restore?.takeFocus != false) || gridHasFocus
             val position = if (restoreSelection) restore?.position else null
             val anchor = if (restoreSelection) position?.anchorId?.let { id -> channels.indexOfFirst { it.id == id } } ?: -1
                 else grid.firstVisibleItemIndex

@@ -19,7 +19,8 @@ internal fun LiveTvCategories(groups: List<String>, channels: List<Channel>, tre
     selected: String?, labels: HomeLabels, colors: HomeTvPalette, entry: FocusRequester,
     onSelect: (String?) -> Unit, projectionDispatcher: CoroutineDispatcher = Dispatchers.Default,
     listEntry: FocusRequester? = null, header: FocusRequester? = null,
-    sidebar: FocusRequester? = null, sidebarOnRight: Boolean = false, headerFallback: FocusRequester? = null) {
+    sidebar: FocusRequester? = null, sidebarOnRight: Boolean = false, headerFallback: FocusRequester? = null,
+    navigation: LiveTvListNavigation? = null) {
     val names = organizationFolderLabels()
     val folder = tree.folder(FolderFilter.id(selected))
     val parent = if (folder != null && tree.children(folder.id).isNotEmpty()) folder.id else folder?.parentId
@@ -52,5 +53,5 @@ internal fun LiveTvCategories(groups: List<String>, channels: List<Channel>, tre
         }
     }
     val activeIndex = targets.indexOfFirst { it.selected }.coerceAtLeast(0)
-    LiveTvCategoryFocus(targets, activeIndex, colors, entry, header, listEntry, sidebar, sidebarOnRight, headerFallback)
+    LiveTvCategoryFocus(targets, activeIndex, colors, entry, header, listEntry, sidebar, sidebarOnRight, headerFallback, navigation)
 }
