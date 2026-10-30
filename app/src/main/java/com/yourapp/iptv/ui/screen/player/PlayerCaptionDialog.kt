@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.yourapp.iptv.ui.screen.player
 
 import androidx.compose.foundation.layout.*
@@ -8,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -43,10 +46,11 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
         while (true) { value = withContext(Dispatchers.IO) { model.deviceStats() }; delay(2000) }
     }
     val focus = rememberContextFocus("player-caption-entry")
-    focus.Resume(setOf("entry"), "entry", "off")
-    focus.Restore("entry", if (state.loaded) listOf("off", "back") else listOf("back"),
-        ready = (state.loaded && !state.saving) || state.readFailed)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val windowFocused = LocalWindowInfo.current.isWindowFocused
+        focus.Resume(setOf("entry"), "entry", "off")
+        focus.Restore("entry", if (state.loaded) listOf("off", "back") else listOf("back"),
+            ready = windowFocused && ((state.loaded && !state.saving) || state.readFailed))
         Surface(Modifier.fillMaxWidth(0.78f).heightIn(max = 490.dp).then(focus.inputModifier()), color = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface, shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.yourapp.iptv.ui.screen.history
 
 import androidx.compose.foundation.BorderStroke
@@ -8,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -110,12 +113,15 @@ internal fun WatchHistoryContent(state: WatchHistoryUiState, playingId: String?,
     }
     if (confirmSource != null) {
         val confirmation = rememberContextFocus("history-clear-confirmation")
-        confirmation.Resume(setOf("confirm"), "confirm", "cancel")
-        confirmation.Restore("confirm", listOf("cancel", "clear"))
         fun dismiss() { confirmSource = null; focus.request("controls", "clear") }
         AlertDialog(onDismissRequest = ::dismiss, modifier = confirmation.inputModifier(),
             title = { Text(stringResource(R.string.history_clear)) },
-            text = { Text(stringResource(R.string.history_clear_question)) },
+            text = {
+                val windowFocused = LocalWindowInfo.current.isWindowFocused
+                confirmation.Resume(setOf("confirm"), "confirm", "cancel")
+                confirmation.Restore("confirm", listOf("cancel", "clear"), ready = windowFocused)
+                Text(stringResource(R.string.history_clear_question))
+            },
             confirmButton = { AppButton(stringResource(R.string.history_clear), {
                 val source = confirmSource; confirmSource = null
                 if (source != null) { focus.request("rows", place = null); onClear(source) }

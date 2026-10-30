@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.yourapp.iptv.ui.screen.player
 
 import android.view.KeyEvent
@@ -30,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,14 +62,16 @@ fun PlayerChannelPanel(
     val controls = "$context:controls"
     val keys = remember(channels) { channels.map { it.id } }
     val list = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
-    focus.Resume(setOf(context, controls), context, currentId.takeIf { focus.bookmarks.get(context) == null })
-    focus.Maintain(context, keys)
-    focus.Restore(context, keys, onEmpty = { focus.request(controls, "close") }, scrollTo = { index ->
-        if (list.layoutInfo.visibleItemsInfo.none { it.index == index }) list.scrollToItem(index)
-    })
-    focus.Restore(controls, listOf("close"))
     Dialog(onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val windowFocused = LocalWindowInfo.current.isWindowFocused
+        focus.Resume(setOf(context, controls), context, currentId.takeIf { focus.bookmarks.get(context) == null })
+        focus.Maintain(context, keys)
+        focus.Restore(context, keys, ready = windowFocused,
+            onEmpty = { focus.request(controls, "close") }, scrollTo = { index ->
+                if (list.layoutInfo.visibleItemsInfo.none { it.index == index }) list.scrollToItem(index)
+            })
+        focus.Restore(controls, listOf("close"), ready = windowFocused)
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))
             .then(focus.inputModifier())
             .onPreviewKeyEvent { onRemoteKey(it.nativeKeyEvent, false) }) {

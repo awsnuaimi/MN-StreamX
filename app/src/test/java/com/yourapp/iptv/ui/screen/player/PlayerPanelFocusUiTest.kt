@@ -19,6 +19,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w960dp-h720dp-mdpi")
@@ -47,11 +48,22 @@ class PlayerPanelFocusUiTest {
                 }
             }
         }
+        focusLatestDialog()
+    }
+
+    private fun focusLatestDialog() {
+        // Android sends this to every newly opened window; Robolectric needs it explicitly.
+        compose.runOnIdle {
+            val dialog = checkNotNull(ShadowDialog.getLatestDialog())
+            checkNotNull(dialog.window).decorView.dispatchWindowFocusChanged(true)
+        }
+        compose.waitForIdle()
     }
 
     private fun openChannels() {
         compose.onNodeWithTag("player-more-list").performScrollToIndex(PlayerMoreAction.CHANNELS.ordinal)
         compose.onNodeWithTag("player-more-CHANNELS").performClick()
+        focusLatestDialog()
         compose.waitForFocus("player-channel-75")
     }
 
@@ -59,6 +71,7 @@ class PlayerPanelFocusUiTest {
         board()
         openChannels()
         compose.onNodeWithTag("player-channels-close").performClick()
+        focusLatestDialog()
         compose.waitForFocus("player-more-CHANNELS")
     }
 
@@ -68,8 +81,10 @@ class PlayerPanelFocusUiTest {
         compose.onNodeWithTag("player-channel-list").performScrollToIndex(100)
         compose.onNodeWithTag("player-channel-100").performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag("player-channels-close").performClick()
+        focusLatestDialog()
         compose.waitForFocus("player-more-CHANNELS")
         compose.onNodeWithTag("player-more-CHANNELS").performClick()
+        focusLatestDialog()
         compose.waitForFocus("player-channel-100")
         compose.onNodeWithTag("player-channel-100").assertIsDisplayed()
     }

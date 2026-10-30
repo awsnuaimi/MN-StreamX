@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.yourapp.iptv.ui.screen.player
 
 import android.view.KeyEvent
@@ -27,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -49,9 +52,10 @@ internal fun PlayerProgramDetailsDialog(channelName: String, state: PlayerEpgUiS
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     var focused by remember { mutableStateOf(false) }
-    focus.Resume(setOf("details"), "details", "content")
-    focus.Restore("details", listOf("content", "close"))
     Dialog(onDismissRequest = onDismiss) {
+        val windowFocused = LocalWindowInfo.current.isWindowFocused
+        focus.Resume(setOf("details"), "details", "content")
+        focus.Restore("details", listOf("content", "close"), ready = windowFocused)
         CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * appearance.textSize.scale)) {
             Surface(Modifier.fillMaxWidth().fillMaxHeight(0.86f).then(focus.inputModifier()), color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface,
                 shape = MaterialTheme.shapes.large) {

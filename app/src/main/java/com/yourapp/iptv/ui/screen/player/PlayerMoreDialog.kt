@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.yourapp.iptv.ui.screen.player
 
 import android.view.KeyEvent
@@ -14,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -48,17 +51,19 @@ internal fun PlayerMoreDialog(channel: Channel, appearance: PlayerAppearance, fa
     }
     val available = actions.filter(::enabled)
     val keys = available.map { it.name } + "@close"
-    focus.Resume(setOf("player-more"), "player-more",
-        initial.name.takeIf { focus.bookmarks.get("player-more") == null })
-    focus.Maintain("player-more", keys)
-    focus.Restore("player-more", keys, scrollTo = { index ->
-        available.getOrNull(index)?.let { action ->
-            val row = actions.indexOf(action)
-            if (list.layoutInfo.visibleItemsInfo.none { it.index == row }) list.scrollToItem(row)
-        }
-    })
     val density = LocalDensity.current
     Dialog(onDismissRequest = onDismiss) {
+        // Dialog owns a separate Compose view and input-mode manager.
+        val windowFocused = LocalWindowInfo.current.isWindowFocused
+        focus.Resume(setOf("player-more"), "player-more",
+            initial.name.takeIf { focus.bookmarks.get("player-more") == null })
+        focus.Maintain("player-more", keys)
+        focus.Restore("player-more", keys, ready = windowFocused, scrollTo = { index ->
+            available.getOrNull(index)?.let { action ->
+                val row = actions.indexOf(action)
+                if (list.layoutInfo.visibleItemsInfo.none { it.index == row }) list.scrollToItem(row)
+            }
+        })
         CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * appearance.textSize.scale)) {
             Surface(Modifier.fillMaxWidth().heightIn(max = 480.dp)
                 .then(focus.inputModifier())
