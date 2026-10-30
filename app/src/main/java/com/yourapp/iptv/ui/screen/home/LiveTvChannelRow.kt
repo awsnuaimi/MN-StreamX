@@ -13,6 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
+import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -29,8 +31,10 @@ import com.yourapp.iptv.ui.presentation.LiveChannelRow
 internal fun LiveTvChannelRow(row: LiveChannelRow, program: ChannelProgramInfo, badge: String?,
     active: Boolean, colors: HomeTvPalette, labels: HomeLabels, onClick: () -> Unit, onLongClick: () -> Unit,
     modifier: Modifier = Modifier, narrow: Boolean = false, showLogos: Boolean = true, preferredChannelId: String? = null) {
-    val shape = if (active) HomeHeroShape else RoundedCornerShape(10.dp)
-    Row(modifier.fillMaxWidth().clip(shape).background(if (active) colors.focused else colors.surface)
+    var focused by remember { mutableStateOf(false) }
+    val shape = if (active || focused) HomeHeroShape else RoundedCornerShape(10.dp)
+    Row(modifier.tvFocusIndicator(shape).onFocusChanged { focused = it.isFocused }
+        .fillMaxWidth().clip(shape).background(when { focused -> colors.focused; active -> colors.selected; else -> colors.surface })
         .then(if (active) Modifier.border(1.5.dp, colors.accent, shape) else Modifier)
         .liveTvRowInput(onClick, onLongClick)
         .focusProperties { canFocus = true }

@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.yourapp.iptv.ui.component.common.restoreOrRequestFocus
 
 internal data class LiveTvCategoryTarget(val key: String, val tag: String, val title: String,
     val selected: Boolean, val onClick: () -> Unit)
@@ -22,7 +23,7 @@ internal data class LiveTvCategoryTarget(val key: String, val tag: String, val t
 @Composable
 internal fun LiveTvCategoryFocus(items: List<LiveTvCategoryTarget>, activeIndex: Int,
     colors: HomeTvPalette, entry: FocusRequester, header: FocusRequester?, listEntry: FocusRequester?,
-    sidebar: FocusRequester?, sidebarOnRight: Boolean) {
+    sidebar: FocusRequester?, sidebarOnRight: Boolean, headerFallback: FocusRequester? = null) {
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -62,7 +63,7 @@ internal fun LiveTvCategoryFocus(items: List<LiveTvCategoryTarget>, activeIndex:
     }.homeDpadKeys { direction ->
         val index = items.indexOfFirst { it.key == (pending ?: lastKey) }.takeIf { it >= 0 } ?: activeIndex
         when (direction) {
-            HomeDpad.UP -> { cancel(); header?.requestFocus() }
+            HomeDpad.UP -> { cancel(); header?.restoreOrRequestFocus(headerFallback) }
             HomeDpad.DOWN -> { cancel(); listEntry?.requestFocus() }
             else -> {
                 val next = HomeDpadPolicy.neighbor(index, items.size, direction, false, rtl)

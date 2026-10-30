@@ -21,7 +21,7 @@ fun AppButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, 
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.heightIn(min = 52.dp).onFocusChanged { focused = it.isFocused },
+        modifier = modifier.tvFocusIndicator(ButtonDefaults.shape).heightIn(min = 52.dp).onFocusChanged { focused = it.isFocused },
         border = BorderStroke(if (focused) 3.dp else 1.dp, if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,

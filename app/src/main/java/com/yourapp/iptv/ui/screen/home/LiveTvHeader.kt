@@ -23,18 +23,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yourapp.iptv.ui.presentation.LiveChannelSort
+import com.yourapp.iptv.ui.component.common.rememberedFocusGroup
 
 @Composable
 internal fun LiveTvHeader(title: String, visible: Int, total: Int, query: String, onQuery: (String) -> Unit,
     sort: LiveChannelSort, onSort: (LiveChannelSort) -> Unit, labels: HomeLabels, colors: HomeTvPalette,
     categories: FocusRequester? = null, entry: FocusRequester? = null, onManage: (() -> Unit)? = null, canSort: Boolean = true,
     sidebar: FocusRequester? = null, sidebarOnRight: Boolean = false, above: FocusRequester? = null,
-    manageEntry: FocusRequester? = null) {
+    manageEntry: FocusRequester? = null, searchEntry: FocusRequester? = null) {
     var search by rememberSaveable { mutableStateOf(false) }
     var sorting by remember { mutableStateOf(false) }
     var requestField by remember { mutableStateOf(false) }
     var returnFocus by remember { mutableStateOf(false) }
-    val defaultButton = remember { FocusRequester() }; val button = entry ?: defaultButton
+    val defaultButton = remember { FocusRequester() }; val button = searchEntry ?: defaultButton
+    val defaultEntry = remember { FocusRequester() }; val headerEntry = entry ?: defaultEntry
     val field = remember { FocusRequester() }
     val sortButton = remember { FocusRequester() }
     val hiddenDefault = remember { FocusRequester() }; val hidden = manageEntry ?: hiddenDefault
@@ -59,7 +61,7 @@ internal fun LiveTvHeader(title: String, visible: Int, total: Int, query: String
         return Modifier.homeFocusLinks(up = above, down = if (shown) field else categories,
             left = horizontal(HomeDpad.LEFT), right = horizontal(HomeDpad.RIGHT))
     }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().rememberedFocusGroup(headerEntry, button), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val compact = maxWidth < 560.dp || LocalDensity.current.fontScale > 1.4f
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,

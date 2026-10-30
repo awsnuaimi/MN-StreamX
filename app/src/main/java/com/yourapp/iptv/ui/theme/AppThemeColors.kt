@@ -9,25 +9,25 @@ import com.yourapp.iptv.domain.model.HomeTheme
 
 internal object AppThemeColors {
     private val dark = darkColorScheme(
-        primary = NeonBlue, onPrimary = Color.Black,
-        primaryContainer = Color(0xFF164362), onPrimaryContainer = Color(0xFFE2F4FF),
+        primary = Color(0xFF00B5EC), onPrimary = Color(0xFF031421),
+        primaryContainer = Color(0xFF1A346C), onPrimaryContainer = Color(0xFFE2F4FF),
         inversePrimary = Color(0xFF005EB8),
         secondary = Color(0xFFB6CADC), onSecondary = Color(0xFF102438),
-        secondaryContainer = Color(0xFF16344D), onSecondaryContainer = Color(0xFFE1EFFA),
+        secondaryContainer = Color(0xFF0F1C3D), onSecondaryContainer = Color(0xFFE1EFFA),
         tertiary = Color(0xFF8FE4A0), onTertiary = Color(0xFF003915),
         tertiaryContainer = Color(0xFF153529), onTertiaryContainer = Color(0xFFD4F8DC),
         error = Color(0xFFFFB4AB), onError = Color(0xFF690005),
         errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
-        background = Color(0xFF101E33), onBackground = Color.White,
-        surface = Color(0xFF172B46), onSurface = Color.White,
-        surfaceVariant = Color(0xFF263B54), onSurfaceVariant = Color(0xFFBED0E2),
-        outline = Color(0xFF6886A5), outlineVariant = Color(0xFF3B5872),
+        background = Color(0xFF071127), onBackground = Color.White,
+        surface = Color(0xFF122045), onSurface = Color.White,
+        surfaceVariant = Color(0xFF172A52), onSurfaceVariant = Color(0xFFABBBD5),
+        outline = Color(0xFF6886A5), outlineVariant = Color(0xFF263655),
         inverseSurface = Color(0xFFE1EAF4), inverseOnSurface = Color(0xFF16283B),
         surfaceTint = Color.Transparent, scrim = Color.Black,
-        surfaceDim = Color(0xFF0C1428), surfaceBright = Color(0xFF30465F),
-        surfaceContainerLowest = Color(0xFF0C1428), surfaceContainerLow = Color(0xFF122139),
-        surfaceContainer = Color(0xFF172B46), surfaceContainerHigh = Color(0xFF20364E),
-        surfaceContainerHighest = Color(0xFF2B425C)
+        surfaceDim = Color(0xFF061024), surfaceBright = Color(0xFF1D3562),
+        surfaceContainerLowest = Color(0xFF061024), surfaceContainerLow = Color(0xFF0F1C3D),
+        surfaceContainer = Color(0xFF122045), surfaceContainerHigh = Color(0xFF172A52),
+        surfaceContainerHighest = Color(0xFF1D3562)
     )
     private val light = lightColorScheme(
         primary = Color(0xFF005EB8), onPrimary = Color.White,

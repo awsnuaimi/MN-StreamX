@@ -1,6 +1,5 @@
 package com.yourapp.iptv.ui.screen.settings
 
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -18,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.R
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.ui.theme.IPTVAppTheme
+import com.yourapp.iptv.ui.component.common.tvFocusIndicator
+import com.yourapp.iptv.ui.component.common.rememberedFocusGroup
 import com.yourapp.iptv.viewmodel.HomeAppearanceEditorState
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -41,7 +42,8 @@ internal fun SettingsAppearancePanel(state: HomeAppearanceEditorState, labels: S
     var display by rememberSaveable(value.profileId) { mutableStateOf(false) }
     val displayFocus = remember { FocusRequester() }
     var themeFocused by remember { mutableStateOf(false) }
-    Surface(Modifier.fillMaxWidth().onFocusChanged { themeFocused = it.hasFocus }.focusGroup(),
+    val themeEntry = remember { FocusRequester() }
+    Surface(Modifier.fillMaxWidth().onFocusChanged { themeFocused = it.hasFocus }.rememberedFocusGroup(themeEntry),
         shape = MaterialTheme.shapes.medium,
         color = if (themeFocused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(if (themeFocused) 2.dp else 1.dp,
@@ -55,7 +57,7 @@ internal fun SettingsAppearancePanel(state: HomeAppearanceEditorState, labels: S
                         label = { Text((if (value.theme == theme) "✓ " else "") + stringResource(title)) },
                         leadingIcon = { Canvas(Modifier.size(13.dp)) { drawCircle(when (theme) {
                             HomeTheme.DARK_BLUE -> Color(0xFF21518A);HomeTheme.RED -> Color(0xFFFF3038);HomeTheme.LIGHT -> Color.White
-                        }) } }, modifier = Modifier.testTag("settings-theme-${theme.name}"))
+                        }) } }, modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.small).testTag("settings-theme-${theme.name}"))
                 }
             } }
             if (compact) Column {

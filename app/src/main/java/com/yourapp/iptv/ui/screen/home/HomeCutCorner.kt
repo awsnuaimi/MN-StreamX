@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
+import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 
 internal val HomeHeroShape = CutCornerShape(topEnd = 10.dp, bottomStart = 10.dp)
 
@@ -24,7 +25,7 @@ internal fun HomeWatchButton(text: String, colors: HomeTvPalette, onClick: () ->
     val scale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     var focused by remember { mutableStateOf(false) }
     Surface(onClick = onClick, enabled = enabled,
-        modifier = modifier.height((35f * scale).dp).onFocusChanged { focused = it.isFocused },
+        modifier = modifier.tvFocusIndicator(HomeHeroShape).height((35f * scale).dp).onFocusChanged { focused = it.isFocused },
         color = colors.accent, contentColor = if (colors.text == Color.White) Color(0xFF031421) else Color.White,
         shape = HomeHeroShape, border = if (focused) BorderStroke(2.dp, colors.text) else null) {
         Box(Modifier.padding(horizontal = 22.dp, vertical = 7.dp), contentAlignment = Alignment.Center) {

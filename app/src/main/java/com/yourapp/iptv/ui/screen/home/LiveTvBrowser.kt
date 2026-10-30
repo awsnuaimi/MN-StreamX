@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import com.yourapp.iptv.ui.component.common.restoreOrRequestFocus
 
 /** A pure UI boundary. No player, audio capture, provider request or durable setting is started here. */
 @Composable
@@ -84,9 +85,11 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     var menuKey by remember(state.browseScope, state.selectedGroup, state.query, accessEpoch) { mutableStateOf<String?>(null) }
     val menu = rowIndex.forKey(menuKey)
     val categories = remember { FocusRequester() }; val watch = remember { FocusRequester() }
+    val detailMemory = remember { FocusRequester() }
     val defaultEntry = remember { FocusRequester() }
     val entry = entryFocus ?: defaultEntry
     val defaultHeader = remember { FocusRequester() }; val headerFocus = headerEntry ?: defaultHeader
+    val headerSearchFocus = remember { FocusRequester() }
     val hiddenFocus = remember { FocusRequester() }
     val statusFocus = remember { FocusRequester() }
     val emptyFocus = remember { FocusRequester() }
@@ -103,11 +106,11 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     var statusFocused by remember { mutableStateOf(false) }
     var previousStatus by remember { mutableStateOf(hasStatusRetry) }
     val restoreStatus = previousStatus && !hasStatusRetry && statusFocused
-    SideEffect { previousStatus = hasStatusRetry; if (restoreStatus) headerFocus.requestFocus() }
+    SideEffect { previousStatus = hasStatusRetry; if (restoreStatus) headerFocus.restoreOrRequestFocus(headerSearchFocus) }
     var restoreHidden by remember { mutableStateOf(false) }
     LaunchedEffect(manage, restoreHidden) {
         if (!manage && restoreHidden) {
-            (if (preferences.ready) hiddenFocus else headerFocus).requestFocus()
+            if (preferences.ready) hiddenFocus.requestFocus() else headerFocus.restoreOrRequestFocus(headerSearchFocus)
             restoreHidden = false
         }
     }
@@ -148,8 +151,8 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
             state.visibleChannels.size, state.channels.size, state.query, onQuery, sort, { value -> if (onPreference == null) localSort = value else onPreference { it.copy(sort = LiveTvSort.valueOf(value.name)) } }, labels, colors, categories, headerFocus,
             onManage = onPreference?.takeIf { preferences.ready }?.let { { manage = true } }, canSort = preferences.ready && !preferences.saving,
             sidebar = sidebarFocus, sidebarOnRight = appearance.sidebarOnRight,
-            above = if (hasStatusRetry) statusFocus else aboveHeader, manageEntry = hiddenFocus)
-        LiveTvCategories(state.groups, state.channels, state.organization, state.selectedGroup, labels, colors, categories, onGroup, projectionDispatcher, entry, headerFocus, sidebarFocus, appearance.sidebarOnRight)
+            above = if (hasStatusRetry) statusFocus else aboveHeader, manageEntry = hiddenFocus, searchEntry = headerSearchFocus)
+        LiveTvCategories(state.groups, state.channels, state.organization, state.selectedGroup, labels, colors, categories, onGroup, projectionDispatcher, entry, headerFocus, sidebarFocus, appearance.sidebarOnRight, headerSearchFocus)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().onPreviewKeyEvent(numberKeys)
             .onFocusChanged { if (!it.hasFocus) numeric.clear() }.focusGroup()) {
             val detail = maxWidth >= 680.dp && LocalDensity.current.fontScale <= 1.6f
@@ -171,7 +174,8 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
                                 { focused = it.channel(focused, preferences.value.preferredQualities).id; menuKey = it.key }, { visible = it }, onPosition, onRestored,
                                 categories, watch, detailAvailable, Modifier.fillMaxSize(), appearance.showChannelLogos,
                                 navigation, sidebarFocus, ready = projected?.first === input, preferredQualities = preferences.value.preferredQualities, index = rowIndex,
-                                sidebarOnRight = appearance.sidebarOnRight, emptyEntry = emptyFocus.takeIf { fallbackReady })
+                                sidebarOnRight = appearance.sidebarOnRight, emptyEntry = emptyFocus.takeIf { fallbackReady },
+                                onEnterDetails = { detailMemory.restoreOrRequestFocus(watch) })
                             if (fallbackKind != "none") key(input, fallbackKind) {
                                 LiveTvEmptyFocus(fallbackKind, labels, colors, emptyFocus, categories, sidebarFocus, appearance.sidebarOnRight,
                                     { fallbackReady = it }, onPreferencesRetry, { onQuery(""); onGroup(null) }, Modifier.align(Alignment.Center))
@@ -182,8 +186,8 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
                         if (detail && active != null && channel != null) LiveTvDetail(active, channel, program(channel),
                             guides.forChannel(channel, state.browseScope, accessEpoch).nowMillis, colors, labels, translated,
                             captions.settings.target.tag.uppercase(Locale.ROOT), watch, entry, { onPlay(channel) },
-                            { onTranslate(channel) }, Modifier.weight(1f).fillMaxHeight().onFocusChanged { detailsFocused = it.hasFocus }.focusGroup(),
-                            sidebarOnRight = appearance.sidebarOnRight, above = categories)
+                            { onTranslate(channel) }, Modifier.weight(1f).fillMaxHeight().onFocusChanged { detailsFocused = it.hasFocus },
+                            sidebarOnRight = appearance.sidebarOnRight, above = categories, groupEntry = detailMemory)
                     }
                 }
             }

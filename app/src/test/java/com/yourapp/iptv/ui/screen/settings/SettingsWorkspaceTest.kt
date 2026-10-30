@@ -42,6 +42,7 @@ class SettingsWorkspaceTest {
     private var scale by mutableFloatStateOf(1f)
     private var editor by mutableStateOf(HomeAppearanceEditorState(HomeAppearance(), loading = false, committed = HomeAppearance()))
     private var writes = 0
+    private var ready by mutableStateOf(true)
     private val actions = mutableListOf<SettingsAction>()
     private fun board() {
         compose.setContent {
@@ -51,7 +52,7 @@ class SettingsWorkspaceTest {
                 LocalizedResources(language) { IPTVAppTheme {
                     Surface(Modifier.fillMaxSize()) {
                         val labels = SettingsLabels(language)
-                        SettingsWorkspace(labels, "Synthetic profile", editor.dirty, editor.saving, editor.saved, editor.error != null, true,
+                        SettingsWorkspace(labels, "Synthetic profile", editor.dirty, editor.saving, editor.saved, editor.error != null, ready,
                             onSave = { writes++;editor = editor.copy(saving = true) },
                             onReset = { editor = editor.copy(value = HomeAppearance(), saved = false) },
                             onDiscard = { editor = editor.copy(value = editor.committed!!, saved = false, error = null) },
@@ -77,6 +78,25 @@ class SettingsWorkspaceTest {
     private fun red() = compose.onNodeWithTag("settings-theme-RED").performScrollTo().performClick()
     private fun finishSave() { editor = editor.copy(saving = false, saved = true, committed = editor.value) }
     private fun back() = compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+
+    @Test fun returningFromTheRailRestoresThePreviousOption() {
+        board()
+        compose.onNodeWithTag("settings-night").performScrollTo()
+            .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.onNodeWithTag("settings-night").performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithTag("settings-category-APPEARANCE").assertIsFocused()
+        compose.onNodeWithTag("settings-category-APPEARANCE").performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.onNodeWithTag("settings-night").assertIsFocused().assertIsDisplayed()
+    }
+
+    @Test fun readinessUpdatesDoNotStealFocusFromTheCurrentControl() {
+        board()
+        compose.onNodeWithTag("settings-night").performScrollTo()
+            .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.runOnIdle { ready = false }
+        compose.runOnIdle { ready = true }
+        compose.onNodeWithTag("settings-night").assertIsFocused()
+    }
 
     @Test fun arabicMatchesTheTwoPaneDesignAndEnglishMirrorsIt() {
         board()

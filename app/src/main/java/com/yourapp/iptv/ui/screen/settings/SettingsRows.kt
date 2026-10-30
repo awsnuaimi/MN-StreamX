@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 
 @Composable
 internal fun SettingsActionRow(title: String, summary: String = "", value: String = "",
@@ -22,7 +23,7 @@ internal fun SettingsActionRow(title: String, summary: String = "", value: Strin
     val colors = MaterialTheme.colorScheme
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     Surface(onClick = onClick, enabled = enabled,
-        modifier = modifier.fillMaxWidth().heightIn(min = 44.dp).onFocusChanged { focused = it.hasFocus }
+        modifier = modifier.tvFocusIndicator(MaterialTheme.shapes.medium).fillMaxWidth().heightIn(min = 44.dp).onFocusChanged { focused = it.isFocused }
             .semantics { if (checked != null) toggleableState = if (checked) androidx.compose.ui.state.ToggleableState.On else androidx.compose.ui.state.ToggleableState.Off },
         color = if (focused) colors.primaryContainer else colors.surfaceContainerLow,
         contentColor = colors.onSurface, shape = MaterialTheme.shapes.medium,
@@ -69,7 +70,7 @@ internal fun SettingsFooterButton(title: String, onClick: () -> Unit, enabled: B
     var focused by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     Surface(onClick = onClick, enabled = enabled,
-        modifier = modifier.heightIn(min = 42.dp).onFocusChanged { focused = it.isFocused },
+        modifier = modifier.tvFocusIndicator(MaterialTheme.shapes.medium).heightIn(min = 42.dp).onFocusChanged { focused = it.isFocused },
         color = if (primary && enabled) colors.primary else if (focused) colors.primaryContainer else colors.surfaceContainerHigh,
         contentColor = if (primary && enabled) colors.onPrimary else colors.onSurface,
         shape = MaterialTheme.shapes.medium,

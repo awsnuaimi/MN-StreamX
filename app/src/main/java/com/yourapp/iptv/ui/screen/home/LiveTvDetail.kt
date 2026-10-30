@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.presentation.ChannelProgramInfo
 import com.yourapp.iptv.ui.presentation.LiveChannelRow
+import com.yourapp.iptv.ui.component.common.rememberedFocusGroup
+import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -36,10 +38,12 @@ internal fun liveTvTime(time: Long): String = SimpleDateFormat("HH:mm", Locale.g
 internal fun LiveTvDetail(row: LiveChannelRow, channel: Channel, program: ChannelProgramInfo,
     nowMillis: Long, colors: HomeTvPalette, labels: HomeLabels, translated: Boolean, target: String,
     watch: FocusRequester, backToList: FocusRequester, onWatch: () -> Unit, onTranslation: () -> Unit,
-    modifier: Modifier = Modifier, sidebarOnRight: Boolean? = null, above: FocusRequester? = null) {
+    modifier: Modifier = Modifier, sidebarOnRight: Boolean? = null, above: FocusRequester? = null,
+    groupEntry: FocusRequester? = null) {
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
     val sidebarRight = sidebarOnRight ?: (direction == androidx.compose.ui.unit.LayoutDirection.Rtl)
     val translation = remember { FocusRequester() }
+    val defaultEntry = remember { FocusRequester() }
     var watchTop by remember { mutableFloatStateOf(Float.NaN) }
     var translationTop by remember { mutableFloatStateOf(Float.NaN) }
     val stacked = watchTop.isFinite() && translationTop.isFinite() && translationTop > watchTop + 1f
@@ -56,7 +60,7 @@ internal fun LiveTvDetail(row: LiveChannelRow, channel: Channel, program: Channe
     }
     val frame = rememberChannelFrame(channel)
     var loaded by remember(channel.id, channel.streamUrl) { mutableStateOf(false) }
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(colors.selected)
+    Column(modifier.rememberedFocusGroup(groupEntry ?: defaultEntry, watch, scrollable = true).clip(RoundedCornerShape(12.dp)).background(colors.selected)
         .verticalScroll(rememberScrollState()).testTag("live-detail")) {
         Box(Modifier.fillMaxWidth().aspectRatio(1.67f)) {
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(colors.cardFallbackGradient)),
@@ -101,7 +105,7 @@ internal fun LiveTvDetail(row: LiveChannelRow, channel: Channel, program: Channe
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                     var focused by remember { mutableStateOf(false) }
-                    Surface(onClick = onWatch, modifier = Modifier.focusRequester(watch)
+                    Surface(onClick = onWatch, modifier = Modifier.tvFocusIndicator(HomeHeroShape).focusRequester(watch)
                         .then(routes(false)).focusProperties { canFocus = true }
                         .onGloballyPositioned { watchTop = it.positionInParent().y }.onFocusChanged { focused = it.isFocused }.testTag("live-watch"),
                         shape = HomeHeroShape, color = colors.accent,

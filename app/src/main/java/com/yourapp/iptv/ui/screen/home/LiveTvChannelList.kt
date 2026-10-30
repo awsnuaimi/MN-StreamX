@@ -28,7 +28,8 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
     navigation: LiveTvListNavigation = remember { LiveTvListNavigation() },
     sidebarFocus: FocusRequester? = null, ready: Boolean = true, preferredQualities: Map<String, String> = emptyMap(),
     index: LiveChannelIndex = remember(rows) { LiveChannelIndex(rows) },
-    sidebarOnRight: Boolean? = null, emptyEntry: FocusRequester? = null) {
+    sidebarOnRight: Boolean? = null, emptyEntry: FocusRequester? = null,
+    onEnterDetails: (() -> Unit)? = null) {
     val list = rememberLazyListState()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -135,7 +136,7 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
             if (horizontal) {
                 val details = if (sidebarRight) Key.DirectionLeft else Key.DirectionRight
                 navigation.cancel()
-                if (event.key == details && showDetail) watchFocus.requestFocus()
+                if (event.key == details && showDetail) { if (onEnterDetails != null) onEnterDetails() else watchFocus.requestFocus() }
                 else if (event.key != details && sidebarFocus != null) sidebarFocus.requestFocus()
             } else if (event.key == Key.DirectionUp && position == 0) {
                 navigation.cancel(); categoryFocus.requestFocus()

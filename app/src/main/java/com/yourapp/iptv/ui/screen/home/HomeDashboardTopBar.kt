@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -42,7 +43,7 @@ private fun HeaderPill(text: String, onClick: () -> Unit, modifier: Modifier = M
     val scale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     var focused by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
-    Surface(onClick = onClick, modifier = modifier.height((32f * scale).dp).onFocusChanged { focused = it.isFocused }
+    Surface(onClick = onClick, modifier = modifier.tvFocusIndicator(RoundedCornerShape(50)).height((32f * scale).dp).onFocusChanged { focused = it.isFocused }
         .semantics { contentDescription = text }, shape = RoundedCornerShape(50),
         color = if (focused) colors.primaryContainer else colors.surface.copy(alpha = 0.3f),
         border = BorderStroke(if (focused || selected) 1.5.dp else 1.dp,

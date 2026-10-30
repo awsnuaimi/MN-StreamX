@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.HomeAppearance
+import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 
 @Composable
 internal fun HomeSidebar(appearance: HomeAppearance, labels: HomeLabels, selected: HomeSection,
@@ -67,7 +68,7 @@ private fun RailButton(section: HomeSection, expanded: Boolean, selected: HomeSe
     onFocused: (HomeSection) -> Unit, previous: FocusRequester? = null, next: FocusRequester? = null, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val active = selected == section
-    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 42.dp)
+    Surface(onClick = onClick, modifier = Modifier.tvFocusIndicator(HomeHeroShape).fillMaxWidth().heightIn(min = 42.dp)
         .focusRequester(requester).homeFocusLinks(up = previous, down = next,
             left = dashboard.takeIf { sidebarOnRight }, right = dashboard.takeUnless { sidebarOnRight })
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused(section) }

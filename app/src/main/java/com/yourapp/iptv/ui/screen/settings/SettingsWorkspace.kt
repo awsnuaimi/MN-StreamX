@@ -2,9 +2,6 @@ package com.yourapp.iptv.ui.screen.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
@@ -25,6 +22,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.yourapp.iptv.domain.model.HomeLanguage
 import com.yourapp.iptv.ui.component.common.AppButton
+import com.yourapp.iptv.ui.component.common.rememberedFocusGroup
+import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 
 /** UI navigation only. Draft persistence and protected destinations stay with their existing owners. */
 @Composable
@@ -40,8 +39,10 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
     var pending by remember { mutableStateOf<SettingsIntent?>(null) }
     var waitForSave by remember { mutableStateOf(false) }
     var contentFocused by remember { mutableStateOf(false) }
+    var initializedLayout by remember { mutableStateOf<Pair<Boolean, Boolean>?>(null) }
     val rail = remember { SettingsCategory.entries.associateWith { FocusRequester() } }
     val first = remember { FocusRequester() };val search = remember { FocusRequester() }
+    val detailEntry = remember(selected) { FocusRequester() }
     val saveFocus = remember { FocusRequester() };var restoreSaveFocus by remember { mutableStateOf(false) }
     val searchButton = remember { FocusRequester() }
     val holder = rememberSaveableStateHolder()
@@ -70,9 +71,7 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
     }
     val direction = if (labels.language == HomeLanguage.ARABIC) LayoutDirection.Rtl else LayoutDirection.Ltr
     CompositionLocalProvider(LocalLayoutDirection provides direction) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.let {
-            if (it.luminance() < 0.3f) lerp(it, Color.Black, 0.35f) else it
-        }).testTag("settings-workspace")) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("settings-workspace")) {
             val wide = maxWidth.value / LocalDensity.current.fontScale.coerceAtLeast(1f) >= 620f
             val railWidth = (maxWidth * 0.29f).coerceIn(220.dp, 330.dp)
             fun returnToRail() {
@@ -98,11 +97,11 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
                         color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.testTag("settings-dirty"))
                     TextButton(onClick = { searchOpen = !searchOpen;if (!searchOpen) query = "" }, enabled = !saving,
-                        modifier = Modifier.height(36.dp).focusRequester(searchButton).testTag("settings-search-toggle")) {
+                        modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.medium).height(36.dp).focusRequester(searchButton).testTag("settings-search-toggle")) {
                         Text(labels.text("بحث", "Search", "Suchen"))
                     }
                     TextButton(onClick = { action(SettingsAction.BACK) }, enabled = !saving,
-                        modifier = Modifier.height(36.dp).testTag("settings-back")) { Text(labels.back()) }
+                        modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.medium).height(36.dp).testTag("settings-back")) { Text(labels.back()) }
                     if (wide) Text("MN StreamX", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                 }
                 if (searchOpen) {
@@ -124,12 +123,13 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
                             if (matches.isEmpty()) Text(labels.text("لا توجد نتائج", "No results", "Keine Ergebnisse"), Modifier.padding(12.dp))
                             matches.forEach { category ->
                                 key(category) { SettingsCategoryButton(category, selected == category, labels, rail.getValue(category),
-                                    if (wide) first else null, enabled = !saving,
+                                    if (wide) detailEntry else null, enabled = !saving,
                                     onClick = { request(SettingsIntent.Category(category)) }) }
                             }
                         }
                     }
-                    if (wide || (detailOpen && !searchOpen)) Surface(Modifier.weight(1f).fillMaxHeight().testTag("settings-detail"),
+                    if (wide || (detailOpen && !searchOpen)) Surface(Modifier.weight(1f).fillMaxHeight()
+                        .onFocusChanged { contentFocused = it.hasFocus }.focusGroup().testTag("settings-detail"),
                         shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                         Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -141,8 +141,12 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
                             Text(labels.description(selected), style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             holder.SaveableStateProvider(selected.name) {
-                                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                                    .onFocusChanged { contentFocused = it.hasFocus }.focusGroup().testTag("settings-options"),
+                                Column(Modifier.weight(1f).fillMaxWidth()
+                                    .rememberedFocusGroup(detailEntry, first, scrollable = true) { direction ->
+                                        val towardRail = if (labels.language == HomeLanguage.ARABIC) FocusDirection.Right else FocusDirection.Left
+                                        if (wide && direction == towardRail) rail.getValue(selected) else FocusRequester.Default
+                                    }.verticalScroll(rememberScrollState())
+                                    .testTag("settings-options"),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)) { content(selected, first, action) }
                             }
                             if (selected == SettingsCategory.APPEARANCE) {
@@ -163,9 +167,14 @@ internal fun SettingsWorkspace(labels: SettingsLabels, profileName: String, dirt
                 Text("OK · " + labels.text("اختيار", "Select", "Auswählen") + "     ↩ · " + labels.back(),
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            LaunchedEffect(wide, detailOpen, canSave) { withFrameNanos { };runCatching {
-                if (wide || !detailOpen) rail.getValue(selected).requestFocus() else first.requestFocus()
-            } }
+            LaunchedEffect(wide, detailOpen, canSave) {
+                val layout = wide to detailOpen
+                if (initializedLayout == layout || (!wide && detailOpen && !canSave)) return@LaunchedEffect
+                withFrameNanos { }
+                runCatching {
+                    if (wide || !detailOpen) rail.getValue(selected).requestFocus() else detailEntry.requestFocus()
+                }.onSuccess { initializedLayout = layout }
+            }
         }
     }
     pending?.let { intent ->
@@ -191,11 +200,11 @@ private fun SettingsCategoryButton(category: SettingsCategory, selected: Boolean
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val colors = MaterialTheme.colorScheme
     Surface(onClick = onClick, enabled = enabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 42.dp).focusRequester(requester)
+        modifier = Modifier.tvFocusIndicator(MaterialTheme.shapes.medium).fillMaxWidth().heightIn(min = 42.dp).focusRequester(requester)
             .focusProperties { if (content != null) { if (rtl) left = content else right = content } }
             .onFocusChanged { focused = it.isFocused }.testTag("settings-category-${category.name}")
             .semantics { this.selected = selected;contentDescription = labels.title(category) },
-        color = if (selected || focused) colors.primaryContainer else colors.surfaceContainerLow,
+        color = when { focused -> colors.primaryContainer; selected -> colors.secondaryContainer; else -> colors.surfaceContainerLow },
         contentColor = colors.onSurface, shape = MaterialTheme.shapes.medium,
         border = BorderStroke(if (focused) 2.dp else 1.dp, if (focused) colors.primary else if (selected) colors.primary.copy(alpha = 0.5f) else colors.surfaceContainerLow)) {
         Row(Modifier.padding(horizontal = 10.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,

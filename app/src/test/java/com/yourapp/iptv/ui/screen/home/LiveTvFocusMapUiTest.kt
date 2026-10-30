@@ -117,6 +117,19 @@ class LiveTvFocusMapUiTest {
         press("live-category-Group 34", Key.DirectionUp); waitFocus("live-search")
         compose.runOnIdle { assertNull(played) }
     }
+    @Test fun categoriesReturnToTheLastHeaderAction() {
+        board(); focus("live-sort")
+        press("live-sort", Key.DirectionDown); waitFocus("live-category-all")
+        press("live-category-all", Key.DirectionUp); waitFocus("live-sort")
+        compose.runOnIdle { assertNull(played) }
+    }
+    @Test fun reenteringDetailsRestoresThePreviousAction() {
+        board(); focus("live-translation")
+        compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        waitFocus("live-channel-0")
+        press("live-channel-0", Key.DirectionRight); waitFocus("live-translation")
+        compose.runOnIdle { assertNull(played) }
+    }
     @Test fun leavingCategoriesCancelsPendingLazyFocusRequests() {
         board(); focus("live-category-all")
         compose.onNodeWithTag("live-category-all").performKeyInput { repeat(35) { pressKey(Key.DirectionRight) }; pressKey(Key.DirectionUp) }

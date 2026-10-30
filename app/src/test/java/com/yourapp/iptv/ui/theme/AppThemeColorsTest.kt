@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import com.yourapp.iptv.ui.screen.home.HomeTvPalettes
 import com.yourapp.iptv.domain.model.HomeTheme
+import com.yourapp.iptv.domain.model.HomeAppearance
+import com.yourapp.iptv.ui.screen.home.liveTvColors
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -60,6 +62,7 @@ class AppThemeColorsTest {
         for ((theme, night) in modes) {
             val home = HomeTvPalettes.forTheme(theme, night)
             val app = AppThemeColors.forTheme(theme, night)
+            assertEquals(home, liveTvColors(HomeAppearance(theme = theme, isNightMode = night)))
             assertEquals(app.background, home.background)
             assertEquals(app.surfaceContainerLowest, home.sidebar)
             assertEquals(app.primaryContainer, home.focused)

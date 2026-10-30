@@ -5,6 +5,7 @@ import com.yourapp.iptv.R
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.focusGroup
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -13,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import com.yourapp.iptv.ui.component.common.restoreOrRequestFocus
 import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -117,6 +120,17 @@ fun HomeScreen(
     val favoriteRetryVisible = favorites.errorMessage != null && !favorites.isSaving
     val aboveContent = if (favoriteRetryVisible) favoriteRetryFocus else parentalFocus.takeIf { parentalVisible }
     var lastSidebarFocus by rememberSaveable { mutableStateOf(HomeSection.DASHBOARD.name) }
+    var lastArea by rememberSaveable { mutableStateOf("rail") }
+    val currentContentFocus by rememberUpdatedState(contentFocus)
+    val focusManager = LocalFocusManager.current
+    var enterContent by remember { mutableStateOf(false) }
+    LaunchedEffect(enterContent, contentFocus) {
+        if (enterContent && contentFocus != null) {
+            withFrameNanos { }
+            focusManager.moveFocus(if (appearance.sidebarOnRight) FocusDirection.Left else FocusDirection.Right)
+            enterContent = false
+        }
+    }
     fun restoreSidebarFocus() {
         val target = HomeFocusPolicy.restore(lastSidebarFocus, state.isLoading || state.isRefreshing,
             !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
@@ -130,18 +144,24 @@ fun HomeScreen(
             if (!launchedFromDashboard) viewModel.selectChannel(it)
             launchedFromDashboard = false
             onReturnHandled()
+            withFrameNanos { }
+            if (lastArea == "content") currentContentFocus?.restoreOrRequestFocus()
         }
     }
     LaunchedEffect(state.sessionReady, state.isLoading, state.browseScope) {
         if (state.sessionReady && !state.isLoading && !initialFocusDone) {
             initialFocusDone = true
             if (returnedChannelId != null) return@LaunchedEffect
-            withFrameNanos { }; restoreSidebarFocus()
+            withFrameNanos { }
+            if (lastArea == "content" && currentContentFocus != null) currentContentFocus?.restoreOrRequestFocus()
+            else restoreSidebarFocus()
         }
     }
     BackHandler(enabled = !dashboardVisible) {
-        if (state.query.isNotBlank()) viewModel.updateQuery("") else dashboardVisible = true
-        restoreSidebarFocus()
+        if (state.query.isNotBlank()) viewModel.updateQuery("") else {
+            dashboardVisible = true
+            sidebarFocus.getValue(HomeSection.DASHBOARD).requestFocus()
+        }
     }
     val selected = when {
         dashboardVisible -> HomeSection.DASHBOARD
@@ -153,10 +173,10 @@ fun HomeScreen(
         viewModel.onBrowseInteraction()
         when (section) {
             HomeSection.MORE -> Unit
-            HomeSection.DASHBOARD -> { dashboardVisible = true }
+            HomeSection.DASHBOARD -> { dashboardVisible = true; enterContent = true }
             HomeSection.LIVE, HomeSection.FAVORITES -> {
                 if (liveLocked) parental.model?.requestPin()
-                else { dashboardVisible = false; viewModel.selectSection(section == HomeSection.FAVORITES) }
+                else { dashboardVisible = false; viewModel.selectSection(section == HomeSection.FAVORITES); enterContent = true }
             }
             HomeSection.MOVIES -> onMovies()
             HomeSection.SERIES -> onSeries()
@@ -180,12 +200,13 @@ fun HomeScreen(
         }) {
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
                 HomeSidebar(appearance, labels, selected, state.isLoading || state.isRefreshing,
-                    sidebarFocus, { section -> lastSidebarFocus = section.name }, ::select,
+                    sidebarFocus, { section -> lastSidebarFocus = section.name; lastArea = "rail" }, ::select,
                     dashboardFocus = contentFocus, browserFocus = contentFocus,
                     liveBrowser = !dashboardVisible, organizationReady = !state.isLoading && !state.needsSource && state.errorMessage == null && state.channels.isNotEmpty())
             }
             CompositionLocalProvider(LocalLayoutDirection provides languageDirection) {
-                Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = if (dashboardVisible) 30.dp else 0.dp,
+                Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) lastArea = "content" }
+                    .focusGroup().padding(horizontal = if (dashboardVisible) 30.dp else 0.dp,
                     vertical = if (dashboardVisible) 20.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     if (parentalVisible) Box(Modifier.focusRequester(parentalFocus).homeFocusLinks(
                         down = if (favoriteRetryVisible) favoriteRetryFocus else lowerFocus,
@@ -219,7 +240,8 @@ fun HomeScreen(
                                     launchedFromDashboard = true
                                     onPlayChannel(channel.id, null, "", false)
                                 }, onLive = { select(HomeSection.LIVE) }, onMovies = onMovies, onSeries = onSeries,
-                                onGuide = { onOpenGuide(null, null, "", false) }, onHistory = onHistory)
+                                onGuide = { onOpenGuide(null, null, "", false) }, onHistory = onHistory,
+                                sidebarFocus = sidebarFocus.getValue(HomeSection.DASHBOARD))
                         } }
                         else -> key(state.browseScope) {
                             LiveTvBrowserScene(state, appearance, labels, viewModel::updateQuery,

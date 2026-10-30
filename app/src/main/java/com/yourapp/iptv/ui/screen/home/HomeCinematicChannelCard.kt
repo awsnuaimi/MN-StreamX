@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
 import com.yourapp.iptv.ui.state.HomeProgramUiState
+import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 
 /** Separate artwork and programme caption, with one stable focus target. */
 @OptIn(ExperimentalFoundationApi::class)
@@ -31,17 +32,17 @@ import com.yourapp.iptv.ui.state.HomeProgramUiState
 internal fun HomeCinematicChannelCard(channel: Channel, metrics: HomeDashboardMetrics, colors: HomeTvPalette,
     labels: HomeLabels, onFocus: (Boolean) -> Unit = {}, showChannelLogos: Boolean = true,
     program: HomeProgramUiState = HomeProgramUiState(), languageBadge: String? = null,
-    tagPrefix: String = "home-channel", onClick: () -> Unit) {
+    tagPrefix: String = "home-channel", modifier: Modifier = Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val bring = remember { BringIntoViewRequester() }
     LaunchedEffect(focused) { if (focused) bring.bringIntoView() }
     val frame = rememberChannelFrame(channel)
     val current = program.takeIf { it.matches(channel) }?.let { it.schedule.current(it.nowMillis) }
     val scale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-    Surface(onClick = onClick, modifier = Modifier.width(metrics.channelWidth.dp)
+    Surface(onClick = onClick, modifier = modifier.tvFocusIndicator(RoundedCornerShape(11.dp)).width(metrics.channelWidth.dp)
         .heightIn(min = (metrics.channelWidth * 0.65f * scale).dp)
         .bringIntoViewRequester(bring).onFocusChanged { focused = it.isFocused; onFocus(it.isFocused) }
-        .testTag("$tagPrefix-${channel.id}"), shape = RoundedCornerShape(11.dp), color = colors.surface,
+        .testTag("$tagPrefix-${channel.id}"), shape = RoundedCornerShape(11.dp), color = if (focused) colors.focused else colors.surface,
         border = BorderStroke(if (focused) 2.dp else 1.dp, if (focused) colors.accent else colors.outline)) {
         Column {
             Box(Modifier.fillMaxWidth().height(64.dp).background(Brush.verticalGradient(colors.cardFallbackGradient))) {
