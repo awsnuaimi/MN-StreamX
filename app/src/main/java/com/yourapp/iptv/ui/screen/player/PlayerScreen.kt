@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -25,11 +26,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
 import com.yourapp.iptv.ui.component.player.*
+import com.yourapp.iptv.ui.component.common.FocusInputEpoch
+import com.yourapp.iptv.ui.component.common.rememberContextFocus
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
 import com.yourapp.iptv.ui.screen.history.WatchHistoryDialog
 import com.yourapp.iptv.viewmodel.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -69,13 +73,14 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     val appearance by appearanceViewModel.appearance.collectAsStateWithLifecycle()
     val channel = state.channel
     val activeChannel by rememberUpdatedState(channel)
-    var panels by remember { mutableStateOf(PlayerPanelState()) }
+    var panels by rememberSaveable(stateSaver = PlayerPanelSaver) { mutableStateOf(PlayerPanelState()) }
     val cardsOpen = panels.panel == PlayerPanel.CARDS
     var bannerVisible by remember { mutableStateOf(true) }
     var interaction by remember { mutableIntStateOf(0) }
     var focusEpoch by remember { mutableIntStateOf(0) }
     var focusedId by remember { mutableStateOf<String?>(null) }
-    var moreInitial by remember { mutableStateOf(PlayerMoreAction.FAVORITE) }
+    var moreInitial by rememberSaveable { mutableStateOf(PlayerMoreAction.FAVORITE) }
+    val panelFocus = rememberContextFocus("live-player")
     var retry by remember(channel?.id) { mutableIntStateOf(0) }
     var playbackError by remember(channel?.id, retry) { mutableStateOf<String?>(null) }
     var buffering by remember(channel?.id, retry) { mutableStateOf(true) }
@@ -94,7 +99,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) { activation.reset(); remoteKeys.reset() }
+            if (event == Lifecycle.Event.ON_STOP) { activation.reset(); remoteKeys.reset(); panelFocus.cancel() }
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer); activation.reset(); remoteKeys.reset() }
@@ -116,7 +121,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         surface.hideControls(); panels = panels.cards(); focusedId = channel.id; focusEpoch++
     }
     fun openMore() {
-        moreInitial = PlayerMoreAction.FAVORITE; panels = panels.more()
+        panels = panels.more()
     }
     fun openChannels() {
         surface.hideControls(); panels = panels.channels(); focusedId = null
@@ -184,9 +189,13 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
             delay(appearance.timeoutMillis); bannerVisible = false
         }
     }
+    val requestInputEpoch = remember(focusEpoch, channel?.id, retry, error, panels.panel) { FocusInputEpoch.value }
     LaunchedEffect(focusEpoch, channel?.id, retry, error, panels.panel) {
         if (!panels.isModal) {
+            lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
             withFrameNanos { }
+            if (FocusInputEpoch.value != requestInputEpoch || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+                return@LaunchedEffect
             when {
                 error != null -> { surface.hideControls(); runCatching { errorFocus.requestFocus() } }
                 cardsOpen && channel != null -> Unit // Rail restores focus after scrolling.
@@ -195,88 +204,91 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
             }
         }
     }
-    Box(Modifier.fillMaxSize().background(Color.Black)
-        .onPreviewKeyEvent { handleRemote(it.nativeKeyEvent, panels.panel == PlayerPanel.CONTROLS) }
-        .focusRequester(rootFocus).focusable()) {
-        if (channel != null) PlayerSurface(channel, retry, surface,
-            onError = { id, message -> if (id == activeChannel?.id) playbackError = message },
-            onBuffering = { id, loading -> if (id == activeChannel?.id) buffering = loading },
-            onRemoteKey = ::handleRemote,
-            onControllerVisibilityChanged = { visible ->
-                if (visible) panels = panels.controls()
-                else if (panels.panel == PlayerPanel.CONTROLS) { panels = panels.watching(); focusEpoch++ }
-            },
-            modifier = Modifier.fillMaxSize(), controllerTimeoutMs = appearance.timeoutMillis.toInt(),
-            technicalInfoEnabled = true,
-            onPlaybackStarted = viewModel::onPlaybackStarted,
-            captionSettings = captionState.settings,
-            onCaptionBinding = { player, audio -> captionPlayer = player; captionAudio = audio },
-            onTechnicalInfo = { id, value -> if (id == activeChannel?.id) technical = value })
-        GeneratedCaptionOverlay(captionModel, captionAudio, captionState.settings,
-            raised = panels.panel != PlayerPanel.WATCHING || bannerVisible)
-        if ((cardsOpen || (bannerVisible && panels.panel == PlayerPanel.WATCHING)) && error == null) {
-            PlayerInfoOverlay(channel, state.currentIndex + 1, state.queue.channels, appearance, activeEpg, technical,
-                cardsOpen, focused, preview, focusEpoch, panels.focusMore, ::openMore, ::selectChannel,
-                onFocusChannel = { focusedId = it })
-        }
-        if ((state.isLoading || (channel != null && buffering)) && error == null)
-            CircularProgressIndicator(Modifier.align(Alignment.Center))
-        if (error != null) PlayerErrorOverlay(error, channel != null, state.queue.size > 0, errorFocus,
-            onRetry = { retry++; focusEpoch++ }, onChannels = ::openChannels, onBack = { onBack(channel?.id) })
-        if (panels.panel == PlayerPanel.CHANNELS) PlayerChannelPanel(state.queue.channels, state.currentIndex,
-            organizationFilterName(state.selectedGroup, state.organization), state.query, state.favoritesOnly, onSelect = ::selectChannel,
-            onDismiss = ::back, onRemoteKey = ::handleRemote)
-        if (panels.panel == PlayerPanel.MORE && channel != null) {
-        val lastChannel by viewModel.lastChannelState.collectAsStateWithLifecycle()
-        val recallScope = rememberCoroutineScope()
-        DisposableEffect(viewModel, lifecycle) {
-            val observer = LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_START) viewModel.showLastChannelMenu()
-                if (event == Lifecycle.Event.ON_STOP) viewModel.hideLastChannelMenu()
+    CompositionLocalProvider(LocalPlayerFocus provides panelFocus) {
+        Box(Modifier.fillMaxSize().background(Color.Black).then(panelFocus.inputModifier())
+            .onPreviewKeyEvent { handleRemote(it.nativeKeyEvent, panels.panel == PlayerPanel.CONTROLS) }
+            .focusRequester(rootFocus).focusable()) {
+            if (channel != null) PlayerSurface(channel, retry, surface,
+                onError = { id, message -> if (id == activeChannel?.id) playbackError = message },
+                onBuffering = { id, loading -> if (id == activeChannel?.id) buffering = loading },
+                onRemoteKey = ::handleRemote,
+                onControllerVisibilityChanged = { visible ->
+                    if (visible) panels = panels.controls()
+                    else if (panels.panel == PlayerPanel.CONTROLS) { panels = panels.watching(); focusEpoch++ }
+                },
+                modifier = Modifier.fillMaxSize(), controllerTimeoutMs = appearance.timeoutMillis.toInt(),
+                technicalInfoEnabled = true,
+                onPlaybackStarted = viewModel::onPlaybackStarted,
+                captionSettings = captionState.settings,
+                onCaptionBinding = { player, audio -> captionPlayer = player; captionAudio = audio },
+                onTechnicalInfo = { id, value -> if (id == activeChannel?.id) technical = value })
+            GeneratedCaptionOverlay(captionModel, captionAudio, captionState.settings,
+                raised = panels.panel != PlayerPanel.WATCHING || bannerVisible)
+            if ((cardsOpen || (bannerVisible && panels.panel == PlayerPanel.WATCHING)) && error == null) {
+                PlayerInfoOverlay(channel, state.currentIndex + 1, state.queue.channels, appearance, activeEpg, technical,
+                    cardsOpen, focused, preview, focusEpoch, panels.focusMore, ::openMore, ::selectChannel,
+                    onFocusChannel = { focusedId = it })
             }
-            lifecycle.addObserver(observer)
-            if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) viewModel.showLastChannelMenu()
-            onDispose { lifecycle.removeObserver(observer); viewModel.hideLastChannelMenu() }
-        }
-        PlayerMoreDialog(channel, appearance, favorites,
-            state.canChangeChannel, moreInitial, onRemoteKey = ::handleRemote, onDismiss = ::back,
-            lastChannel = lastChannel, onRetryLastChannel = viewModel::retryLastChannel,
-            onAction = { action ->
-                when (action) {
-                    PlayerMoreAction.FAVORITE -> viewModel.toggleFavorite()
-                    PlayerMoreAction.LAST_CHANNEL -> recallScope.launch {
-                        val target = viewModel.recallLastChannel() ?: return@launch
-                        surface.hideControls(); panels = panels.watching()
-                        focusedId = null; focusEpoch++; showBanner()
-                        if (!viewModel.selectHistoryChannel(target.channel, target.sourceKey))
-                            onOpenHistoryChannel(target.channel.id, target.sourceKey)
-                    }
-                    PlayerMoreAction.CAPTIONS -> {
-                        if (parental.state.allows(com.yourapp.iptv.domain.parental.ParentalSection.SETTINGS))
-                            panels = panels.captions()
-                        else { panels = panels.watching(); parental.model?.requestPin() }
-                    }
-                    PlayerMoreAction.HISTORY -> panels = panels.history()
-                    PlayerMoreAction.DETAILS -> panels = panels.details()
-                    PlayerMoreAction.CHANNELS -> openChannels()
-                    PlayerMoreAction.GUIDE -> {
-                        panels = panels.watching()
-                        onGuide(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
-                    }
-                    PlayerMoreAction.CONTROLS -> { panels = panels.controls(); surface.showControls() }
-                    PlayerMoreAction.APPEARANCE -> { panels = panels.watching(); onAppearance() }
-                    PlayerMoreAction.PREVIOUS -> changeChannel(false)
-                    PlayerMoreAction.NEXT -> changeChannel(true)
+            if ((state.isLoading || (channel != null && buffering)) && error == null)
+                CircularProgressIndicator(Modifier.align(Alignment.Center))
+            if (error != null) PlayerErrorOverlay(error, channel != null, state.queue.size > 0, errorFocus,
+                onRetry = { retry++; focusEpoch++ }, onChannels = ::openChannels, onBack = { onBack(channel?.id) })
+            if (panels.panel == PlayerPanel.CHANNELS) PlayerChannelPanel(state.queue.channels, state.currentIndex,
+                organizationFilterName(state.selectedGroup, state.organization), state.query, state.favoritesOnly, onSelect = ::selectChannel,
+                onDismiss = ::back, onRemoteKey = ::handleRemote)
+            if (panels.panel == PlayerPanel.MORE && channel != null) {
+            val lastChannel by viewModel.lastChannelState.collectAsStateWithLifecycle()
+            val recallScope = rememberCoroutineScope()
+            DisposableEffect(viewModel, lifecycle) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_START) viewModel.showLastChannelMenu()
+                    if (event == Lifecycle.Event.ON_STOP) viewModel.hideLastChannelMenu()
                 }
-            }, onRetryFavorites = viewModel::retryFavorites)
+                lifecycle.addObserver(observer)
+                if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) viewModel.showLastChannelMenu()
+                onDispose { lifecycle.removeObserver(observer); viewModel.hideLastChannelMenu() }
+            }
+            PlayerMoreDialog(channel, appearance, favorites,
+                state.canChangeChannel, moreInitial, onRemoteKey = ::handleRemote, onDismiss = ::back,
+                lastChannel = lastChannel, onRetryLastChannel = viewModel::retryLastChannel,
+                onAction = { action ->
+                    moreInitial = action
+                    when (action) {
+                        PlayerMoreAction.FAVORITE -> viewModel.toggleFavorite()
+                        PlayerMoreAction.LAST_CHANNEL -> recallScope.launch {
+                            val target = viewModel.recallLastChannel() ?: return@launch
+                            surface.hideControls(); panels = panels.watching()
+                            focusedId = null; focusEpoch++; showBanner()
+                            if (!viewModel.selectHistoryChannel(target.channel, target.sourceKey))
+                                onOpenHistoryChannel(target.channel.id, target.sourceKey)
+                        }
+                        PlayerMoreAction.CAPTIONS -> {
+                            if (parental.state.allows(com.yourapp.iptv.domain.parental.ParentalSection.SETTINGS))
+                                panels = panels.captions()
+                            else { panels = panels.watching(); parental.model?.requestPin() }
+                        }
+                        PlayerMoreAction.HISTORY -> panels = panels.history()
+                        PlayerMoreAction.DETAILS -> panels = panels.details()
+                        PlayerMoreAction.CHANNELS -> openChannels()
+                        PlayerMoreAction.GUIDE -> {
+                            panels = panels.watching()
+                            onGuide(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
+                        }
+                        PlayerMoreAction.CONTROLS -> { panels = panels.controls(); surface.showControls() }
+                        PlayerMoreAction.APPEARANCE -> onAppearance()
+                        PlayerMoreAction.PREVIOUS -> changeChannel(false)
+                        PlayerMoreAction.NEXT -> changeChannel(true)
+                    }
+                }, onRetryFavorites = viewModel::retryFavorites)
+            }
+            if (panels.panel == PlayerPanel.DETAILS && channel != null)
+                PlayerProgramDetailsDialog(channel.name, activeEpg, appearance, ::back)
+            if (panels.panel == PlayerPanel.CAPTIONS)
+                PlayerCaptionDialog(captionModel, captionSelection, ::back)
+            if (panels.panel == PlayerPanel.HISTORY) WatchHistoryDialog(channel?.id, ::back, { selected, source ->
+                panels = panels.watching(); focusedId = null; focusEpoch++; showBanner()
+                if (!viewModel.selectHistoryChannel(selected, source)) onOpenHistoryChannel(selected.id, source)
+            })
         }
-        if (panels.panel == PlayerPanel.DETAILS && channel != null)
-            PlayerProgramDetailsDialog(channel.name, activeEpg, appearance, ::back)
-        if (panels.panel == PlayerPanel.CAPTIONS)
-            PlayerCaptionDialog(captionModel, captionSelection, ::back)
-        if (panels.panel == PlayerPanel.HISTORY) WatchHistoryDialog(channel?.id, ::back, { selected, source ->
-            panels = panels.watching(); focusedId = null; focusEpoch++; showBanner()
-            if (!viewModel.selectHistoryChannel(selected, source)) onOpenHistoryChannel(selected.id, source)
-        })
     }
 }

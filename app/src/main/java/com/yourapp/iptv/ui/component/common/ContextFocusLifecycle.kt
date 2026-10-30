@@ -13,8 +13,10 @@ internal fun ContextFocus.Resume(contexts: Set<String>, fallback: String, prefer
     val currentContexts by rememberUpdatedState(contexts)
     val currentFallback by rememberUpdatedState(fallback)
     val currentPreferred by rememberUpdatedState(preferred)
+    val initialInputEpoch = remember(this) { FocusInputEpoch.value }
     LaunchedEffect(this) {
-        if (initial) restore(currentContexts, currentFallback, currentPreferred)
+        if (initial && initialInputEpoch == FocusInputEpoch.value)
+            restore(currentContexts, currentFallback, currentPreferred)
     }
     DisposableEffect(this, owner) {
         var stopped = false

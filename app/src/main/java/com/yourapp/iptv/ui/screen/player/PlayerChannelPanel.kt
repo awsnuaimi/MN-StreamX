@@ -22,17 +22,14 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.res.stringResource
 import com.yourapp.iptv.R
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,6 +40,7 @@ import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
 import com.yourapp.iptv.ui.component.channel.FavoriteBadge
 import com.yourapp.iptv.ui.component.common.AppButton
+import com.yourapp.iptv.ui.component.common.Resume
 
 @Composable
 fun PlayerChannelPanel(
@@ -55,18 +53,22 @@ fun PlayerChannelPanel(
     onDismiss: () -> Unit,
     onRemoteKey: (KeyEvent, Boolean) -> Boolean
 ) {
-    val selectedFocus = remember { FocusRequester() }
+    val focus = rememberPlayerFocus()
+    val currentId = channels.getOrNull(currentIndex)?.id
+    val context = "player-channels:$currentId"
+    val controls = "$context:controls"
+    val keys = remember(channels) { channels.map { it.id } }
     val list = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
-    LaunchedEffect(currentIndex, channels.size) {
-        if (currentIndex in channels.indices) {
-            list.scrollToItem(currentIndex)
-            withFrameNanos { }
-            runCatching { selectedFocus.requestFocus() }
-        }
-    }
+    focus.Resume(setOf(context, controls), context, currentId.takeIf { focus.bookmarks.get(context) == null })
+    focus.Maintain(context, keys)
+    focus.Restore(context, keys, onEmpty = { focus.request(controls, "close") }, scrollTo = { index ->
+        if (list.layoutInfo.visibleItemsInfo.none { it.index == index }) list.scrollToItem(index)
+    })
+    focus.Restore(controls, listOf("close"))
     Dialog(onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))
+            .then(focus.inputModifier())
             .onPreviewKeyEvent { onRemoteKey(it.nativeKeyEvent, false) }) {
             Surface(
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
@@ -81,18 +83,18 @@ fun PlayerChannelPanel(
                             Text((if (favoritesOnly) "★ " + stringResource(R.string.player_favorites) + " · " else "") + (group ?: stringResource(R.string.player_all_categories)), maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
                         }
-                        AppButton(stringResource(R.string.player_close), onDismiss)
+                        AppButton(stringResource(R.string.player_close), onDismiss,
+                            focus.target(controls, "close", 0).testTag("player-channels-close"))
                     }
                     if (query.isNotBlank()) Text(stringResource(R.string.player_search, query), maxLines = 1,
                         overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
                     if (channels.isEmpty()) Text(stringResource(R.string.player_empty_list))
-                    LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth(),
+                    LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth().testTag("player-channel-list"),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(channels, key = { _, channel -> channel.id }) { index, channel ->
                             PlayerChannelRow(channel, index + 1, index == currentIndex,
-                                onClick = { onSelect(channel.id) },
-                                modifier = if (index == currentIndex) Modifier.focusRequester(selectedFocus)
-                                    else Modifier)
+                                onClick = { focus.record(context, channel.id, index); onSelect(channel.id) },
+                                modifier = focus.target(context, channel.id, index).testTag("player-channel-${channel.id}"))
                         }
                     }
                     Text(stringResource(R.string.player_list_hint),

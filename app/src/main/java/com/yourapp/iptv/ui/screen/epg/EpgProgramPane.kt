@@ -13,22 +13,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
@@ -40,11 +36,12 @@ import com.yourapp.iptv.ui.state.PlayerEpgUiState
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.platform.LocalConfiguration
+import com.yourapp.iptv.ui.component.common.ContextFocus
 
 @Composable
-fun EpgProgramPane(
-    channel: Channel, epg: PlayerEpgUiState, selectedKey: String?, request: EpgFocusRequest,
-    onSelectProgram: (String) -> Unit, onPlay: () -> Unit, onFocused: () -> Unit,
+internal fun EpgProgramPane(
+    channel: Channel, epg: PlayerEpgUiState, selectedKey: String?, focus: ContextFocus,
+    onSelectProgram: (String) -> Unit, onPlay: () -> Unit,
     favorites: FavoriteUiState, onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -53,25 +50,21 @@ fun EpgProgramPane(
     }
     val selected = EpgProgramSelection.resolve(programs, selectedKey, epg.nowMillis)
     val resolvedKey = selected?.let(EpgProgramSelection::key)
-    val missingSelection = selectedKey != null && programs.none { EpgProgramSelection.key(it) == selectedKey }
-    val focus = remember { FocusRequester() }
-    val playFocus = remember { FocusRequester() }
+    val context = epgProgramContext(channel.id)
+    val keys = remember(programs) { listOf("@play", "@favorite") + programs.map { EpgProgramSelection.key(it) } }
     val list = key(channel.id) { rememberLazyListState() }
     val zone = ZoneId.systemDefault()
     val locale = LocalConfiguration.current.locales[0]
     val formatter = remember(zone, locale) { DateTimeFormatter.ofPattern("dd/MM HH:mm", locale).withZone(zone) }
-    LaunchedEffect(request.serial, missingSelection) {
-        if (request.area == EpgFocusArea.PROGRAMS) {
-            val index = programs.indexOfFirst { EpgProgramSelection.key(it) == resolvedKey }
-            if (index >= 0 && list.layoutInfo.visibleItemsInfo.none { it.index == index }) list.scrollToItem(index)
-            withFrameNanos { }
-            runCatching { if (index >= 0) focus.requestFocus() else playFocus.requestFocus() }
-        }
-    }
+    val ready = !epg.isLoading || programs.isNotEmpty()
+    focus.Maintain(context, keys, ready)
+    focus.Restore(context, keys, ready, fallbackKey = resolvedKey, scrollTo = { index ->
+        val row = index - 2
+        if (row >= 0 && list.layoutInfo.visibleItemsInfo.none { it.index == row }) list.scrollToItem(row)
+    })
     Surface(modifier, color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface,
         shape = MaterialTheme.shapes.medium) {
-        Column(Modifier.fillMaxSize().padding(12.dp)
-            .onFocusChanged { if (it.hasFocus) onFocused() }.focusGroup(),
+        Column(Modifier.fillMaxSize().padding(12.dp).focusGroup(),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -80,9 +73,13 @@ fun EpgProgramPane(
                         style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                     Text(stringResource(R.string.ui_epg_provider_time), style = MaterialTheme.typography.bodySmall)
                 }
-                AppButton(stringResource(R.string.ui_watch_live), onPlay, Modifier.focusRequester(playFocus))
+                AppButton(stringResource(R.string.ui_watch_live), {
+                    focus.record(context, "@play", 0); onPlay()
+                }, focus.target(context, "@play", 0).testTag("epg-watch"))
             }
-            FavoriteButton(channel.isFavorite, favorites, onToggleFavorite)
+            FavoriteButton(channel.isFavorite, favorites, {
+                focus.record(context, "@favorite", 1); onToggleFavorite()
+            }, focus.target(context, "@favorite", 1).testTag("epg-favorite"))
             if (epg.schedule.isStale) {
                 Text(stringResource(R.string.ui_epg_cached), color = AppThemeColors.warning(MaterialTheme.colorScheme),
                     style = MaterialTheme.typography.bodySmall)
@@ -103,11 +100,13 @@ fun EpgProgramPane(
             } else {
                 LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(programs, key = EpgProgramSelection::key) { program ->
+                    itemsIndexed(programs, key = { _, program -> EpgProgramSelection.key(program) }) { index, program ->
                         val key = EpgProgramSelection.key(program)
                         EpgProgramCard(program, key == resolvedKey, epg.nowMillis, formatter,
-                            onSelect = { onSelectProgram(key) }, onPlay = onPlay,
-                            modifier = if (key == resolvedKey) Modifier.focusRequester(focus) else Modifier)
+                            onSelect = { onSelectProgram(key) }, onPlay = {
+                                focus.record(context, key, index + 2); onPlay()
+                            }, modifier = focus.target(context, key, index + 2)
+                                .testTag("epg-program-$key"))
                     }
                 }
             }

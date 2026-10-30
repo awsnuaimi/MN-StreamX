@@ -89,7 +89,7 @@ internal class ContextFocus(val bookmarks: FocusBookmarks) {
     }
 
     @Composable
-    fun Restore(context: String, keys: List<String>, ready: Boolean = true,
+    fun Restore(context: String, keys: List<String>, ready: Boolean = true, fallbackKey: String? = null,
         onEmpty: () -> Unit = {}, scrollTo: suspend (Int) -> Unit = {}) {
         val request = pending?.takeIf { it.context == context }
         val inputEpoch = if (request != null) FocusInputEpoch.value else null
@@ -97,7 +97,7 @@ internal class ContextFocus(val bookmarks: FocusBookmarks) {
         val inputMode = LocalInputModeManager.current
         val currentEmpty by rememberUpdatedState(onEmpty)
         val currentScroll by rememberUpdatedState(scrollTo)
-        LaunchedEffect(this, request, keys, ready, inputEpoch) {
+        LaunchedEffect(this, request, keys, ready, inputEpoch, fallbackKey) {
             if (request == null) return@LaunchedEffect
             if (request.inputEpoch != inputEpoch) { if (pending == request) cancel(); return@LaunchedEffect }
             if (!ready) return@LaunchedEffect
@@ -105,7 +105,8 @@ internal class ContextFocus(val bookmarks: FocusBookmarks) {
             // resumed destination may take focus; disposal/input cancels this suspended intent.
             lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
             if (pending != request || request.inputEpoch != FocusInputEpoch.value) return@LaunchedEffect
-            val index = FocusBookmarks.resolve(request.place, keys, request.preferred)
+            val index = FocusBookmarks.resolve(request.place, keys,
+                request.preferred ?: fallbackKey.takeIf { request.place == null })
             if (index == null) {
                 if (pending == request) { cancel(); currentEmpty() }
                 return@LaunchedEffect

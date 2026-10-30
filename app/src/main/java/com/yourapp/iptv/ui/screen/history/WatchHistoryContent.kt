@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -14,34 +15,39 @@ import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.R
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
 import com.yourapp.iptv.ui.component.common.AppButton
+import com.yourapp.iptv.ui.component.common.FocusBookmarks
+import com.yourapp.iptv.ui.component.common.Resume
+import com.yourapp.iptv.ui.component.common.rememberContextFocus
 import com.yourapp.iptv.ui.state.*
 
 @Composable
 internal fun WatchHistoryContent(state: WatchHistoryUiState, playingId: String?, onPlay: (String, String) -> Unit,
     onRemove: (String, String) -> Unit, onClear: (String) -> Unit, onRetry: () -> Unit, onBack: () -> Unit) {
     val list = rememberLazyListState()
-    val entryFocus = remember { FocusRequester() }
-    val closeFocus = remember { FocusRequester() }
-    var focusedTarget by remember(state.sourceKey) { mutableStateOf<String?>(null) }
-    var initialized by remember(state.sourceKey) { mutableStateOf(false) }
-    var afterRemoval by remember(state.sourceKey) { mutableStateOf<Int?>(null) }
+    val focus = rememberContextFocus("watch-history:${state.sourceKey}")
     var confirmSource by remember(state.sourceKey) { mutableStateOf<String?>(null) }
-    LaunchedEffect(state.sourceKey, state.isLoading, state.isSaving, state.rows) {
-        if (state.isLoading || state.isSaving || (initialized && afterRemoval == null)) return@LaunchedEffect
-        initialized = true
-        val index = (afterRemoval ?: 0).coerceIn(0, (state.rows.size - 1).coerceAtLeast(0))
-        afterRemoval = null
-        focusedTarget = state.rows.getOrNull(index)?.channel?.id
-        if (focusedTarget != null) list.scrollToItem(index)
-        withFrameNanos { }
-        runCatching { if (focusedTarget == null) closeFocus.requestFocus() else entryFocus.requestFocus() }
+    val keys = remember(state.rows) { state.rows.flatMap { listOf("play:${it.channel.id}", "remove:${it.channel.id}") } }
+    val controls = buildList {
+        add("close")
+        if (state.error != null && !state.isSaving) add("retry")
+        if (!state.isLoading && !state.isSaving && state.totalRecords > 0) add("clear")
     }
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val ready = !state.isLoading && !state.isSaving && confirmSource == null
+    focus.Resume(setOf("rows", "controls"), "rows")
+    focus.Maintain("rows", keys, ready)
+    focus.Restore("rows", keys, ready, onEmpty = { focus.request("controls", "close") },
+        scrollTo = { index ->
+            val row = index / 2
+            if (list.layoutInfo.visibleItemsInfo.none { it.index == row }) list.scrollToItem(row)
+        })
+    focus.Restore("controls", controls, ready = confirmSource == null && !state.isSaving)
+    Column(Modifier.fillMaxSize().then(focus.inputModifier()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(stringResource(R.string.history_title), Modifier.weight(1f), color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.headlineSmall)
-            AppButton(stringResource(R.string.history_close), onBack, Modifier.focusRequester(closeFocus))
+            AppButton(stringResource(R.string.history_close), onBack,
+                focus.target("controls", "close", 0).testTag("history-close"))
         }
         Text(stringResource(R.string.history_hint), style = MaterialTheme.typography.bodySmall)
         if (state.error != null) {
@@ -50,7 +56,8 @@ internal fun WatchHistoryContent(state: WatchHistoryUiState, playingId: String?,
                 WatchHistoryError.CHANNELS -> R.string.history_channels_error
                 WatchHistoryError.WRITE -> R.string.history_write_error
             }), color = MaterialTheme.colorScheme.error)
-            AppButton(stringResource(R.string.history_retry), onRetry, enabled = !state.isSaving)
+            AppButton(stringResource(R.string.history_retry), onRetry,
+                focus.target("controls", "retry", 1), enabled = !state.isSaving)
         }
         if (state.totalRecords > state.rows.size) Text(stringResource(R.string.history_missing,
             state.totalRecords - state.rows.size), style = MaterialTheme.typography.bodySmall)
@@ -64,9 +71,13 @@ internal fun WatchHistoryContent(state: WatchHistoryUiState, playingId: String?,
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         var focused by remember { mutableStateOf(false) }
-                        Surface(onClick = { onPlay(state.sourceKey, row.channel.id) }, enabled = !state.isSaving,
+                        Surface(onClick = {
+                            focus.record("rows", "play:${row.channel.id}", index * 2)
+                            onPlay(state.sourceKey, row.channel.id)
+                        }, enabled = !state.isSaving,
                             modifier = Modifier.weight(1f).heightIn(min = 72.dp)
-                                .then(if (row.channel.id == focusedTarget) Modifier.focusRequester(entryFocus) else Modifier)
+                                .then(focus.target("rows", "play:${row.channel.id}", index * 2))
+                                .testTag("history-play-${row.channel.id}")
                                 .onFocusChanged { focused = it.isFocused },
                             color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
                             shape = MaterialTheme.shapes.medium,
@@ -84,21 +95,32 @@ internal fun WatchHistoryContent(state: WatchHistoryUiState, playingId: String?,
                             }
                         }
                         AppButton(stringResource(R.string.history_remove), {
-                            afterRemoval = index; onRemove(state.sourceKey, row.channel.id)
-                        }, enabled = !state.isSaving)
+                            focus.request("rows", place = FocusBookmarks.Place("play:${row.channel.id}", index * 2))
+                            onRemove(state.sourceKey, row.channel.id)
+                        }, focus.target("rows", "remove:${row.channel.id}", index * 2 + 1)
+                            .testTag("history-remove-${row.channel.id}"), enabled = !state.isSaving)
                     }
                 }
             }
         }
         AppButton(stringResource(if (state.isSaving) R.string.history_saving else R.string.history_clear),
-            { confirmSource = state.sourceKey }, enabled = !state.isLoading && !state.isSaving && state.totalRecords > 0)
+            {
+                focus.record("controls", "clear", 2); confirmSource = state.sourceKey
+            }, focus.target("controls", "clear", 2), enabled = !state.isLoading && !state.isSaving && state.totalRecords > 0)
     }
-    if (confirmSource != null) AlertDialog(onDismissRequest = { confirmSource = null },
-        title = { Text(stringResource(R.string.history_clear)) },
-        text = { Text(stringResource(R.string.history_clear_question)) },
-        confirmButton = { AppButton(stringResource(R.string.history_clear), {
-            val source = confirmSource; confirmSource = null
-            if (source != null) { afterRemoval = 0; onClear(source) }
-        }) },
-        dismissButton = { AppButton(stringResource(R.string.history_cancel), { confirmSource = null }) })
+    if (confirmSource != null) {
+        val confirmation = rememberContextFocus("history-clear-confirmation")
+        confirmation.Resume(setOf("confirm"), "confirm", "cancel")
+        confirmation.Restore("confirm", listOf("cancel", "clear"))
+        fun dismiss() { confirmSource = null; focus.request("controls", "clear") }
+        AlertDialog(onDismissRequest = ::dismiss, modifier = confirmation.inputModifier(),
+            title = { Text(stringResource(R.string.history_clear)) },
+            text = { Text(stringResource(R.string.history_clear_question)) },
+            confirmButton = { AppButton(stringResource(R.string.history_clear), {
+                val source = confirmSource; confirmSource = null
+                if (source != null) { focus.request("rows", place = null); onClear(source) }
+            }, confirmation.target("confirm", "clear", 1)) },
+            dismissButton = { AppButton(stringResource(R.string.history_cancel), ::dismiss,
+                confirmation.target("confirm", "cancel", 0)) })
+    }
 }

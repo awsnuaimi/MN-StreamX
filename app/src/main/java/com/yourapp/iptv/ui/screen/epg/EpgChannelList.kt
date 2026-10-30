@@ -18,53 +18,48 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.ui.component.channel.ChannelLogo
 import com.yourapp.iptv.ui.component.channel.FavoriteBadge
 import com.yourapp.iptv.ui.state.EpgUiState
+import com.yourapp.iptv.ui.component.common.ContextFocus
 
 @Composable
-fun EpgChannelList(
-    state: EpgUiState, request: EpgFocusRequest, onSelect: (String) -> Unit,
-    onActivate: (String) -> Unit, onFocused: () -> Unit, modifier: Modifier = Modifier
+internal fun EpgChannelList(
+    state: EpgUiState, focus: ContextFocus, onSelect: (String) -> Unit,
+    onActivate: (String) -> Unit, modifier: Modifier = Modifier
 ) {
     val list = rememberLazyListState()
-    val selectedFocus = remember { FocusRequester() }
-    LaunchedEffect(request.serial) {
-        if (request.area == EpgFocusArea.CHANNELS && state.selectedIndex >= 0) {
-            if (list.layoutInfo.visibleItemsInfo.none { it.index == state.selectedIndex }) {
-                list.scrollToItem(state.selectedIndex)
-            }
-            withFrameNanos { }
-            runCatching { selectedFocus.requestFocus() }
-        }
-    }
+    val keys = remember(state.queue) { state.queue.channels.map { it.id } }
+    focus.Restore(EPG_CHANNELS, keys, ready = !state.isLoading && !state.isFiltering,
+        fallbackKey = state.selectedChannelId,
+        onEmpty = { focus.request(EPG_FILTERS, "query") }, scrollTo = { index ->
+            if (list.layoutInfo.visibleItemsInfo.none { it.index == index }) list.scrollToItem(index)
+        })
     Surface(modifier, color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface,
         shape = MaterialTheme.shapes.medium) {
-        Column(Modifier.fillMaxSize().padding(8.dp)
-            .onFocusChanged { if (it.hasFocus) onFocused() }.focusGroup(),
+        Column(Modifier.fillMaxSize().padding(8.dp).focusGroup(),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(stringResource(R.string.ui_channels), style = MaterialTheme.typography.titleMedium)
             LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(state.queue.channels, key = { _, channel -> channel.id }) { index, channel ->
                     EpgChannelRow(channel, index + 1, channel.id == state.selectedChannelId,
-                        onSelect = { onSelect(channel.id) }, onActivate = { onActivate(channel.id) },
-                        modifier = if (channel.id == state.selectedChannelId) Modifier.focusRequester(selectedFocus)
-                            else Modifier)
+                        onSelect = { onSelect(channel.id) }, onActivate = {
+                            focus.record(EPG_CHANNELS, channel.id, index)
+                            onActivate(channel.id)
+                        }, modifier = focus.target(EPG_CHANNELS, channel.id, index)
+                            .testTag("epg-channel-${channel.id}"))
                 }
             }
         }

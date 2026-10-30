@@ -8,8 +8,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -24,6 +22,8 @@ import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.repository.CaptionDeviceStats
 import com.yourapp.iptv.player.caption.EmbeddedCaptions
 import com.yourapp.iptv.ui.component.common.AppButton
+import com.yourapp.iptv.ui.component.common.Resume
+import com.yourapp.iptv.ui.component.common.rememberContextFocus
 import com.yourapp.iptv.viewmodel.CaptionViewModel
 import java.text.DateFormat
 import java.util.Date
@@ -42,10 +42,12 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
     val device by produceState<CaptionDeviceStats?>(null, model) {
         while (true) { value = withContext(Dispatchers.IO) { model.deviceStats() }; delay(2000) }
     }
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { withFrameNanos { }; runCatching { focus.requestFocus() } }
+    val focus = rememberContextFocus("player-caption-entry")
+    focus.Resume(setOf("entry"), "entry", "off")
+    focus.Restore("entry", if (state.loaded) listOf("off", "back") else listOf("back"),
+        ready = (state.loaded && !state.saving) || state.readFailed)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth(0.78f).heightIn(max = 490.dp), color = MaterialTheme.colorScheme.surface,
+        Surface(Modifier.fillMaxWidth(0.78f).heightIn(max = 490.dp).then(focus.inputModifier()), color = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface, shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(stringResource(R.string.caption_title), style = MaterialTheme.typography.titleLarge,
@@ -86,7 +88,7 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                     }
                     item {
                         AppButton((if (settings.mode == CaptionMode.OFF) "✓ " else "") + stringResource(R.string.caption_off), { model.save(settings.copy(mode = CaptionMode.OFF)) },
-                            Modifier.fillMaxWidth().focusRequester(focus), enabled = state.loaded && !state.saving)
+                            Modifier.fillMaxWidth().then(focus.target("entry", "off", 0)), enabled = state.loaded && !state.saving)
                     }
                     item { AppButton((if (settings.mode == CaptionMode.EMBEDDED) "✓ " else "") + stringResource(R.string.caption_embedded), { model.save(settings.copy(mode = CaptionMode.EMBEDDED)) },
                         Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving) }
@@ -184,7 +186,8 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                     if (state.readFailed) item { Text(stringResource(R.string.caption_read_error)); AppButton(stringResource(R.string.caption_retry), model::reload) }
                     if (state.saveFailed) item { Text(stringResource(R.string.caption_save_error), color = MaterialTheme.colorScheme.error) }
                 }
-                AppButton(stringResource(R.string.ui_back), onDismiss, Modifier.fillMaxWidth())
+                AppButton(stringResource(R.string.ui_back), onDismiss,
+                    Modifier.fillMaxWidth().then(focus.target("entry", "back", 1)))
             }
         }
     }

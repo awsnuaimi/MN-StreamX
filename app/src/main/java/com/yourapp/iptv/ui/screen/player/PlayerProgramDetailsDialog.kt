@@ -18,16 +18,12 @@ import androidx.compose.ui.res.stringResource
 import com.yourapp.iptv.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalDensity
@@ -39,6 +35,8 @@ import androidx.compose.ui.window.Dialog
 import com.yourapp.iptv.domain.model.PlayerAppearance
 import com.yourapp.iptv.domain.model.Program
 import com.yourapp.iptv.ui.component.common.AppButton
+import com.yourapp.iptv.ui.component.common.Resume
+import com.yourapp.iptv.ui.component.common.rememberContextFocus
 import com.yourapp.iptv.ui.presentation.ProgramPresentation
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
 import kotlinx.coroutines.launch
@@ -47,19 +45,20 @@ import kotlinx.coroutines.launch
 internal fun PlayerProgramDetailsDialog(channelName: String, state: PlayerEpgUiState,
     appearance: PlayerAppearance, onDismiss: () -> Unit) {
     val density = LocalDensity.current
-    val focus = remember { FocusRequester() }
+    val focus = rememberContextFocus("player-details")
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     var focused by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { withFrameNanos { }; runCatching { focus.requestFocus() } }
+    focus.Resume(setOf("details"), "details", "content")
+    focus.Restore("details", listOf("content", "close"))
     Dialog(onDismissRequest = onDismiss) {
         CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * appearance.textSize.scale)) {
-            Surface(Modifier.fillMaxWidth().fillMaxHeight(0.86f), color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface,
+            Surface(Modifier.fillMaxWidth().fillMaxHeight(0.86f).then(focus.inputModifier()), color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface,
                 shape = MaterialTheme.shapes.large) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(channelName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Content))
-                    Surface(Modifier.weight(1f).fillMaxWidth().focusRequester(focus)
+                    Surface(Modifier.weight(1f).fillMaxWidth().then(focus.target("details", "content", 0))
                         .onFocusChanged { focused = it.isFocused }.onPreviewKeyEvent {
                             val event = it.nativeKeyEvent
                             val direction = when (event.keyCode) {
@@ -84,7 +83,8 @@ internal fun PlayerProgramDetailsDialog(channelName: String, state: PlayerEpgUiS
                             if (state.schedule.isStale) Text(stringResource(R.string.player_cached), color = AppThemeColors.warning(MaterialTheme.colorScheme))
                         }
                     }
-                    AppButton(stringResource(R.string.player_close_details), onDismiss, Modifier.fillMaxWidth())
+                    AppButton(stringResource(R.string.player_close_details), onDismiss,
+                        Modifier.fillMaxWidth().then(focus.target("details", "close", 1)))
                 }
             }
         }

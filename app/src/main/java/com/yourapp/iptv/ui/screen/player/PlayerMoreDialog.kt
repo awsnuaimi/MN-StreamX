@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -22,6 +23,7 @@ import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.PlayerAppearance
 import com.yourapp.iptv.ui.component.channel.FavoriteFeedback
 import com.yourapp.iptv.ui.component.common.AppButton
+import com.yourapp.iptv.ui.component.common.Resume
 import com.yourapp.iptv.ui.screen.player.deck.*
 import com.yourapp.iptv.ui.state.FavoriteUiState
 import com.yourapp.iptv.ui.state.LastChannelError
@@ -34,41 +36,58 @@ internal fun PlayerMoreDialog(channel: Channel, appearance: PlayerAppearance, fa
     canChange: Boolean, initial: PlayerMoreAction, onRemoteKey: (KeyEvent, Boolean) -> Boolean,
     onDismiss: () -> Unit, onAction: (PlayerMoreAction) -> Unit, onRetryFavorites: () -> Unit,
     lastChannel: LastChannelUiState = LastChannelUiState(), onRetryLastChannel: () -> Unit = {}) {
-    val focus = remember { FocusRequester() }
+    val focus = rememberPlayerFocus()
     val list = rememberLazyListState()
     val actions = remember(appearance.showChannelButtons) {
         PlayerMoreAction.entries.filter { appearance.showChannelButtons || it !in setOf(PlayerMoreAction.PREVIOUS, PlayerMoreAction.NEXT) }
     }
-    LaunchedEffect(initial) {
-        list.scrollToItem(actions.indexOf(initial).coerceAtLeast(0)); withFrameNanos { }
-        runCatching { focus.requestFocus() }
+    fun enabled(action: PlayerMoreAction) = when (action) {
+        PlayerMoreAction.LAST_CHANNEL -> lastChannel.canRecall
+        PlayerMoreAction.NEXT, PlayerMoreAction.PREVIOUS -> canChange
+        else -> true
     }
+    val available = actions.filter(::enabled)
+    val keys = available.map { it.name } + "@close"
+    focus.Resume(setOf("player-more"), "player-more",
+        initial.name.takeIf { focus.bookmarks.get("player-more") == null })
+    focus.Maintain("player-more", keys)
+    focus.Restore("player-more", keys, scrollTo = { index ->
+        available.getOrNull(index)?.let { action ->
+            val row = actions.indexOf(action)
+            if (list.layoutInfo.visibleItemsInfo.none { it.index == row }) list.scrollToItem(row)
+        }
+    })
     val density = LocalDensity.current
     Dialog(onDismissRequest = onDismiss) {
         CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * appearance.textSize.scale)) {
             Surface(Modifier.fillMaxWidth().heightIn(max = 480.dp)
+                .then(focus.inputModifier())
                 .onPreviewKeyEvent { onRemoteKey(it.nativeKeyEvent, false) },
                 color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface, shape = MaterialTheme.shapes.large) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(stringResource(R.string.player_more_title), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
                     Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                     LastChannelFeedback(lastChannel, onRetryLastChannel)
-                    LazyColumn(state = list, modifier = Modifier.weight(1f, fill = false),
+                    LazyColumn(state = list, modifier = Modifier.weight(1f, fill = false).testTag("player-more-list"),
                         contentPadding = PaddingValues(3.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(actions, key = { it.name }) { action ->
                             MoreActionRow(action, channel.isFavorite, favorites, lastChannel,
-                                enabled = when (action) {
-                                    PlayerMoreAction.LAST_CHANNEL -> lastChannel.canRecall
-                                    PlayerMoreAction.NEXT, PlayerMoreAction.PREVIOUS -> canChange
-                                    else -> true
-                                }, modifier = if (action == initial) Modifier.focusRequester(focus) else Modifier,
-                                onClick = { if (action != PlayerMoreAction.LAST_CHANNEL || !lastChannel.isSwitching) onAction(action) })
+                                enabled = enabled(action), modifier = (if (enabled(action))
+                                    focus.target("player-more", action.name, available.indexOf(action)) else Modifier)
+                                    .testTag("player-more-${action.name}"),
+                                onClick = {
+                                    if (action != PlayerMoreAction.LAST_CHANNEL || !lastChannel.isSwitching) {
+                                        focus.record("player-more", action.name, available.indexOf(action))
+                                        onAction(action)
+                                    }
+                                })
                         }
                         item("feedback") { FavoriteFeedback(favorites, onRetryFavorites,
                             messageOverride = stringResource(R.string.player_favorites_error),
                             retryLabel = stringResource(R.string.player_favorites_retry)) }
                     }
-                    AppButton(stringResource(R.string.player_back_cards), onDismiss, Modifier.fillMaxWidth())
+                    AppButton(stringResource(R.string.player_back_cards), onDismiss, Modifier.fillMaxWidth()
+                        .then(focus.target("player-more", "@close", available.size)).testTag("player-more-close"))
                 }
             }
         }
