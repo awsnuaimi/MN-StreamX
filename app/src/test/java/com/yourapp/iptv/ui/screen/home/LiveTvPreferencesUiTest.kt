@@ -18,6 +18,12 @@ import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.ui.state.*
 import com.yourapp.iptv.ui.theme.IPTVAppTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import com.yourapp.iptv.ui.presentation.LiveChannelRows
+import com.yourapp.iptv.ui.presentation.LiveChannelSort
+import java.util.Locale
 import org.junit.*
 import org.junit.Assert.*
 import org.junit.runner.RunWith
@@ -28,7 +34,7 @@ import org.robolectric.annotation.GraphicsMode
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w960dp-h540dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class, ExperimentalCoroutinesApi::class)
 class LiveTvPreferencesUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val channels = listOf(Channel("fhd", "PL| News FHD", streamUrl = "fhd", group = "News"),
@@ -38,7 +44,8 @@ class LiveTvPreferencesUiTest {
     private val catalog = mutableStateOf(HomeUiState(channels = channels, visibleChannels = channels,
         groups = listOf("News", "Sports"), browseScope = "a".repeat(64), isLoading = false))
     private var played: String? = null
-    private fun board(arabic: Boolean = false, scale: Float = 1f) {
+    private fun board(arabic: Boolean = false, scale: Float = 1f,
+        worker: CoroutineDispatcher = Dispatchers.Main.immediate, awaitReady: Boolean = true) {
         compose.setContent {
             IPTVAppTheme {
                 val input = LocalInputModeManager.current
@@ -50,7 +57,7 @@ class LiveTvPreferencesUiTest {
                     Surface(Modifier.fillMaxSize()) {
                         LiveTvBrowser(catalog.value, HomeAppearance(language = language), HomeLabels(language),
                             HomeGuideState(), 0, CaptionUiState(), {}, {}, { played = it.id }, {}, {}, true,
-                            { _, _ -> }, {}, {}, projectionDispatcher = Dispatchers.Main.immediate,
+                            { _, _ -> }, {}, {}, projectionDispatcher = worker,
                             preferences = personal.value, onPreference = { transform ->
                                 personal.value = personal.value.copy(value = transform(personal.value.value))
                             })
@@ -58,7 +65,7 @@ class LiveTvPreferencesUiTest {
                 }
             }
         }
-        ready()
+        if (awaitReady) ready()
     }
     private fun ready() {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("live-channel-list").fetchSemanticsNodes().size == 1 }
@@ -122,6 +129,25 @@ class LiveTvPreferencesUiTest {
         compose.onNodeWithTag("live-hidden-close").assertIsFocused()
         compose.onNodeWithTag("live-hidden-close").performClick(); ready()
         compose.onNodeWithTag("live-category-News").assertIsDisplayed()
+    }
+    @Test fun qualityOnlyChangesDoNotQueueAnotherProjectionButHidingStillDoes() {
+        val worker = StandardTestDispatcher()
+        board(worker = worker, awaitReady = false)
+        worker.scheduler.runCurrent(); ready()
+        val family = LiveChannelRows.project(channels, LiveChannelSort.PROVIDER, Locale.GERMAN).first()
+        compose.runOnIdle { personal.value = personal.value.copy(value = personal.value.value.prefer(family.preferenceKey, "hd")) }
+        compose.waitForIdle()
+        // The paused row worker has not run again. Existing rows must remain ready with the new quality.
+        compose.onNodeWithTag("live-channel-list").assertExists()
+        compose.onNodeWithTag("live-channel-fhd").performClick()
+        compose.runOnIdle { assertEquals("hd", played); played = null }
+        compose.runOnIdle { personal.value = personal.value.copy(value = personal.value.value.copy(hiddenChannels = setOf("fhd", "hd"))) }
+        compose.waitForIdle()
+        compose.onNodeWithTag("live-channel-list").assertDoesNotExist()
+        worker.scheduler.runCurrent(); ready()
+        compose.onNodeWithTag("live-channel-fhd").assertDoesNotExist()
+        compose.onNodeWithTag("live-channel-sport").assertIsDisplayed()
+        compose.runOnIdle { assertNull(played) }
     }
     @Test fun sortingWritesPersonalPreferenceAndSurvivesRecomposition() {
         board(); preview("live-customize-de.png"); compose.onNodeWithTag("live-sort").performClick()

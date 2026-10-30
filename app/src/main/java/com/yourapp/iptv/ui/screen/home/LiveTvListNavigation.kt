@@ -2,14 +2,16 @@ package com.yourapp.iptv.ui.screen.home
 
 import androidx.compose.ui.input.key.KeyEvent
 import com.yourapp.iptv.domain.model.HomeGridPosition
+import com.yourapp.iptv.domain.performance.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** One latest intent owns scrolling and focus; an outgoing screen cannot finish an old request. */
-internal class LiveTvListNavigation {
+internal class LiveTvListNavigation(private val spans: PerformanceSpans = PerformanceSpans(PerformanceJournal.recorder)) {
     data class Request(val revision: Long, val key: String?, val position: HomeGridPosition? = null,
         val token: Long? = null, val instant: Boolean = false)
     private var revision = 0L
+    private var measurement: Long? = null
     private val mutable = MutableStateFlow<Request?>(null)
     val requests = mutable.asStateFlow()
     var ownsFocus = false
@@ -20,11 +22,14 @@ internal class LiveTvListNavigation {
     fun handle(event: KeyEvent) = input(event)
     fun enter() { if (mutable.value == null) request(null) }
     fun request(key: String?, position: HomeGridPosition? = null, token: Long? = null, instant: Boolean = false) {
+        measurement = spans.start(PerformanceStage.LIVE_FOCUS)
         mutable.value = Request(++revision, key, position, token, instant)
     }
     fun current(ticket: Long) = mutable.value?.revision == ticket
-    fun finish(ticket: Long) { if (current(ticket)) mutable.value = null }
-    fun cancel() { mutable.value = null }
+    fun finish(ticket: Long, outcome: PerformanceOutcome = PerformanceOutcome.COMPLETE) {
+        if (current(ticket)) { spans.finish(measurement, outcome); measurement = null; mutable.value = null }
+    }
+    fun cancel() { mutable.value?.let { finish(it.revision, PerformanceOutcome.CANCELLED) } }
 }
 
 internal object LiveTvNavigationPolicy {
