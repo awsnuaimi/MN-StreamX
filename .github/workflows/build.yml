@@ -147,7 +147,7 @@ jobs:
   publish:
     name: Publish stable in-app update
     needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_update && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_update))
     runs-on: ubuntu-latest
     permissions:
       contents: write
