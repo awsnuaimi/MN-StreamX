@@ -31,7 +31,7 @@ class VodPlaybackViewModel @Inject constructor(
     private var blocked = false
     private var generation = 0L
     private var selection: Job? = null
-    private var metadata: Job? = null
+    private val metadata = VodMetadataRequest(viewModelScope)
     private var episodeSeries: String? = null
     private var episodes: List<VodEpisode>? = null
 
@@ -62,7 +62,7 @@ class VodPlaybackViewModel @Inject constructor(
 
     private fun invalidate() {
         blocked = true; generation++
-        selection?.cancel(); metadata?.cancel(); episodes = null
+        selection?.cancel(); metadata.cancel(); episodes = null
         mutable.value = VodPlaybackState.Error
     }
 
@@ -92,11 +92,11 @@ class VodPlaybackViewModel @Inject constructor(
     }
 
     private fun loadEpisodes(series: String) {
-        if (metadata?.isActive == true || blocked) return
+        if (blocked) return
         val credentials = account ?: return
         val key = source ?: return
-        mutable.update { value -> if (value is VodPlaybackState.Ready) value.copy(episodesLoading = true, episodesFailed = false) else value }
-        metadata = viewModelScope.launch {
+        metadata.launch {
+            mutable.update { value -> if (value is VodPlaybackState.Ready) value.copy(episodesLoading = true, episodesFailed = false) else value }
             try {
                 val ordered = withTimeout(30_000L) {
                     val details = withContext(Dispatchers.IO) {
@@ -109,14 +109,23 @@ class VodPlaybackViewModel @Inject constructor(
                 }
                 if (blocked || source != key) return@launch
                 episodeSeries = series; episodes = ordered
-                mutable.update { value -> if (value is VodPlaybackState.Ready && value.seriesId == series)
-                    value.copy(next = VodEpisodeOrder.next(ordered,value.id),episodesLoading = false, episodesFailed = false) else value }
+                complete {
+                    mutable.update { value -> if (value is VodPlaybackState.Ready && value.seriesId == series)
+                        value.copy(next = VodEpisodeOrder.next(ordered,value.id),episodesLoading = false, episodesFailed = false) else value }
+                }
             } catch (_: TimeoutCancellationException) {
-                if (!blocked) DiagnosticJournal.record(DiagnosticArea.DETAILS,DiagnosticIssue.TIMEOUT,key)
-                episodesFailed(series)
+                complete {
+                    if (!blocked) DiagnosticJournal.record(DiagnosticArea.DETAILS,DiagnosticIssue.TIMEOUT,key)
+                    episodesFailed(series)
+                }
             }
             catch (error: CancellationException) { throw error }
-            catch (error: Exception) { if (!blocked) DiagnosticFailures.record(DiagnosticArea.DETAILS,error,ProfileScope.source(key));episodesFailed(series) }
+            catch (error: Exception) {
+                complete {
+                    if (!blocked) DiagnosticFailures.record(DiagnosticArea.DETAILS,error,ProfileScope.source(key))
+                    episodesFailed(series)
+                }
+            }
         }
     }
 
