@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.ui.component.common.*
 import com.yourapp.iptv.viewmodel.VodUiState
+import com.yourapp.iptv.viewmodel.VodProgressUiState
 
 internal data class VodActions(val back: () -> Unit, val refresh: () -> Unit, val search: (String) -> Unit,
     val category: (String?) -> Unit, val retryCategory: () -> Unit, val open: (VodItem) -> Unit,
@@ -23,15 +24,31 @@ internal data class VodActions(val back: () -> Unit, val refresh: () -> Unit, va
 internal fun vodPosterContext(category: String?, query: String) = "posters:${category?.length ?: -1}:$category:$query"
 
 @Composable
-internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, labels: VodLabels, actions: VodActions) {
+internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, labels: VodLabels, actions: VodActions,
+    progressState: VodProgressUiState? = null) {
     var lastSource by rememberSaveable(state.kind) { mutableStateOf<String?>(null) }
     val focus = rememberContextFocus("vod:${state.kind}:${state.sourceKey ?: lastSource}")
     SideEffect { if (state.sourceKey != null) lastSource = state.sourceKey }
-    val visible = remember(state.catalog.items, state.categoryId, state.query) { state.visible }
+    val visible = remember(state.catalog.items, state.categoryId, state.query, state.filteredItems) { state.visible }
     val posters = vodPosterContext(state.categoryId, state.query)
     val posterKeys = remember(visible) { visible.map { it.id } }
-    val contexts = setOf("controls", "categories", posters, "continued", "category-status")
-    focus.Resume(contexts, "controls", "back")
+    val contexts = buildSet {
+        add("controls")
+        if (!state.loading && !state.error && !state.unavailable) {
+            add("categories"); add(posters); add("category-status")
+            if (progress.any { it.kind == state.kind }) add("continued")
+        }
+    }
+    val saved = progressState?.forSource(state.sourceKey)
+    val recommendation = remember(state.kind, visible, saved) {
+        saved?.let { VodContinuation.poster(state.kind, visible, it) }
+    }
+    if (progressState == null) focus.Resume(contexts, "controls", "back") else {
+        val historyReady = progressState.ready && progressState.sourceKey == state.sourceKey
+        focus.VodEntry(contexts, state.selected == null && !state.loading && !state.categoryLoading && !state.filtering &&
+            (historyReady || state.error || state.unavailable),
+            if (recommendation != null) posters else "controls", recommendation ?: "back", waitingKey = "back".takeIf { state.selected == null }, waitingContext = "controls")
+    }
     val controls = buildList {
         add("back")
         if (!state.loading) add("refresh")
@@ -41,7 +58,7 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
     focus.Restore("controls", controls, ready = !state.loading ||
         (focus.pending?.preferred ?: focus.bookmarks.get("controls")?.key ?: "back") == "back")
     focus.Maintain("controls", controls)
-    val ready = !state.loading && !state.categoryLoading
+    val ready = !state.loading && !state.categoryLoading && !state.filtering
     focus.Maintain(posters, posterKeys, ready)
     var hadDialog by remember(focus) { mutableStateOf(false) }
     LaunchedEffect(state.selected, focus) {
@@ -92,6 +109,8 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
                                     }, focus.target("category-status", "retry", 0).testTag("vod-category-retry"))
                                 }
                             }
+                            state.filtering -> Box(Modifier.weight(1f).fillMaxHeight(),
+                                contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                             else -> VodPosterGrid(visible, focus, posters, state.selected == null,
                                 labels, state.catalog.items.isEmpty() && state.query.isBlank(),
                                 Modifier.weight(1f).fillMaxHeight()) { index, item ->
@@ -103,7 +122,7 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
             }
         }
         state.selected?.let { selected ->
-            VodDetailsDialog(state, selected, labels, progress, actions.close, actions.retryDetails, actions.play)
+            VodDetailsDialog(state, selected, labels, progress, actions.close, actions.retryDetails, progressState, actions.play)
         }
     }
 }

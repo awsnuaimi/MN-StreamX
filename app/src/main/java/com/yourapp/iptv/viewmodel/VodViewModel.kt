@@ -10,6 +10,8 @@ import com.yourapp.iptv.domain.repository.VodRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,12 +37,12 @@ data class VodUiState(
     val details: VodDetails? = null,
     val detailLoading: Boolean = false,
     val detailError: Boolean = false,
-    val sourceKey: String? = null
+    val sourceKey: String? = null,
+    val filteredItems: List<VodItem>? = null,
+    val filtering: Boolean = false
 ) {
-    val visible: List<VodItem> get() = catalog.items.filter { item ->
-        (categoryId == null || item.belongsTo(categoryId)) &&
-            (query.isBlank() || item.name.contains(query.trim(), ignoreCase = true))
-    }
+    // Synthetic UI/test states can still derive visibility without a ViewModel.
+    val visible: List<VodItem> get() = filteredItems ?: VodCatalogFilter.match(catalog.items, categoryId, query)
 }
 
 @HiltViewModel
@@ -53,6 +55,8 @@ class VodViewModel @Inject constructor(
     private var catalogJob: Job? = null
     private var categoryJob: Job? = null
     private var detailsJob: Job? = null
+    private var visibleJob: Job? = null
+    private var visibleRequest = 0L
     private var loadedKind: VodKind? = null
     private var account: AppSettings? = null
     private var generation = 0L
@@ -63,12 +67,14 @@ class VodViewModel @Inject constructor(
         if (!refresh && loadedKind == kind && catalogJob?.isActive == true) return
         catalogJob?.cancel()
         cancelSelection()
+        cancelVisible()
         loadedKind = kind
         mutable.value = VodUiState(kind = kind)
         catalogJob = viewModelScope.launch {
             try {
                 settings.observeSettings().distinctUntilChangedBy(ProfileScope::of).collectLatest { source ->
                     cancelSelection()
+                    cancelVisible()
                     val current = ++generation
                     account = source
                     mutable.value = VodUiState(kind = kind, sourceKey = ProfileScope.of(source))
@@ -80,7 +86,7 @@ class VodViewModel @Inject constructor(
                         val catalog = repository.catalog(source, kind)
                         currentCoroutineContext().ensureActive()
                         if (current != generation) return@collectLatest
-                        mutable.value = mutable.value.copy(loading = false, catalog = catalog)
+                        updateVisible(mutable.value.copy(loading = false, catalog = catalog))
                         if (catalog.categoryScoped) catalog.categories.firstOrNull()?.let { filter(it.id) }
                     } catch (error: CancellationException) { throw error }
                     catch (error: Exception) {
@@ -96,7 +102,7 @@ class VodViewModel @Inject constructor(
     fun filter(categoryId: String?, retry: Boolean = false) {
         val state = mutable.value
         if (!state.catalog.categoryScoped) {
-            mutable.value = state.copy(categoryId = categoryId)
+            updateVisible(state.copy(categoryId = categoryId))
             return
         }
         val source = account ?: return
@@ -106,15 +112,15 @@ class VodViewModel @Inject constructor(
         close()
         val request = ++categoryRequest
         val current = generation
-        mutable.value = mutable.value.copy(categoryId = category.id, categoryLoading = true,
-            categoryError = false, catalog = state.catalog.copy(items = emptyList()))
+        updateVisible(mutable.value.copy(categoryId = category.id, categoryLoading = true,
+            categoryError = false, catalog = state.catalog.copy(items = emptyList())))
         categoryJob = viewModelScope.launch {
             try {
                 val items = repository.category(source, state.kind, category.id)
                 currentCoroutineContext().ensureActive()
                 if (current == generation && request == categoryRequest) {
-                    mutable.value = mutable.value.copy(categoryLoading = false,
-                        catalog = mutable.value.catalog.copy(items = items))
+                    updateVisible(mutable.value.copy(categoryLoading = false,
+                        catalog = mutable.value.catalog.copy(items = items)))
                 }
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
@@ -126,7 +132,10 @@ class VodViewModel @Inject constructor(
         }
     }
 
-    fun search(query: String) { mutable.value = mutable.value.copy(query = query.take(100)) }
+    fun search(query: String) {
+        val clipped = query.take(100)
+        if (mutable.value.query != clipped) updateVisible(mutable.value.copy(query = clipped))
+    }
 
     fun open(item: VodItem) {
         val source = account ?: return
@@ -158,6 +167,36 @@ class VodViewModel @Inject constructor(
         detailRequest++
         mutable.value = mutable.value.copy(selected = null, details = null,
             detailLoading = false, detailError = false)
+    }
+
+    private fun cancelVisible() {
+        visibleJob?.cancel()
+        visibleRequest++
+    }
+
+    /** Keep expensive catalog scans off the UI thread, without changing small-list focus timing. */
+    private fun updateVisible(next: VodUiState) {
+        cancelVisible()
+        val entries = next.catalog.items
+        if (entries.size < VodCatalogFilter.BACKGROUND_THRESHOLD) {
+            mutable.value = next.copy(filteredItems = null, filtering = false)
+            return
+        }
+        val token = visibleRequest
+        val category = next.categoryId
+        val query = next.query
+        mutable.value = next.copy(filteredItems = emptyList(), filtering = true)
+        visibleJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                VodCatalogFilter.matchCancellable(entries, category, query)
+            }
+            currentCoroutineContext().ensureActive()
+            val state = mutable.value
+            if (token == visibleRequest && state.catalog.items === entries &&
+                state.categoryId == category && state.query == query) {
+                mutable.value = state.copy(filteredItems = result, filtering = false)
+            }
+        }
     }
 
     private fun cancelSelection() {
