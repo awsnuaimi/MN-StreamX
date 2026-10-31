@@ -51,11 +51,19 @@ class ProfilePublicationRaceTest {
     @Test fun anIntermediateRestoreRecordIsDiscardedAfterTheTransactionRollsBack() = runBlocking {
         val disk = ProfileMemory()
         ProfilePublicationFixture(disk).use { f ->
-            f.start();f.profiles.rename("default","Before");val before = f.profiles.state.value.catalog
-            val pause = f.pauseNextRead(SecureStorageException(SecureStorageFailure.AUTHENTICATION_FAILED))
+            f.start()
+            assertEquals(ProfileResult.OK, f.profiles.rename("default", "Before"))
+            // Finish processing the committed record before arming a pause for the rollback record.
+            f.drain()
+            val before = f.profiles.state.value.catalog
+            val intermediate = f.encoded(UserProfiles(revision = 50))
+            val pause = f.pauseNextRead(
+                SecureStorageException(SecureStorageFailure.AUTHENTICATION_FAILED),
+                requireNotNull(intermediate[PROFILE_RECORD])
+            )
             try {
                 AppDataGate.write {
-                    disk.values.value = f.encoded(UserProfiles(revision = 50))
+                    disk.values.value = intermediate
                     pause.awaitEntry();disk.values.value = f.encoded(before)
                 }
                 pause.release();f.drain()

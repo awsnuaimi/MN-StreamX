@@ -31,7 +31,8 @@ internal class ProfilePublicationFixture(val disk: DataStore<Preferences> = Prof
         .asCoroutineDispatcher()
     private val owner = SupervisorJob()
     private val scope = CoroutineScope(owner + dispatcher)
-    private val pendingRead = AtomicReference<ProfileReadPause?>(null)
+    private data class TargetedRead(val pause: ProfileReadPause, val encryptedRecord: String?)
+    private val pendingRead = AtomicReference<TargetedRead?>(null)
     private val pauses = ConcurrentLinkedQueue<ProfileReadPause>()
     val realCipher = DeviceProfileCipher { SecretKeySpec(ByteArray(32) { 6 },"AES") }
     @Volatile var decryptFailure: Exception? = null
@@ -40,7 +41,11 @@ internal class ProfilePublicationFixture(val disk: DataStore<Preferences> = Prof
         override fun encrypt(value: String) = realCipher.encrypt(encryptInstead ?: value)
         override fun encryptNew(value: String) = realCipher.encryptNew(encryptInstead ?: value)
         override fun decrypt(value: String): String {
-            if (Thread.currentThread().name.startsWith("profile-publication-observer")) pendingRead.getAndSet(null)?.hold()
+            if (Thread.currentThread().name.startsWith("profile-publication-observer")) {
+                val pending = pendingRead.get()
+                if (pending != null && (pending.encryptedRecord == null || pending.encryptedRecord == value) &&
+                    pendingRead.compareAndSet(pending, null)) pending.pause.hold()
+            }
             decryptFailure?.let { throw it }
             return realCipher.decrypt(value)
         }
@@ -59,9 +64,11 @@ internal class ProfilePublicationFixture(val disk: DataStore<Preferences> = Prof
     fun pauseObserver(): ProfileReadPause = ProfileReadPause().also { pause ->
         pauses.add(pause);scope.launch { pause.hold() };pause.awaitEntry()
     }
-    fun pauseNextRead(failure: Exception? = null): ProfileReadPause = ProfileReadPause(failure).also {
-        pauses.add(it);check(pendingRead.compareAndSet(null,it))
-    }
+    fun pauseNextRead(failure: Exception? = null, encryptedRecord: String? = null): ProfileReadPause =
+        ProfileReadPause(failure).also { pause ->
+            pauses.add(pause)
+            check(pendingRead.compareAndSet(null, TargetedRead(pause, encryptedRecord)))
+        }
     suspend fun drain() = withContext(dispatcher) { }
     suspend fun catalog() = ProfileCodec.decode(disk.data.first()[PROFILE_RECORD]?.let(realCipher::decrypt))
     suspend fun awaitCatalog(value: UserProfiles) = withTimeout(5_000) { profiles.state.first { it.catalog == value } }
