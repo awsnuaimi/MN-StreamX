@@ -43,7 +43,7 @@ internal fun VodPosterCard(item: VodItem, modifier: Modifier = Modifier,
                     AsyncImage(model = image, contentDescription = item.name,
                         modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 } else {
-                    Box(Modifier.fillMaxSize().background(colors.surfaceContainerHigh),
+                    Box(Modifier.fillMaxSize().background(colors.surfaceContainerLow),
                         contentAlignment = Alignment.Center) {
                         Text("▶", color = colors.primary, style = MaterialTheme.typography.displaySmall)
                     }
