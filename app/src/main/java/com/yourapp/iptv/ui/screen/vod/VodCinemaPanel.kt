@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -41,7 +42,8 @@ internal fun VodPanelTitle(title: String, glyph: VodGlyph) {
 }
 
 @Composable
-internal fun VodChoiceRow(label: String, chosen: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, glyph: VodGlyph? = null) {
+internal fun VodChoiceRow(label: String, chosen: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier,
+    glyph: VodGlyph? = null, progress: Float? = null, progressTag: String? = null) {
     var focused by remember { mutableStateOf(false) }
     Button(onClick,modifier.fillMaxWidth().heightIn(min = 52.dp).focusProperties { canFocus = true }
         .onFocusChanged { focused = it.isFocused }.semantics { role = if (glyph == null) Role.RadioButton else Role.Button;if (glyph == null) selected = chosen },
@@ -49,7 +51,19 @@ internal fun VodChoiceRow(label: String, chosen: Boolean, onClick: () -> Unit, m
         border = BorderStroke(if (focused) 2.dp else 1.dp,if (focused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .07f)),
         colors = ButtonDefaults.buttonColors(containerColor = if (focused) Color.White else Color.White.copy(alpha = if (chosen) .09f else .025f),
             contentColor = if (focused) Color(0xFF111820) else Color.White)) {
-        Text(label,Modifier.weight(1f),maxLines = 2,overflow = TextOverflow.Ellipsis)
+        if (progress == null) {
+            Text(label,Modifier.weight(1f),maxLines = 2,overflow = TextOverflow.Ellipsis)
+        } else {
+            Column(Modifier.weight(1f),verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text(label,maxLines = 2,overflow = TextOverflow.Ellipsis)
+                LinearProgressIndicator(progress = { progress.coerceIn(0f,1f) },
+                    modifier = Modifier.fillMaxWidth().height(4.dp)
+                        .then(if (progressTag != null) Modifier.testTag(progressTag) else Modifier),
+                    color = if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                    trackColor = if (focused) MaterialTheme.colorScheme.onPrimary.copy(alpha = .25f)
+                        else Color.White.copy(alpha = .16f))
+            }
+        }
         val ink = LocalContentColor.current
         if (glyph != null) VodControlIcon(glyph,Modifier.padding(start = 14.dp).size(18.dp))
         else Canvas(Modifier.padding(start = 14.dp).size(18.dp)) {

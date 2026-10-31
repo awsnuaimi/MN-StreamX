@@ -44,6 +44,18 @@ class VodEpisodePanelTest {
         compose.runOnIdle { assertEquals("one",selected?.id) }
     }
 
+    @Test fun savedEpisodeShowsRealProgressWithoutChangingSeasonNavigation() {
+        val numbered = item.copy(id = "22",seriesId = "800",episodes = listOf(
+            VodEpisode("21","First",1,1,"mp4"),VodEpisode("22","Second",1,2,"mp4")))
+        val rows = listOf(VodProgressEntry(VodKind.SERIES,"22","Second","mp4",60_000L,
+            120_000L,1_000L,"800"))
+        compose.setContent { IPTVAppTheme { LocalizedResources(HomeLanguage.GERMAN) {
+            VodEpisodePanel(numbered,VodPlaybackLabels(HomeLanguage.GERMAN),{}, {},progressRows = rows)
+        } } }
+        compose.onNodeWithTag("vod-episode-progress-22",useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("vod-episode-21").assertExists()
+    }
+
     @Test fun choosingTheCurrentlyPlayingEpisodeDismissesRatherThanRestartingIt() {
         var dismissed = 0
         var selections = 0

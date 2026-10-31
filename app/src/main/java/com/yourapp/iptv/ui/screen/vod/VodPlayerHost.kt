@@ -26,6 +26,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -226,9 +227,11 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
                     onSelect = { current?.selectTrack(if (audio) C.TRACK_TYPE_AUDIO else C.TRACK_TYPE_TEXT,it);closePanel() },
                     onOff = { current?.disableSubtitles();closePanel() },onClose = ::closePanel)
             } else if (panel == VodPlayerPanel.EPISODES) {
+                // Collection is active only while the episode drawer is visible.
+                val episodeProgress by model.episodeProgress.collectAsStateWithLifecycle()
                 VodEpisodePanel(item,labels,onSelect = { episode ->
                     current?.save();closePanel();model.playEpisode(item,episode)
-                },onClose = ::closePanel)
+                },onClose = ::closePanel,progressRows = episodeProgress)
             } else VodPlayerOptionDialog(panel,labels,snapshot.speed,display,
                 onSpeed = { current?.setSpeed(it);closePanel() },onDisplay = { display = it;closePanel() },
                 onRestart = { current?.restart();closePanel() },onClose = ::closePanel)

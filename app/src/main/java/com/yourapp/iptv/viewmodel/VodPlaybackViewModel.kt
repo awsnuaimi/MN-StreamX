@@ -26,6 +26,14 @@ class VodPlaybackViewModel @Inject constructor(
     private val mutable = MutableStateFlow<VodPlaybackState>(VodPlaybackState.Loading)
     val state = mutable.asStateFlow()
     val autoNext = saved.getStateFlow("autoNextEpisode", false)
+
+    /** Observe only the active profile/source; an inactive screen has no active collector. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val episodeProgress: StateFlow<List<VodProgressEntry>> = state
+        .map { (it as? VodPlaybackState.Ready)?.sourceKey }
+        .distinctUntilChanged()
+        .flatMapLatest { key -> if (key == null) flowOf(emptyList()) else progress.observe(key) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     private var account: AppSettings? = null
     private var source: String? = null
     private var blocked = false
