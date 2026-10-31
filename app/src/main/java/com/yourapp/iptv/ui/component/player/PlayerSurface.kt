@@ -14,6 +14,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -28,6 +29,8 @@ import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
+import com.yourapp.iptv.domain.model.LiveRecoveryState
+import com.yourapp.iptv.player.recovery.AndroidPlaybackNetwork
 import com.yourapp.iptv.player.controller.PlayerController
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -46,7 +49,8 @@ fun PlayerSurface(
     onTechnicalInfo: (String, PlaybackTechnicalInfo) -> Unit = { _, _ -> },
     onPlaybackStarted: (Channel) -> Unit = {},
     captionSettings: CaptionSettings = CaptionSettings(),
-    onCaptionBinding: (ExoPlayer?, CaptionAudioTap?) -> Unit = { _, _ -> }
+    onCaptionBinding: (ExoPlayer?, CaptionAudioTap?) -> Unit = { _, _ -> },
+    onRecovery: (String, LiveRecoveryState) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current.applicationContext
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -56,18 +60,37 @@ fun PlayerSurface(
     val reportControls by rememberUpdatedState(onControllerVisibilityChanged)
     val reportStarted by rememberUpdatedState(onPlaybackStarted)
     val reportCaptionBinding by rememberUpdatedState(onCaptionBinding)
+    val reportRecovery by rememberUpdatedState(onRecovery)
+    val currentChannel by rememberUpdatedState(channel)
+    val scope = rememberCoroutineScope()
+    val network = remember(context) { AndroidPlaybackNetwork(context).observe() }
     var renderedFrame by remember { mutableStateOf<RenderedChannelFrame?>(null) }
     val audioTap = remember { CaptionAudioTap() }
     val generatedAudio = captionSettings.mode == CaptionMode.GENERATED
     val session = remember(context) {
-        PlayerPlaybackSession(PlayerController(context), channel,
-            onError = { id, error -> reportError(id, error) },
-            onBuffering = { id, loading -> reportBuffering(id, loading) },
+        PlayerPlaybackSession(PlayerController(context), channel, scope, network,
+            onError = { selected, error ->
+                if (selected.id == currentChannel.id && selected.streamUrl == currentChannel.streamUrl)
+                    reportError(selected.id, error)
+            },
+            onBuffering = { selected, loading ->
+                if (selected.id == currentChannel.id && selected.streamUrl == currentChannel.streamUrl)
+                    reportBuffering(selected.id, loading)
+            },
             onStarted = { selected, mediaId ->
                 Log.i("MNX.FrameCapture", "first video frame rendered")
                 renderedFrame = RenderedChannelFrame(selected, mediaId)
                 reportStarted(selected)
+            }, onRecovery = { selected, state ->
+                if (selected.id == currentChannel.id && selected.streamUrl == currentChannel.streamUrl)
+                    reportRecovery(selected.id, state)
             })
+    }
+
+    DisposableEffect(session, handle) {
+        val cancel: () -> Unit = session::cancelRecovery
+        handle.cancelRecoveryAction = cancel
+        onDispose { if (handle.cancelRecoveryAction === cancel) handle.cancelRecoveryAction = null }
     }
 
     LaunchedEffect(session, generatedAudio) { session.configureCaptionAudio(if (generatedAudio) audioTap else null) }

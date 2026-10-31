@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live_recovery_title">Verbindung wird wiederhergestellt…</string>
+    <string name="live_recovery_waiting_network">Warten auf die Netzwerkverbindung. Der nächste Versuch startet automatisch, sobald sie wieder verfügbar ist.</string>
+    <string name="live_recovery_scheduled">Versuch %1$d von %2$d wird vorbereitet…</string>
+    <string name="live_recovery_connecting">Verbindung wird hergestellt — Versuch %1$d von %2$d…</string>
+    <string name="live_recovery_exhausted">Der Stream konnte nicht automatisch wiederhergestellt werden. Erneut versuchen oder einen anderen Sender wählen.</string>
+</resources>

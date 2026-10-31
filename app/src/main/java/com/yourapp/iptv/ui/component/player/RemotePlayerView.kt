@@ -18,6 +18,9 @@ internal class RemotePlayerView(context: Context) : PlayerView(context) {
 @androidx.annotation.OptIn(UnstableApi::class)
 class PlayerSurfaceHandle {
     internal var view: RemotePlayerView? = null
+    internal var cancelRecoveryAction: (() -> Unit)? = null
+
+    fun cancelRecovery() { cancelRecoveryAction?.invoke() }
 
     fun requestFocus() { view?.requestFocus() }
     fun hideControls() { view?.hideController() }

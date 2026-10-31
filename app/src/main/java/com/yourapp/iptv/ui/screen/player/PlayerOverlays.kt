@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.res.stringResource
@@ -25,6 +26,8 @@ import com.yourapp.iptv.domain.model.Channel
 import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
 import com.yourapp.iptv.ui.screen.player.deck.PlayerDeckOverlay
 import com.yourapp.iptv.domain.model.PlayerAppearance
+import com.yourapp.iptv.domain.model.LiveRecoveryState
+import com.yourapp.iptv.domain.model.LiveRecoveryPhase
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.ui.state.PlayerEpgUiState
 
@@ -45,14 +48,26 @@ fun PlayerInfoOverlay(
 @Composable
 fun PlayerErrorOverlay(
     error: String, canRetry: Boolean, hasChannels: Boolean, focus: FocusRequester,
-    onRetry: () -> Unit, onChannels: () -> Unit, onBack: () -> Unit
+    onRetry: () -> Unit, onChannels: () -> Unit, onBack: () -> Unit,
+    recovery: LiveRecoveryState = LiveRecoveryState()
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Surface(Modifier.padding(32.dp), color = MaterialTheme.colorScheme.surface,
             shape = MaterialTheme.shapes.large, contentColor = MaterialTheme.colorScheme.onSurface) {
             Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(R.string.player_error), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(if (recovery.isRecovering) R.string.live_recovery_title else R.string.player_error),
+                    style = MaterialTheme.typography.titleMedium)
+                when (recovery.phase) {
+                    LiveRecoveryPhase.WAITING_NETWORK -> Text(stringResource(R.string.live_recovery_waiting_network))
+                    LiveRecoveryPhase.SCHEDULED -> Text(stringResource(R.string.live_recovery_scheduled,
+                        recovery.attempt, recovery.maxAttempts))
+                    LiveRecoveryPhase.CONNECTING -> Text(stringResource(R.string.live_recovery_connecting,
+                        recovery.attempt, recovery.maxAttempts))
+                    LiveRecoveryPhase.EXHAUSTED -> Text(stringResource(R.string.live_recovery_exhausted))
+                    else -> Unit
+                }
+                if (recovery.isRecovering) LinearProgressIndicator(Modifier.fillMaxWidth())
                 Regex("ERROR_CODE_[A-Z0-9_]+").find(error)?.value?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall)
                 }

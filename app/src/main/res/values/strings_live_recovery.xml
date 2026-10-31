@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live_recovery_title">جارٍ استعادة البث…</string>
+    <string name="live_recovery_waiting_network">بانتظار الاتصال بالشبكة. ستُستأنف المحاولة تلقائياً عند عودته.</string>
+    <string name="live_recovery_scheduled">جارٍ تجهيز المحاولة %1$d من %2$d…</string>
+    <string name="live_recovery_connecting">جارٍ إعادة الاتصال — المحاولة %1$d من %2$d…</string>
+    <string name="live_recovery_exhausted">لم تنجح استعادة البث تلقائياً. يمكنك إعادة المحاولة أو اختيار قناة أخرى.</string>
+</resources>

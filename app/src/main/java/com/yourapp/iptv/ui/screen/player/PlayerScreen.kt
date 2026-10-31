@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import com.yourapp.iptv.domain.model.PlaybackTechnicalInfo
+import com.yourapp.iptv.domain.model.LiveRecoveryState
 import com.yourapp.iptv.ui.component.player.*
 import com.yourapp.iptv.ui.component.common.FocusInputEpoch
 import com.yourapp.iptv.ui.component.common.rememberContextFocus
@@ -81,10 +82,11 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     var focusedId by remember { mutableStateOf<String?>(null) }
     var moreInitial by rememberSaveable { mutableStateOf(PlayerMoreAction.FAVORITE) }
     val panelFocus = rememberContextFocus("live-player")
-    var retry by remember(channel?.id) { mutableIntStateOf(0) }
-    var playbackError by remember(channel?.id, retry) { mutableStateOf<String?>(null) }
-    var buffering by remember(channel?.id, retry) { mutableStateOf(true) }
-    var technical by remember(channel?.id, retry) { mutableStateOf(PlaybackTechnicalInfo()) }
+    var retry by remember(channel?.id, channel?.streamUrl) { mutableIntStateOf(0) }
+    var playbackError by remember(channel?.id, channel?.streamUrl, retry) { mutableStateOf<String?>(null) }
+    var recoveryState by remember(channel?.id, channel?.streamUrl, retry) { mutableStateOf(LiveRecoveryState()) }
+    var buffering by remember(channel?.id, channel?.streamUrl, retry) { mutableStateOf(true) }
+    var technical by remember(channel?.id, channel?.streamUrl, retry) { mutableStateOf(PlaybackTechnicalInfo()) }
     val error = if (state.sourceChanged) stringResource(R.string.history_source_changed) else state.errorMessage ?: playbackError
     val surface = remember { PlayerSurfaceHandle() }
     val captionModel: CaptionViewModel = hiltViewModel()
@@ -128,7 +130,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     }
     fun back() {
         when (playerBackAction(panels.panel)) {
-            PlayerBackAction.EXIT -> onBack(channel?.id)
+            PlayerBackAction.EXIT -> { surface.cancelRecovery(); onBack(channel?.id) }
             PlayerBackAction.HIDE_CARDS -> hideCards()
             else -> {
                 if (panels.panel == PlayerPanel.CONTROLS) surface.hideControls()
@@ -142,6 +144,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     fun changeChannel(next: Boolean) {
         panels = panels.afterZapping(); focusedId = null
         surface.hideControls()
+        if (state.canChangeChannel) surface.cancelRecovery()
         if (next) viewModel.nextChannel() else viewModel.previousChannel()
         focusEpoch++; showBanner()
     }
@@ -149,7 +152,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         panels = panels.afterSelection(); focusedId = null
         surface.hideControls()
         // Selecting the active channel only closes the rail; the stream is left running.
-        if (id != channel?.id) viewModel.selectChannel(id)
+        if (id != channel?.id) { surface.cancelRecovery(); viewModel.selectChannel(id) }
         focusEpoch++; showBanner()
     }
     fun handleRemote(event: KeyEvent, visible: Boolean): Boolean {
@@ -208,7 +211,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         Box(Modifier.fillMaxSize().background(Color.Black).then(panelFocus.inputModifier())
             .onPreviewKeyEvent { handleRemote(it.nativeKeyEvent, panels.panel == PlayerPanel.CONTROLS) }
             .focusRequester(rootFocus).focusable()) {
-            if (channel != null) PlayerSurface(channel, retry, surface,
+            if (channel != null && !state.sourceChanged) PlayerSurface(channel, retry, surface,
                 onError = { id, message -> if (id == activeChannel?.id) playbackError = message },
                 onBuffering = { id, loading -> if (id == activeChannel?.id) buffering = loading },
                 onRemoteKey = ::handleRemote,
@@ -221,6 +224,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                 onPlaybackStarted = viewModel::onPlaybackStarted,
                 captionSettings = captionState.settings,
                 onCaptionBinding = { player, audio -> captionPlayer = player; captionAudio = audio },
+                onRecovery = { id, value -> if (id == activeChannel?.id) recoveryState = value },
                 onTechnicalInfo = { id, value -> if (id == activeChannel?.id) technical = value })
             GeneratedCaptionOverlay(captionModel, captionAudio, captionState.settings,
                 raised = panels.panel != PlayerPanel.WATCHING || bannerVisible)
@@ -231,8 +235,11 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
             }
             if ((state.isLoading || (channel != null && buffering)) && error == null)
                 CircularProgressIndicator(Modifier.align(Alignment.Center))
-            if (error != null) PlayerErrorOverlay(error, channel != null, state.queue.size > 0, errorFocus,
-                onRetry = { retry++; focusEpoch++ }, onChannels = ::openChannels, onBack = { onBack(channel?.id) })
+            if (error != null) PlayerErrorOverlay(error, channel != null && !state.sourceChanged,
+                state.queue.size > 0, errorFocus,
+                onRetry = { surface.cancelRecovery(); retry++; focusEpoch++ }, onChannels = ::openChannels,
+                onBack = { surface.cancelRecovery(); onBack(channel?.id) },
+                recovery = if (state.sourceChanged || state.errorMessage != null) LiveRecoveryState() else recoveryState)
             if (panels.panel == PlayerPanel.CHANNELS) PlayerChannelPanel(state.queue.channels, state.currentIndex,
                 organizationFilterName(state.selectedGroup, state.organization), state.query, state.favoritesOnly, onSelect = ::selectChannel,
                 onDismiss = ::back, onRemoteKey = ::handleRemote)
@@ -257,6 +264,8 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                         PlayerMoreAction.FAVORITE -> viewModel.toggleFavorite()
                         PlayerMoreAction.LAST_CHANNEL -> recallScope.launch {
                             val target = viewModel.recallLastChannel() ?: return@launch
+                            if (target.channel.id != channel.id || target.channel.streamUrl != channel.streamUrl)
+                                surface.cancelRecovery()
                             surface.hideControls(); panels = panels.watching()
                             focusedId = null; focusEpoch++; showBanner()
                             if (!viewModel.selectHistoryChannel(target.channel, target.sourceKey))
@@ -271,11 +280,12 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                         PlayerMoreAction.DETAILS -> panels = panels.details()
                         PlayerMoreAction.CHANNELS -> openChannels()
                         PlayerMoreAction.GUIDE -> {
+                            surface.cancelRecovery()
                             panels = panels.watching()
                             onGuide(channel.id, state.selectedGroup, state.query, state.favoritesOnly)
                         }
                         PlayerMoreAction.CONTROLS -> { panels = panels.controls(); surface.showControls() }
-                        PlayerMoreAction.APPEARANCE -> onAppearance()
+                        PlayerMoreAction.APPEARANCE -> { surface.cancelRecovery(); onAppearance() }
                         PlayerMoreAction.PREVIOUS -> changeChannel(false)
                         PlayerMoreAction.NEXT -> changeChannel(true)
                     }
@@ -286,6 +296,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
             if (panels.panel == PlayerPanel.CAPTIONS)
                 PlayerCaptionDialog(captionModel, captionSelection, ::back)
             if (panels.panel == PlayerPanel.HISTORY) WatchHistoryDialog(channel?.id, ::back, { selected, source ->
+                if (selected.id != channel?.id || selected.streamUrl != channel?.streamUrl) surface.cancelRecovery()
                 panels = panels.watching(); focusedId = null; focusEpoch++; showBanner()
                 if (!viewModel.selectHistoryChannel(selected, source)) onOpenHistoryChannel(selected.id, source)
             })

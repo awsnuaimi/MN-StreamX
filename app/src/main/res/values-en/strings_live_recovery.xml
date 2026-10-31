@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live_recovery_title">Restoring the connection…</string>
+    <string name="live_recovery_waiting_network">Waiting for the network connection. Retrying will resume automatically when it returns.</string>
+    <string name="live_recovery_scheduled">Preparing attempt %1$d of %2$d…</string>
+    <string name="live_recovery_connecting">Reconnecting — attempt %1$d of %2$d…</string>
+    <string name="live_recovery_exhausted">The stream could not be restored automatically. Retry or choose another channel.</string>
+</resources>
