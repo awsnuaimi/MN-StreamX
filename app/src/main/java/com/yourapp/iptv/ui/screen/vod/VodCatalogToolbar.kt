@@ -66,11 +66,14 @@ internal fun VodCatalogRail(kind: VodKind, onBack: () -> Unit, modifier: Modifie
         // Navigating out remains possible via the standard back button and remote Back.
         Surface(onClick = onBack, shape = RoundedCornerShape(14.dp), color = colors.surfaceContainer,
             modifier = Modifier.size(44.dp).tvFocusIndicator().testTag("vod-rail-back")) {
-            Box(contentAlignment = Alignment.Center) { Text("⌂", color = colors.onSurface) }
+            Box(contentAlignment = Alignment.Center) {
+                VodRailIcon(VodRailGlyph.HOME, colors.onSurface, Modifier.size(24.dp))
+            }
         }
-        Box(Modifier.size(44.dp).background(colors.primary, RoundedCornerShape(12.dp)),
+        Box(Modifier.size(44.dp).background(colors.primary, VodCutShape),
             contentAlignment = Alignment.Center) {
-            Text(if (kind == VodKind.MOVIE) "▣" else "▤", color = colors.onPrimary)
+            VodRailIcon(if (kind == VodKind.MOVIE) VodRailGlyph.MOVIE else VodRailGlyph.SERIES,
+                colors.onPrimary, Modifier.size(24.dp))
         }
     }
 }

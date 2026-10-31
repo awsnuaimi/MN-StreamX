@@ -1,0 +1,11 @@
+package com.yourapp.iptv.ui.screen.vod
+
+/**
+ * Preview must not crowd out the browsable poster grid on compact TVs.
+ * Dimensions are in dp; the parent Row owns the remaining grid width.
+ * A null width means details remain reachable through each poster card.
+ */
+internal fun vodSeriesPreviewWidthDp(availableDp: Float): Float? {
+    if (!availableDp.isFinite() || availableDp < 680f) return null
+    return (availableDp * 0.30f).coerceIn(210f, 340f)
+}

@@ -1,6 +1,9 @@
 package com.yourapp.iptv.ui.screen.vod
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,10 +21,13 @@ import coil.request.ImageRequest
 import com.yourapp.iptv.domain.model.VodItem
 import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun VodPosterCard(item: VodItem, modifier: Modifier = Modifier,
     onFocused: (VodItem) -> Unit = {}, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
+    val bring = remember { BringIntoViewRequester() }
+    LaunchedEffect(focused) { if (focused) bring.bringIntoView() }
     val colors = MaterialTheme.colorScheme
     val context = LocalContext.current
     val image = remember(context, item.poster) {
@@ -29,9 +35,10 @@ internal fun VodPosterCard(item: VodItem, modifier: Modifier = Modifier,
             ImageRequest.Builder(context).data(url).size(256, 350).crossfade(false).build()
         }
     }
-    Column(Modifier.fillMaxWidth()) {
-        Surface(onClick = onClick, modifier = modifier.fillMaxWidth().tvFocusIndicator()
-            .onFocusChanged { state ->
+    // Bring the whole poster including its caption into view, not just the image surface.
+    Column(Modifier.fillMaxWidth().bringIntoViewRequester(bring)) {
+        Surface(onClick = onClick, modifier = modifier.fillMaxWidth()
+            .tvFocusIndicator().onFocusChanged { state ->
                 focused = state.isFocused
                 if (state.isFocused) onFocused(item)
             },

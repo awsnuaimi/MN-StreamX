@@ -74,6 +74,11 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
     }
     val featured = visible.firstOrNull { it.id == highlighted } ?: visible.firstOrNull()
     val continued = remember(progress, state.kind) { progress.filter { it.kind == state.kind }.take(8) }
+    // Resolve artwork only for saved titles: do not allocate a map of the entire VOD catalog.
+    val continuedArtwork = remember(state.catalog.items, continued) {
+        val savedIds = continued.map { it.id }.toSet()
+        state.catalog.items.filter { it.id in savedIds }
+    }
     val rtl = labels.language == HomeLanguage.ARABIC
     CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
         Row(Modifier.fillMaxSize().then(focus.inputModifier()).testTag("vod-page")) {
@@ -101,54 +106,58 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
                         VodCategories(state, labels, focus, posters, Modifier.fillMaxWidth().height(44.dp)) { id ->
                             focus.request(vodPosterContext(id, state.query)); actions.category(id)
                         }
-                        Row(Modifier.weight(1f).fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            when {
-                                state.categoryLoading -> Box(Modifier.weight(1f).fillMaxHeight(),
-                                    contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                                state.categoryError -> {
-                                    focus.Restore(posters, emptyList(), onEmpty = { focus.request("category-status") })
-                                    focus.Restore("category-status", listOf("retry"))
-                                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                                        VodMessage(labels.failed(), labels.tryAgain(), {
-                                            focus.record("category-status", "retry", 0)
-                                            focus.request(posters); actions.retryCategory()
-                                        }, focus.target("category-status", "retry", 0).testTag("vod-category-retry"))
+                        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                            val seriesWidth = if (state.kind == VodKind.SERIES)
+                                vodSeriesPreviewWidthDp(maxWidth.value) else null
+                            Row(Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                when {
+                                    state.categoryLoading -> Box(Modifier.weight(1f).fillMaxHeight(),
+                                        contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                                    state.categoryError -> {
+                                        focus.Restore(posters, emptyList(), onEmpty = { focus.request("category-status") })
+                                        focus.Restore("category-status", listOf("retry"))
+                                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                                            VodMessage(labels.failed(), labels.tryAgain(), {
+                                                focus.record("category-status", "retry", 0)
+                                                focus.request(posters); actions.retryCategory()
+                                            }, focus.target("category-status", "retry", 0).testTag("vod-category-retry"))
+                                        }
                                     }
-                                }
-                                state.filtering -> Box(Modifier.weight(1f).fillMaxHeight(),
-                                    contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                                else -> VodPosterGrid(visible, focus, posters, state.selected == null,
-                                    labels, state.catalog.items.isEmpty() && state.query.isBlank(),
-                                    Modifier.weight(1f).fillMaxHeight(),
-                                    onFocused = { hoverCandidate = it.id },
-                                    header = {
-                                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                            if (state.kind == VodKind.MOVIE && featured != null) {
-                                                VodMovieHero(featured, labels, onOpen = { actions.open(featured) })
-                                            }
-                                            if (continued.isNotEmpty()) {
-                                                Box(Modifier.onPreviewKeyEvent { event ->
-                                                    if (event.key != Key.DirectionDown) false else {
-                                                        if (event.type == KeyEventType.KeyDown) focus.request(posters)
-                                                        true
-                                                    }
-                                                }) {
-                                                    VodContinueWatching(continued, labels, focus, visible) { entry ->
-                                                        actions.play(entry.kind, entry.id, entry.extension,
-                                                            entry.title, entry.seriesId)
+                                    state.filtering -> Box(Modifier.weight(1f).fillMaxHeight(),
+                                        contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                                    else -> VodPosterGrid(visible, focus, posters, state.selected == null,
+                                        labels, state.catalog.items.isEmpty() && state.query.isBlank(),
+                                        Modifier.weight(1f).fillMaxHeight(),
+                                        onFocused = { hoverCandidate = it.id },
+                                        header = {
+                                            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                                if (state.kind == VodKind.MOVIE && featured != null) {
+                                                    VodMovieHero(featured, labels, onOpen = { actions.open(featured) })
+                                                }
+                                                if (continued.isNotEmpty()) {
+                                                    Box(Modifier.onPreviewKeyEvent { event ->
+                                                        if (event.key != Key.DirectionDown) false else {
+                                                            if (event.type == KeyEventType.KeyDown) focus.request(posters)
+                                                            true
+                                                        }
+                                                    }) {
+                                                        VodContinueWatching(continued, labels, focus, continuedArtwork) { entry ->
+                                                            actions.play(entry.kind, entry.id, entry.extension,
+                                                                entry.title, entry.seriesId)
+                                                        }
                                                     }
                                                 }
+                                                Text(labels.newTitles(), style = MaterialTheme.typography.titleMedium)
                                             }
-                                            Text(labels.newTitles(), style = MaterialTheme.typography.titleMedium)
-                                        }
-                                    }) { index, item ->
-                                    focus.record(posters, item.id, index); actions.open(item)
+                                        }) { index, item ->
+                                        focus.record(posters, item.id, index); actions.open(item)
+                                    }
                                 }
-                            }
-                            if (state.kind == VodKind.SERIES) {
-                                VodSeriesPreview(featured, progress, labels, actions.open,
-                                    Modifier.width(250.dp).fillMaxHeight())
+                                if (seriesWidth != null) {
+                                    VodSeriesPreview(featured, progress, labels, actions.open,
+                                        Modifier.width(seriesWidth.dp).fillMaxHeight())
+                                }
                             }
                         }
                     }
