@@ -28,6 +28,7 @@ fun SettingsScreen(
     val account by viewModel.uiState.collectAsStateWithLifecycle()
     val editor by appearanceModel.uiState.collectAsStateWithLifecycle()
     val profiles by profilesModel.people.collectAsStateWithLifecycle()
+    val adaptiveScope = adaptiveSettingsScope(account, profiles)
     val labels = SettingsLabels(LocalParentalSession.current.language)
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner, appearanceModel, viewModel) {
@@ -58,6 +59,6 @@ fun SettingsScreen(
         canSave = !editor.loading && !editor.failed, onSave = appearanceModel::save,
         onReset = appearanceModel::reset, onDiscard = appearanceModel::discard, onAction = navigate, focusScope = editor.value.profileId) { category, first, action ->
         if (category == SettingsCategory.APPEARANCE) SettingsAppearancePanel(editor, labels, first, appearanceModel::update, appearanceModel::load, onPlayerText = { action(SettingsAction.PLAYER) })
-        else SettingsSection(category, labels, first, account, viewModel::loadSavedSettings, action)
+        else SettingsSection(category, labels, first, account, viewModel::loadSavedSettings, action, adaptiveScope)
     }
 }

@@ -9,7 +9,8 @@ data class LiveTvPreferences(
     val hiddenChannels: Set<String> = emptySet(),
     val hiddenGroups: Set<String> = emptySet(),
     val hiddenFolders: Set<String> = emptySet(),
-    val preferredQualities: Map<String, String> = emptyMap()
+    val preferredQualities: Map<String, String> = emptyMap(),
+    val adaptive: AdaptiveLiveNavigation = AdaptiveLiveNavigation()
 ) {
     fun visible(channel: Channel) = channel.id !in hiddenChannels && channel.group !in hiddenGroups &&
         channel.folderIds.none { it in hiddenFolders }
@@ -22,6 +23,7 @@ data class LiveTvPreferences(
         require(preferredQualities.size <= 10_000 && preferredQualities.all { (family, id) ->
             liveTvFamily.matches(family) && id.isNotBlank() && id.length <= 512
         })
+        adaptive.validate()
         return this
     }
     fun prefer(family: String, selected: String?): LiveTvPreferences = copy(

@@ -4,12 +4,14 @@ package com.yourapp.iptv.ui.presentation
 internal class LiveChannelIndex(val rows: List<LiveChannelRow>) {
     private val keys = HashMap<String, Int>(rows.size)
     private val channels = HashMap<String, Int>()
+    private val families = HashMap<String, Int>(rows.size)
     val numberedRows: Map<Int, LiveChannelRow>
 
     init {
         val numbers = HashMap<Int, LiveChannelRow>()
         rows.forEachIndexed { position, row ->
             keys.putIfAbsent(row.key, position)
+            families.putIfAbsent(row.preferenceKey, position)
             row.variants.forEach { channels.putIfAbsent(it.id, position) }
             if (row.number > 0) numbers[row.number] = row
         }
@@ -20,6 +22,7 @@ internal class LiveChannelIndex(val rows: List<LiveChannelRow>) {
     fun channelPosition(id: String?): Int = id?.let(channels::get) ?: -1
     fun forKey(key: String?): LiveChannelRow? = rows.getOrNull(keyPosition(key))
     fun forChannel(id: String?): LiveChannelRow? = rows.getOrNull(channelPosition(id))
+    fun forFamily(family: String?): LiveChannelRow? = rows.getOrNull(family?.let(families::get) ?: -1)
     override fun toString() = "LiveChannelIndex(rows=${rows.size})"
 
     companion object { val Empty = LiveChannelIndex(emptyList()) }

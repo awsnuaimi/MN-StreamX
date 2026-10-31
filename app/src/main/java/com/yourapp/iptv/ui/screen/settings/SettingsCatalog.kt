@@ -46,7 +46,7 @@ internal object SettingsCatalog {
     private val aliases = mapOf(
         SettingsCategory.ACCOUNTS to "اشتراك حساب ملف subscriptions accounts profiles abos konten profile",
         SettingsCategory.APPEARANCE to "مظهر لغة تيم لون أحمر ليلي شعار أعمدة شبكة قائمة شريط appearance language theme color red night logos columns grid list sidebar sprache design rot nacht raster",
-        SettingsCategory.PLAYBACK to "مشغل نص حجم بدء آخر قناة player text size startup last channel schrift start sender",
+        SettingsCategory.PLAYBACK to "مشغل نص حجم بدء آخر قناة تنقل تكيفي تعلم player text size startup last channel adaptive navigation learning schrift start sender adaptiv navigieren lernen",
         SettingsCategory.CAPTIONS to "ترجمة صوت نموذج سحابة captions subtitles translation audio models cloud untertitel übersetzung modelle",
         SettingsCategory.PARENTAL to "حماية طفل رمز قفل pin parental child lock kindersicherung sperren",
         SettingsCategory.DATA to "نسخ استرجاع بيانات تخزين مساحة backup restore data storage speicher sicherung wiederherstellen",

@@ -15,7 +15,8 @@ import com.yourapp.iptv.ui.state.SettingsUiState
 
 @Composable
 internal fun SettingsSection(category: SettingsCategory, labels: SettingsLabels, first: FocusRequester,
-    account: SettingsUiState, reloadAccounts: () -> Unit, onAction: (SettingsAction) -> Unit) {
+    account: SettingsUiState, reloadAccounts: () -> Unit, onAction: (SettingsAction) -> Unit,
+    adaptiveScope: String = "") {
     fun text(ar: String, en: String, de: String) = labels.text(ar, en, de)
     when (category) {
         SettingsCategory.ACCOUNTS -> {
@@ -36,6 +37,7 @@ internal fun SettingsSection(category: SettingsCategory, labels: SettingsLabels,
             SettingsActionRow(stringResource(R.string.ui_player_title), stringResource(R.string.ui_player_hint), category = category,
                 modifier = Modifier.focusRequester(first).testTag("settings-open-player"), focusKey = "settings-open-player") { onAction(SettingsAction.PLAYER) }
             StartupPlaybackSetting()
+            AdaptiveNavigationSetting(adaptiveScope, labels)
         }
         SettingsCategory.CAPTIONS -> HomeCaptionHost { state, open ->
             val value = if (!state.loaded || state.readFailed) text("غير متاح", "Unavailable", "Nicht verfügbar") else when (state.settings.mode) {

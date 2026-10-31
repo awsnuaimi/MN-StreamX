@@ -29,7 +29,7 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
     sidebarFocus: FocusRequester? = null, ready: Boolean = true, preferredQualities: Map<String, String> = emptyMap(),
     index: LiveChannelIndex = remember(rows) { LiveChannelIndex(rows) },
     sidebarOnRight: Boolean? = null, emptyEntry: FocusRequester? = null,
-    onEnterDetails: (() -> Unit)? = null) {
+    onEnterDetails: (() -> Unit)? = null, entryKey: String? = null) {
     val list = rememberLazyListState()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -46,6 +46,7 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
     val currentRows by rememberUpdatedState(rows)
     val currentIndex by rememberUpdatedState(index)
     val currentActive by rememberUpdatedState(activeKey)
+    val currentEntry by rememberUpdatedState(entryKey)
     val visibleCallback by rememberUpdatedState(onVisible)
     val positionCallback by rememberUpdatedState(onPosition)
     val restoredCallback by rememberUpdatedState(onRestored)
@@ -71,7 +72,8 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
     LaunchedEffect(navigation, rows, ready, rowPx) {
         navigation.requests.collectLatest { request ->
             if (request == null || !ready || rows.isEmpty()) return@collectLatest
-            val targetIndex = index.keyPosition(request.key ?: currentActive).takeIf { it >= 0 }
+            // Resolve an anonymous entry after projection is ready; explicit keys/tokens keep priority.
+            val targetIndex = index.keyPosition(request.key ?: currentEntry ?: currentActive).takeIf { it >= 0 }
                 ?: index.keyPosition(currentActive).takeIf { it >= 0 } ?: 0
             restoring = true
             try {

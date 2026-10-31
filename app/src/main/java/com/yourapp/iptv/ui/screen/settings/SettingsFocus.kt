@@ -17,6 +17,7 @@ internal class SettingsFocusBinding(val focus: ContextFocus, val context: String
             "settings-theme-RED", "settings-theme-LIGHT", "settings-night", "settings-player-text", "settings-display",
             "settings-advanced", "settings-logos", "settings-sidebar-side", "settings-sidebar-expanded", "settings-browse-restore",
             "settings-open-subscriptions", "settings-open-profiles", "settings-open-player", "startup-toggle", "startup-retry",
+            "adaptive-toggle", "adaptive-reset", "adaptive-retry",
             "settings-open-captions", "settings-open-parental", "settings-open-backup", "storage-refresh", "storage-delete",
             "update-action", "update-cancel", "update-install", "settings-open-diagnostics")
     }

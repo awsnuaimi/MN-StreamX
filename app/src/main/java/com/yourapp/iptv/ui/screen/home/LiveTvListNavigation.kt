@@ -28,11 +28,11 @@ internal class LiveTvListNavigation(private val spans: PerformanceSpans = Perfor
     fun attach(owner: Any, handler: (KeyEvent) -> Boolean) { inputOwner = owner; input = handler }
     fun detach(owner: Any) { if (inputOwner === owner) { inputOwner = null; input = { false }; cancel(); clearShortcut() } }
     fun handle(event: KeyEvent) = input(event)
-    fun enter() {
+    fun enter(preferredKey: String? = null) {
         categoryTransfer = false; clearShortcut()
         if (mutable.value == null) {
             val saved = categoryReturn; categoryReturn = null
-            request(saved?.key, saved?.position, instant = saved != null)
+            request(saved?.key ?: preferredKey, saved?.position, instant = saved != null)
         }
     }
     fun bind(value: Any) {

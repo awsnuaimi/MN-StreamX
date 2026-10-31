@@ -67,4 +67,44 @@ class LiveTvPreferencesViewModelTest {
         assertEquals(LiveTvSort.FAVORITES, model.state.value.value.sort); assertFalse(model.state.value.saving)
         assertEquals(LiveTvSort.PROVIDER, repository.row(a).value.sort)
     }
+    @Test fun explicitWatchLearningIsDurableAndDoesNotMarkPreferenceControlsBusy() = runTest(dispatcher) {
+        val model = model(); model.bind(a); runCurrent()
+        val context = "c".repeat(64); val family = "d".repeat(64)
+        repository.release = CompletableDeferred()
+        model.recordWatch(a, context, family); runCurrent()
+        assertFalse(model.state.value.saving); assertTrue(model.state.value.value.adaptive.contexts.isEmpty())
+        model.recordWatch(a, context, family); runCurrent(); assertEquals(1, repository.writes)
+        repository.release!!.complete(Unit); advanceUntilIdle()
+        assertNull(model.state.value.value.adaptive.entry(context) { true })
+        model.recordWatch(a, context, family); advanceUntilIdle()
+        assertEquals(family, model.state.value.value.adaptive.entry(context) { true })
+    }
+    @Test fun resetFromAnotherOwnerInvalidatesAnAlreadyWaitingFirstWatch() = runTest(dispatcher) {
+        val model = model(); model.bind(a); runCurrent(); repository.release = CompletableDeferred()
+        model.recordWatch(a, "c".repeat(64), "d".repeat(64)); runCurrent()
+        repository.row(a).value = repository.row(a).value.let { it.copy(adaptive = it.adaptive.clear()) }
+        runCurrent(); repository.release!!.complete(Unit); advanceUntilIdle()
+        assertTrue(model.state.value.value.adaptive.contexts.isEmpty())
+        assertEquals(1L, model.state.value.value.adaptive.epoch)
+    }
+    @Test fun backgroundLearningPreservesConcurrentOrganizationEdits() = runTest(dispatcher) {
+        val model = model(); model.bind(a); runCurrent(); repository.release = CompletableDeferred()
+        model.recordWatch(a, "c".repeat(64), "d".repeat(64)); runCurrent()
+        repository.row(a).value = repository.row(a).value.copy(sort = LiveTvSort.NAME, hiddenChannels = setOf("hidden"))
+        runCurrent(); repository.release!!.complete(Unit); advanceUntilIdle()
+        assertEquals(LiveTvSort.NAME, model.state.value.value.sort)
+        assertEquals(setOf("hidden"), model.state.value.value.hiddenChannels)
+        assertEquals(1, model.state.value.value.adaptive.contexts.size)
+    }
+    @Test fun disabledLearningAndStaleCallbacksDoNotWriteAndSwitchCancelsPendingEvidence() = runTest(dispatcher) {
+        val model = model(); model.bind(a); runCurrent()
+        model.recordWatch(b, "c".repeat(64), "d".repeat(64)); advanceUntilIdle(); assertEquals(0, repository.writes)
+        repository.row(a).value = LiveTvPreferences(adaptive = AdaptiveLiveNavigation(enabled = false)); runCurrent()
+        model.recordWatch(a, "c".repeat(64), "d".repeat(64)); advanceUntilIdle(); assertEquals(0, repository.writes)
+        repository.row(a).value = LiveTvPreferences(); runCurrent(); repository.release = CompletableDeferred()
+        model.recordWatch(a, "c".repeat(64), "d".repeat(64)); runCurrent(); model.bind(b); runCurrent()
+        repository.release!!.complete(Unit); advanceUntilIdle()
+        assertTrue(repository.row(a).value.adaptive.contexts.isEmpty())
+        assertTrue(model.state.value.value.adaptive.contexts.isEmpty()); assertEquals(b, model.state.value.scope)
+    }
 }

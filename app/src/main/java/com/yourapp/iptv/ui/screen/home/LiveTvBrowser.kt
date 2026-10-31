@@ -44,7 +44,8 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     sidebarFocus: FocusRequester? = null, entryFocus: FocusRequester? = null,
     preferences: LiveTvPreferencesState = LiveTvPreferencesState(ready = true),
     onPreference: (((LiveTvPreferences) -> LiveTvPreferences) -> Unit)? = null,
-    onPreferencesRetry: () -> Unit = {}, headerEntry: FocusRequester? = null, aboveHeader: FocusRequester? = null) {
+    onPreferencesRetry: () -> Unit = {}, headerEntry: FocusRequester? = null, aboveHeader: FocusRequester? = null,
+    onWatchChoice: ((context: String, family: String) -> Unit)? = null) {
     val colors = liveTvColors(appearance)
     LaunchedEffect(catalog.browseScope, catalog.selectedGroup, preferences.value.hiddenGroups, preferences.value.hiddenFolders) {
         val selected = catalog.selectedGroup
@@ -75,6 +76,15 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
         channels = personal.channels, visibleChannels = personal.visibleChannels, groups = personal.groups, organization = personal.organization)
     val rowIndex = projected?.takeIf { it.first === input }?.second?.second ?: LiveChannelIndex.Empty
     val rows = rowIndex.rows
+    val learningContext = remember(catalog.selectedGroup, catalog.favoritesOnly, catalog.query) {
+        AdaptiveLiveNavigation.context(catalog.selectedGroup, catalog.favoritesOnly, catalog.query)
+    }
+    val watchChannel: (Channel) -> Unit = { selected ->
+        if (preferences.ready && preferences.value.adaptive.enabled && learningContext != null) {
+            rowIndex.forChannel(selected.id)?.let { onWatchChoice?.invoke(learningContext, it.preferenceKey) }
+        }
+        onPlay(selected)
+    }
     var manage by remember(catalog.browseScope, accessEpoch) { mutableStateOf(false) }
     var lastIndex by remember(catalog.browseScope, catalog.selectedGroup, catalog.query, catalog.favoritesOnly) { mutableIntStateOf(0) }
     var focused by remember(state.browseScope, state.selectedGroup, state.query, state.favoritesOnly) {
@@ -116,6 +126,11 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
         }
     }
     val navigation = remember(catalog.browseScope, accessEpoch) { LiveTvListNavigation() }
+    // A remembered row or an explicit session restore always wins. Learning only seeds a fresh list.
+    val predictedEntry = if (focused != null || catalog.gridRestore != null || !preferences.ready) null else {
+        preferences.value.adaptive.entry(learningContext) { rowIndex.forFamily(it) != null }
+            ?.let { rowIndex.forFamily(it)?.key }
+    }
     val browseContext = remember(catalog.browseScope, catalog.selectedGroup, catalog.query, catalog.favoritesOnly, accessEpoch) { Any() }
     SideEffect { navigation.bind(browseContext) }
     var groupEntry by remember(catalog.browseScope, accessEpoch) { mutableStateOf<LiveTvGroupEntry?>(null) }
@@ -124,7 +139,7 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
         val intent = groupEntry ?: return@LaunchedEffect
         if (catalog.selectedGroup == intent.group && !catalog.isFiltering && projected?.first === input) {
             withFrameNanos { }
-            if (groupEntry == intent) { entry.requestFocus(); navigation.enter(); groupEntry = null }
+            if (groupEntry == intent) { entry.requestFocus(); navigation.enter(predictedEntry); groupEntry = null }
         }
     }
     val numeric = remember(input, catalog.selectedGroup, catalog.query, catalog.favoritesOnly, accessEpoch) { LiveTvNumberEntry() }
@@ -132,7 +147,7 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     val numberKeys = liveTvNumberKeys(numeric, numberRows, projected?.first === input,
         LocalViewConfiguration.current.longPressTimeoutMillis,
         jump = { row -> entry.requestFocus(); navigation.request(row.key, instant = true) },
-        play = { row -> navigation.cancel(); onPlay(row.channel(focused, preferences.value.preferredQualities)) })
+        play = { row -> navigation.cancel(); watchChannel(row.channel(focused, preferences.value.preferredQualities)) })
     LiveTvNumberLifetime(numeric, navigation::cancel)
     LaunchedEffect(fallbackReady, listFocused, rows.isEmpty()) {
         if (fallbackReady && listFocused && rows.isEmpty()) emptyFocus.requestFocus()
@@ -143,7 +158,7 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     val returnToList = observedInput !== input && navigation.ownsFocus
     SideEffect {
         observedInput = input
-        if (returnToList) { navigation.enter(); entry.requestFocus() }
+        if (returnToList) { navigation.enter(predictedEntry); entry.requestFocus() }
     }
     BackHandler(detailsFocused && rows.isNotEmpty()) { entry.requestFocus() }
     val program: (Channel) -> ChannelProgramInfo = { ChannelProgramInfo.from(it, guides.forChannel(it, state.browseScope, accessEpoch)) }
@@ -186,17 +201,17 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
                             .onFocusChanged {
                                 val entering = it.hasFocus && !navigation.ownsFocus
                                 navigation.ownsFocus = it.hasFocus; listFocused = it.hasFocus
-                                if (it.isFocused) navigation.enter()
+                                if (it.isFocused) navigation.enter(predictedEntry)
                                 else if (entering) navigation.clearShortcut()
                                 else if (!it.hasFocus) navigation.leave()
                             }.focusable().testTag("live-list-entry")) {
                             LiveTvChannelList(rows, state.selectedChannelId, active?.key, state.gridRestore, labels, colors,
-                                program, { HomeChannelPresentation.badge(it, captions) }, { focused = it.id; lastIndex = rowIndex.channelPosition(it.id).coerceAtLeast(0) }, onPlay,
+                                program, { HomeChannelPresentation.badge(it, captions) }, { focused = it.id; lastIndex = rowIndex.channelPosition(it.id).coerceAtLeast(0) }, watchChannel,
                                 { focused = it.channel(focused, preferences.value.preferredQualities).id; menuKey = it.key }, { visible = it }, onPosition, onRestored,
                                 categories, watch, detailAvailable, Modifier.fillMaxSize(), appearance.showChannelLogos,
                                 navigation, sidebarFocus, ready = projected?.first === input, preferredQualities = preferences.value.preferredQualities, index = rowIndex,
                                 sidebarOnRight = appearance.sidebarOnRight, emptyEntry = emptyFocus.takeIf { fallbackReady },
-                                onEnterDetails = { detailMemory.restoreOrRequestFocus(watch) })
+                                onEnterDetails = { detailMemory.restoreOrRequestFocus(watch) }, entryKey = predictedEntry)
                             if (fallbackKind != "none") key(input, fallbackKind) {
                                 LiveTvEmptyFocus(fallbackKind, labels, colors, emptyFocus, categories, sidebarFocus, appearance.sidebarOnRight,
                                     { fallbackReady = it }, onPreferencesRetry, { onQuery(""); onGroup(null) }, Modifier.align(Alignment.Center))
@@ -206,7 +221,7 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
                     CompositionLocalProvider(LocalLayoutDirection provides contentDirection) {
                         if (detail && active != null && channel != null) LiveTvDetail(active, channel, program(channel),
                             guides.forChannel(channel, state.browseScope, accessEpoch).nowMillis, colors, labels, translated,
-                            captions.settings.target.tag.uppercase(Locale.ROOT), watch, entry, { onPlay(channel) },
+                            captions.settings.target.tag.uppercase(Locale.ROOT), watch, entry, { watchChannel(channel) },
                             { onTranslate(channel) }, Modifier.weight(1f).fillMaxHeight().onFocusChanged { detailsFocused = it.hasFocus },
                             sidebarOnRight = appearance.sidebarOnRight, above = categories, groupEntry = detailMemory)
                     }
@@ -223,7 +238,7 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     menu?.let { row ->
         LiveTvChannelMenu(row, row.channel(focused, preferences.value.preferredQualities), labels, colors, canFavorite, onDismiss = { menuKey = null; runCatching { entry.requestFocus() } },
             onFavorite = { onFavorite(row.channel(focused, preferences.value.preferredQualities)); menuKey = null; runCatching { entry.requestFocus() } },
-            onPlay = { menuKey = null; onPlay(it) },
+            onPlay = { menuKey = null; watchChannel(it) },
             onTranslate = { menuKey = null; onTranslate(row.channel(focused, preferences.value.preferredQualities)) },
             onHide = onPreference?.let { change -> { change { it.copy(hiddenChannels = it.hiddenChannels + row.variants.map { c -> c.id }) }; menuKey = null; entry.requestFocus() } },
             onHideCategory = onPreference?.takeIf { state.selectedGroup != null || row.variants.first().group != null }?.let { change -> {

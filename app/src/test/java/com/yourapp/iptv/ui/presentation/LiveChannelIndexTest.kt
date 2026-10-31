@@ -22,6 +22,8 @@ class LiveChannelIndexTest {
         val index = LiveChannelIndex(LiveChannelRows.project(channels, LiveChannelSort.NAME, Locale.GERMAN))
         assertEquals(1, index.channelPosition("hd")); assertEquals(1, index.channelPosition("fhd"))
         assertSame(index.rows[1], index.forChannel("fhd")); assertEquals(0, index.channelPosition("other"))
+        assertSame(index.rows[1], index.forFamily(index.rows[1].preferenceKey))
+        assertNull(index.forFamily("missing")); assertNull(index.forFamily(null))
     }
     @Test fun duplicateIdsKeepTheSameFirstMatchAsThePreviousLinearLookup() {
         val base = rows(2)

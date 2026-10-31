@@ -17,11 +17,12 @@ class LiveTvPreferencesViewModel @Inject constructor(private val repository: Liv
     val state = mutable.asStateFlow()
     private var read: Job? = null
     private var write: Job? = null
+    private var learning: Job? = null
     private var generation = 0L
     fun bind(scope: String, retry: Boolean = false) {
         if (mutable.value.scope == scope && !retry) return
         val ticket = ++generation
-        read?.cancel(); write?.cancel()
+        read?.cancel(); write?.cancel(); learning?.cancel()
         mutable.value = LiveTvPreferencesState(scope)
         if (!ProfileScope.valid(scope)) return
         read = viewModelScope.launch {
@@ -36,6 +37,7 @@ class LiveTvPreferencesViewModel @Inject constructor(private val repository: Liv
     fun change(scope: String, transform: (LiveTvPreferences) -> LiveTvPreferences) {
         val current = mutable.value
         if (current.scope != scope || !current.ready || current.saving) return
+        learning?.cancel()
         val ticket = generation
         mutable.value = current.copy(saving = true, error = false)
         write = viewModelScope.launch {
@@ -43,6 +45,24 @@ class LiveTvPreferencesViewModel @Inject constructor(private val repository: Liv
             catch (error: CancellationException) { throw error }
             catch (_: Exception) { if (ticket == generation) mutable.update { it.copy(error = true) } }
             finally { if (ticket == generation) mutable.update { it.copy(saving = false) } }
+        }
+    }
+
+    /** One explicit watch at a time; never queue arrow presses or optimistically change focus. */
+    fun recordWatch(scope: String, context: String, family: String) {
+        val current = mutable.value
+        if (current.scope != scope || !current.ready || current.saving || !current.value.adaptive.enabled || learning?.isActive == true) return
+        val ticket = generation
+        val expected = current.value.adaptive
+        learning = viewModelScope.launch {
+            try {
+                repository.update(scope) { latest ->
+                    // A concurrent reset, disable or another owner supersedes this observation.
+                    if (latest.adaptive != expected) latest
+                    else latest.copy(adaptive = latest.adaptive.record(context, family))
+                }
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { if (ticket == generation) mutable.update { it.copy(error = true) } }
         }
     }
 }

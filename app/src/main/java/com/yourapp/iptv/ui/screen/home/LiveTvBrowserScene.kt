@@ -35,6 +35,7 @@ internal fun LiveTvBrowserScene(state: HomeUiState, appearance: HomeAppearance, 
             }, onFavorite = onFavorite, canFavorite = canFavorite, onPosition = onPosition,
             onRestored = onRestored, onGuideChannels = { model.bind(it, HomeGuideViewModel.MAX_BROWSER_CHANNELS) }, modifier = modifier, sidebarFocus = sidebarFocus, entryFocus = entryFocus,
             preferences = scoped, onPreference = { preferences.change(state.browseScope, it) },
-            onPreferencesRetry = { preferences.bind(state.browseScope, retry = true) }, headerEntry = headerFocus, aboveHeader = aboveHeader)
+            onPreferencesRetry = { preferences.bind(state.browseScope, retry = true) }, headerEntry = headerFocus, aboveHeader = aboveHeader,
+            onWatchChoice = { context, family -> preferences.recordWatch(state.browseScope, context, family) })
     }
 }

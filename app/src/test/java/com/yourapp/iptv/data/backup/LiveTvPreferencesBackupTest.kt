@@ -11,7 +11,8 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LiveTvPreferencesBackupTest {
-    private val choice = LiveTvPreferences(LiveTvSort.NAME, setOf("one"), setOf("Group"), preferredQualities = mapOf("f".repeat(64) to "hd"))
+    private val choice = LiveTvPreferences(LiveTvSort.NAME, setOf("one"), setOf("Group"), preferredQualities = mapOf("f".repeat(64) to "hd"),
+        adaptive = AdaptiveLiveNavigation().record("a".repeat(64), "b".repeat(64)).record("a".repeat(64), "b".repeat(64)).withEnabled(false))
     @Test fun existingBackupsWithoutPersonalKeysRemainByteCompatible() {
         val old = BackupPayloadCodec.encode(backupPayload())
         assertArrayEquals(old, BackupPayloadCodec.encode(BackupPayloadCodec.decode(old)))

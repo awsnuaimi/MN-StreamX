@@ -27,4 +27,20 @@ class LiveTvNavigationPolicyTest {
         assertEquals("second", nav.requests.value?.key)
         nav.cancel(); assertFalse(nav.current(old)); assertNull(nav.requests.value)
     }
+    @Test fun learnedEntryOnlySeedsAnUnspecifiedRequestAndNeverReplacesAnExplicitTarget() {
+        val nav = LiveTvListNavigation(); nav.enter("learned")
+        assertEquals("learned", nav.requests.value?.key)
+        nav.request("numeric", token = 9, instant = true)
+        val ticket = nav.requests.value!!.revision
+        nav.enter("another")
+        assertEquals("numeric", nav.requests.value?.key); assertEquals(9L, nav.requests.value?.token)
+        assertTrue(nav.current(ticket))
+    }
+    @Test fun categoryReturnAndViewportHavePriorityOverLearning() {
+        val nav = LiveTvListNavigation()
+        val position = com.yourapp.iptv.domain.model.HomeGridPosition("anchor", 12, 1)
+        nav.origin("browsed", position); nav.categories(); nav.enter("learned")
+        assertEquals("browsed", nav.requests.value?.key)
+        assertEquals(position, nav.requests.value?.position); assertTrue(nav.requests.value!!.instant)
+    }
 }
