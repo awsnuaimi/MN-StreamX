@@ -1,6 +1,9 @@
 package com.yourapp.iptv.ui.screen.vod
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -22,6 +26,7 @@ import com.yourapp.iptv.domain.model.VodKind
 import com.yourapp.iptv.player.vod.VodPlayerSnapshot
 import com.yourapp.iptv.player.vod.VodTrackList
 import com.yourapp.iptv.viewmodel.VodPlaybackState
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun VodCinemaHeader(item: VodPlaybackState.Ready, snapshot: VodPlayerSnapshot, labels: VodPlaybackLabels,
@@ -33,7 +38,12 @@ internal fun VodCinemaHeader(item: VodPlaybackState.Ready, snapshot: VodPlayerSn
         Column(Modifier.weight(1f),verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(item.title,Modifier.testTag("vod-title"),color = Color.White,
                 style = MaterialTheme.typography.headlineMedium,maxLines = 2,overflow = TextOverflow.Ellipsis)
-            Text(if (item.kind == VodKind.SERIES) labels.series() else labels.movie(),
+            val currentEpisode = remember(item.episodes,item.id) {
+                item.episodes.firstOrNull { it.id == item.id }
+            }
+            Text(if (item.kind == VodKind.SERIES && currentEpisode != null)
+                    "${labels.season(currentEpisode.season)} · ${labels.episode(currentEpisode.number)}"
+                else if (item.kind == VodKind.SERIES) labels.series() else labels.movie(),
                 color = Color.White.copy(alpha = .72f),fontSize = 13.sp)
             if (item.resumeMs > 0 && snapshot.seekable) Text(
                 "${labels.stay()} · ${com.yourapp.iptv.domain.model.VodSeek.time(item.resumeMs)}",
@@ -43,13 +53,21 @@ internal fun VodCinemaHeader(item: VodPlaybackState.Ready, snapshot: VodPlayerSn
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun VodCinemaTools(item: VodPlaybackState.Ready, snapshot: VodPlayerSnapshot, labels: VodPlaybackLabels,
     autoNext: Boolean, actions: VodPlayerActions, display: VodDisplayMode, target: (VodControlTarget) -> FocusRequester,
     up: FocusRequester) {
     val scale = LocalDensity.current.fontScale.coerceIn(1f,1.8f)
-    fun tool(width: Int, id: VodControlTarget, tag: String) = Modifier.width(width.dp*scale)
-        .focusRequester(target(id)).focusProperties { this.up = up }.testTag(tag)
+    val scope = rememberCoroutineScope()
+    val viewRequests = remember { VodControlTarget.entries.associateWith { BringIntoViewRequester() } }
+    val autoRequest = remember { BringIntoViewRequester() }
+    fun tool(width: Int, id: VodControlTarget, tag: String): Modifier {
+        val request = viewRequests.getValue(id)
+        return Modifier.width(width.dp*scale).bringIntoViewRequester(request)
+            .onFocusChanged { if (it.isFocused) scope.launch { request.bringIntoView() } }
+            .focusRequester(target(id)).focusProperties { this.up = up }.testTag(tag)
+    }
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp,Alignment.CenterHorizontally)) {
         VodControlButton(labels.audio(),VodGlyph.AUDIO,actions.audio,tool(140,VodControlTarget.AUDIO,"vod-audio"),
@@ -65,7 +83,9 @@ internal fun VodCinemaTools(item: VodPlaybackState.Ready, snapshot: VodPlayerSna
             tool(138,VodControlTarget.EPISODES,"vod-episodes"),value = labels.season(
                 item.episodes.firstOrNull { it.id == item.id }?.season ?: item.episodes.first().season))
         if (item.kind == VodKind.SERIES) VodControlButton(labels.text("تشغيل تلقائي","Auto next","Automatisch"),VodGlyph.AUTO,
-            { actions.automatic(!autoNext) },Modifier.width(156.dp*scale).focusProperties { this.up = up }.testTag("vod-auto-next"),
+            { actions.automatic(!autoNext) },Modifier.width(156.dp*scale).bringIntoViewRequester(autoRequest)
+                .onFocusChanged { if (it.isFocused) scope.launch { autoRequest.bringIntoView() } }
+                .focusProperties { this.up = up }.testTag("vod-auto-next"),
             item.seriesId != null,value = if (autoNext) labels.automatic() else labels.off())
     }
 }

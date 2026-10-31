@@ -1,6 +1,8 @@
 package com.yourapp.iptv.ui.screen.vod
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -17,47 +19,73 @@ import androidx.compose.ui.window.DialogProperties
 import com.yourapp.iptv.domain.model.VodEpisode
 import com.yourapp.iptv.viewmodel.VodPlaybackState
 
-/** Side drawer uses only the episodes actually supplied by this series' source. */
+/** Right-hand episode drawer: real provider episodes, with explicit season selection. */
 @Composable
 internal fun VodEpisodePanel(item: VodPlaybackState.Ready, labels: VodPlaybackLabels,
     onSelect: (VodEpisode) -> Unit, onClose: () -> Unit) {
-    val visible = remember(item.episodes,item.id) {
-        item.episodes.filter { it.season ==
-            (item.episodes.firstOrNull { episode -> episode.id == item.id }?.season
-                ?: item.episodes.firstOrNull()?.season) }
+    val seasons = remember(item.episodes) { vodSeasonNumbers(item.episodes) }
+    val initialSeason = remember(item.episodes,item.id) { vodInitialSeason(item.episodes,item.id) }
+    var season by remember(item.sourceKey,item.seriesId,item.id) { mutableStateOf(initialSeason) }
+    val visible = remember(item.episodes,season) {
+        season?.let { vodEpisodesInSeason(item.episodes,it) }.orEmpty()
     }
-    val selected = visible.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
-    val initial = remember(item.id) { FocusRequester() }
-    val list = rememberLazyListState(initialFirstVisibleItemIndex = selected)
+    val currentIndex = remember(visible,item.id) { visible.indexOfFirst { it.id == item.id } }
+    val initialIndex = currentIndex.coerceAtLeast(0)
+    val initial = remember(item.sourceKey,item.id) { FocusRequester() }
+    val closeFocus = remember { FocusRequester() }
+    val list = rememberLazyListState()
+    // A season switch must not steal focus from the season chip the viewer pressed.
+    LaunchedEffect(item.episodes,initialSeason) {
+        if (season !in seasons) season = initialSeason
+    }
+    LaunchedEffect(season) {
+        if (visible.isNotEmpty()) list.scrollToItem(if (season == initialSeason) initialIndex else 0)
+    }
     Dialog(onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().padding(16.dp),contentAlignment = Alignment.CenterEnd) {
-            VodCinemaPanel(Modifier.widthIn(max = 400.dp).fillMaxWidth().fillMaxHeight(.83f)
+        BoxWithConstraints(Modifier.fillMaxSize().padding(16.dp),contentAlignment = Alignment.CenterEnd) {
+            val drawerWidth = if (maxWidth < 680.dp) maxWidth - 8.dp
+                else (maxWidth * .48f).coerceAtMost(460.dp)
+            VodCinemaPanel(Modifier.width(drawerWidth).fillMaxHeight(.86f)
                 .testTag("vod-episode-panel")) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment = Alignment.CenterVertically) {
-                    Text(labels.season(visible.firstOrNull()?.season ?: 1),
-                        style = MaterialTheme.typography.titleLarge,modifier = Modifier.weight(1f))
-                    Text("${visible.size} ${labels.episodes()}",style = MaterialTheme.typography.bodySmall)
+                    Text(labels.episodes(),style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f))
+                    Text("${visible.size}",style = MaterialTheme.typography.bodySmall)
                 }
-                LazyColumn(Modifier.weight(1f),state = list,
+                if (seasons.size > 1) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                        .testTag("vod-episode-seasons"),horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        seasons.forEach { number ->
+                            VodChoiceRow(labels.season(number),season == number,{ season = number },
+                                Modifier.width(142.dp).testTag("vod-season-$number"))
+                        }
+                    }
+                } else if (season != null) {
+                    Text(labels.season(season!!),style = MaterialTheme.typography.titleMedium)
+                }
+                LazyColumn(Modifier.weight(1f).testTag("vod-episode-list"),state = list,
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(visible,key = { _,episode -> episode.id }) { index,episode ->
                         val isCurrent = episode.id == item.id
                         VodChoiceRow("${labels.episode(episode.number)} · ${episode.name}",isCurrent,
                             { if (isCurrent) onClose() else onSelect(episode) },
-                            Modifier.fillMaxWidth().then(if (index == selected)
+                            Modifier.fillMaxWidth().then(if (index == initialIndex && season == initialSeason)
                                 Modifier.focusRequester(initial) else Modifier)
                                 .testTag("vod-episode-${episode.id}"),glyph = if (isCurrent) null else VodGlyph.PLAY)
                     }
                 }
                 VodControlButton(labels.close(),VodGlyph.BACK,onClose,
-                    Modifier.fillMaxWidth().testTag("vod-episodes-close"))
+                    Modifier.fillMaxWidth().focusRequester(closeFocus).testTag("vod-episodes-close"))
             }
         }
-        LaunchedEffect(item.id,visible.size) {
+        // On opening, focus the current episode; do not refocus when switching seasons.
+        LaunchedEffect(item.sourceKey,item.id) {
             if (visible.isNotEmpty()) {
-                list.scrollToItem(selected)
+                list.scrollToItem(initialIndex)
                 withFrameNanos { };initial.requestFocus()
+            } else {
+                withFrameNanos { };closeFocus.requestFocus()
             }
         }
     }
