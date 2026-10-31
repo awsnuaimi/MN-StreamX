@@ -3,45 +3,67 @@ package com.yourapp.iptv.ui.screen.vod
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.yourapp.iptv.domain.model.VodItem
 import com.yourapp.iptv.domain.model.VodProgressEntry
 import com.yourapp.iptv.ui.component.common.*
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
 
-/** Only bounded, locally saved metadata; no catalog or network request. */
+/** Only locally saved progress and artwork from the already loaded catalog. */
 @Composable
-internal fun VodContinueWatching(
-    entries: List<VodProgressEntry>, labels: VodLabels, focus: ContextFocus? = null, onPlay: (VodProgressEntry) -> Unit
-) {
+internal fun VodContinueWatching(entries: List<VodProgressEntry>, labels: VodLabels,
+    focus: ContextFocus? = null, catalog: List<VodItem> = emptyList(),
+    onPlay: (VodProgressEntry) -> Unit) {
     val list = rememberLazyListState()
     val keys = entries.map { "${it.kind}-${it.id}" }
+    val posters = remember(catalog) { catalog.associateBy { it.id } }
     focus?.Restore("continued", keys, scrollTo = { list.scrollToItem(it) })
     focus?.Maintain("continued", keys)
+    val colors = MaterialTheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(labels.resume(), style = MaterialTheme.typography.titleMedium)
         LazyRow(state = list, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(entries, key = { _, it -> "${it.kind}-${it.id}" }) { index, entry ->
                 var focused by remember { mutableStateOf(false) }
+                val poster = posters[entry.id]?.poster?.takeIf {
+                    it.startsWith("https://") || it.startsWith("http://")
+                }
+                val context = LocalContext.current
+                val request = remember(context, poster) {
+                    poster?.let { ImageRequest.Builder(context).data(it).size(110, 160).build() }
+                }
                 Surface(onClick = { focus?.record("continued", keys[index], index); onPlay(entry) },
-                    modifier = Modifier.width(210.dp).then(focus?.target("continued", keys[index], index) ?: Modifier)
+                    modifier = Modifier.width(224.dp).height(94.dp)
+                        .then(focus?.target("continued", keys[index], index) ?: Modifier)
                         .tvFocusIndicator().onFocusChanged { focused = it.isFocused },
-                    color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                    border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
-                    shape = MaterialTheme.shapes.medium) {
-                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(entry.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
-                        val fraction = (entry.positionMs.toFloat() / entry.durationMs.toFloat()).coerceIn(0f, 1f)
-                        LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
-                        Text(labels.position(entry.positionMs), color = Color.LightGray,
-                            style = MaterialTheme.typography.labelSmall)
+                    color = if (focused) colors.primaryContainer else colors.surfaceContainerLow,
+                    border = if (focused) BorderStroke(2.dp, colors.primary) else BorderStroke(1.dp, colors.outlineVariant),
+                    shape = RoundedCornerShape(11.dp)) {
+                    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                        if (request != null) AsyncImage(model = request, contentDescription = null,
+                            modifier = Modifier.width(63.dp).fillMaxHeight(), contentScale = ContentScale.Crop)
+                        Column(Modifier.weight(1f).padding(vertical = 10.dp, horizontal = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Text(entry.title, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                color = colors.onSurface, style = MaterialTheme.typography.labelMedium)
+                            Spacer(Modifier.weight(1f))
+                            val fraction = if (entry.durationMs > 0L)
+                                (entry.positionMs.toFloat() / entry.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+                            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+                            Text(labels.position(entry.positionMs), color = colors.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
             }

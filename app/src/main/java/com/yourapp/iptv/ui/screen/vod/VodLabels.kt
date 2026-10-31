@@ -11,6 +11,13 @@ internal class VodLabels(val language: HomeLanguage) {
     }
     fun title(kind: VodKind) = if (kind == VodKind.MOVIE)
         text("الأفلام", "Movies", "Filme") else text("المسلسلات", "Series", "Serien")
+    fun featured() = text("اختيار مميز", "Featured", "Im Fokus")
+    fun titles() = text("عنوان", "titles", "Titel")
+    fun allShort() = text("الكل", "All", "Alle")
+    fun filter() = text("التصنيفات", "Filter", "Filtern")
+    fun sort() = text("ترتيب", "Sort", "Sortieren")
+    fun details() = text("التفاصيل", "Details", "Details")
+    fun newTitles() = text("تصفح العناوين", "Browse titles", "Titel entdecken")
     fun all() = text("جميع التصنيفات", "All categories", "Alle Kategorien")
     fun search() = text("ابحث عن عنوان", "Search titles", "Titel suchen")
     fun refresh() = text("تحديث القائمة", "Refresh catalog", "Katalog aktualisieren")
