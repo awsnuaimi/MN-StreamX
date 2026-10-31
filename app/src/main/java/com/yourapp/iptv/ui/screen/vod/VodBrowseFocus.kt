@@ -59,18 +59,35 @@ internal fun VodCategories(state: VodUiState, labels: VodLabels, focus: ContextF
 @Composable
 internal fun VodPosterGrid(items: List<VodItem>, focus: ContextFocus, context: String, ready: Boolean,
     labels: VodLabels, emptyCatalog: Boolean, modifier: Modifier,
-    onFocused: (VodItem) -> Unit = {}, onPick: (Int, VodItem) -> Unit) {
+    onFocused: (VodItem) -> Unit = {}, header: (@Composable () -> Unit)? = null,
+    onPick: (Int, VodItem) -> Unit) {
     val list = rememberLazyGridState()
     val keys = remember(items) { items.map { it.id } }
+    // Returning from a dialog may target a Continue Watching card whose lazy header
+    // has been disposed after scrolling. Bring the header back before restoring focus.
+    val pendingContext = focus.pending?.context
+    LaunchedEffect(pendingContext) {
+        if (pendingContext == "continued" && header != null) list.scrollToItem(0)
+    }
     focus.Restore(context, keys, ready, onEmpty = { focus.request("controls", "query") },
-        scrollTo = { list.scrollToItem(it) })
-    if (items.isEmpty()) Box(modifier, contentAlignment = androidx.compose.ui.Alignment.Center) {
-        Text(if (emptyCatalog) labels.emptyCatalog() else labels.empty())
-    } else LazyVerticalGrid(GridCells.Adaptive(128.dp), state = list,
+        scrollTo = { list.scrollToItem(it + (if (header != null) 1 else 0)) })
+    // A single lazy vertical scroll owner keeps the hero, Continue Watching and posters
+    // in the same viewport. A fixed header above a weighted grid would trap posters
+    // in a strip below the TV's visible area.
+    LazyVerticalGrid(GridCells.Adaptive(128.dp), state = list,
         modifier = modifier.testTag("vod-grid"),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(15.dp),
         contentPadding = PaddingValues(bottom = 12.dp)) {
+        if (header != null) item(key = "vod-catalog-header", span = { GridItemSpan(maxLineSpan) }) {
+            header()
+        }
+        if (items.isEmpty()) item(key = "vod-empty", span = { GridItemSpan(maxLineSpan) }) {
+            Box(Modifier.fillMaxWidth().heightIn(min = 150.dp),
+                contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Text(if (emptyCatalog) labels.emptyCatalog() else labels.empty())
+            }
+        }
         itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
             VodPosterCard(item, focus.target(context, item.id, index)
                 .testTag("vod-poster-${item.id}"), onFocused = onFocused) { onPick(index, item) }

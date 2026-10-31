@@ -3,6 +3,10 @@ package com.yourapp.iptv.ui.screen.vod
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -96,16 +100,6 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
                         VodCategories(state, labels, focus, posters, Modifier.fillMaxWidth().height(44.dp)) { id ->
                             focus.request(vodPosterContext(id, state.query)); actions.category(id)
                         }
-                        if (state.kind == VodKind.MOVIE && featured != null) {
-                            VodMovieHero(featured, labels, onOpen = { actions.open(featured) })
-                        }
-                        if (continued.isNotEmpty()) {
-                            VodContinueWatching(continued, labels, focus, visible) { entry ->
-                                actions.play(entry.kind, entry.id, entry.extension, entry.title, entry.seriesId)
-                            }
-                        }
-                        if (state.kind == VodKind.MOVIE) Text(labels.newTitles(),
-                            style = MaterialTheme.typography.titleMedium)
                         Row(Modifier.weight(1f).fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             when {
@@ -125,7 +119,29 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
                                     contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                                 else -> VodPosterGrid(visible, focus, posters, state.selected == null,
                                     labels, state.catalog.items.isEmpty() && state.query.isBlank(),
-                                    Modifier.weight(1f).fillMaxHeight(), onFocused = { hoverCandidate = it.id }) { index, item ->
+                                    Modifier.weight(1f).fillMaxHeight(),
+                                    onFocused = { hoverCandidate = it.id },
+                                    header = {
+                                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                            if (state.kind == VodKind.MOVIE && featured != null) {
+                                                VodMovieHero(featured, labels, onOpen = { actions.open(featured) })
+                                            }
+                                            if (continued.isNotEmpty()) {
+                                                Box(Modifier.onPreviewKeyEvent { event ->
+                                                    if (event.key != Key.DirectionDown) false else {
+                                                        if (event.type == KeyEventType.KeyDown) focus.request(posters)
+                                                        true
+                                                    }
+                                                }) {
+                                                    VodContinueWatching(continued, labels, focus, visible) { entry ->
+                                                        actions.play(entry.kind, entry.id, entry.extension,
+                                                            entry.title, entry.seriesId)
+                                                    }
+                                                }
+                                            }
+                                            Text(labels.newTitles(), style = MaterialTheme.typography.titleMedium)
+                                        }
+                                    }) { index, item ->
                                     focus.record(posters, item.id, index); actions.open(item)
                                 }
                             }

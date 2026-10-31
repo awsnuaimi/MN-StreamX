@@ -51,6 +51,24 @@ class VodFocusUiTest {
         compose.onNodeWithTag("vod-grid").performScrollToNode(hasTestTag("vod-poster-$id"))
         compose.onNodeWithTag("vod-poster-$id").performSemanticsAction(SemanticsActions.RequestFocus)
     }
+    @Test fun movingDownFromCategoriesMakesMoviePostersVisibleBelowTheScrollingHero() {
+        board()
+        compose.onNodeWithTag("vod-all").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithTag("vod-all").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.waitForFocus("vod-poster-0")
+        compose.onNodeWithTag("vod-poster-0").assertIsDisplayed()
+        focusPoster("48")
+        compose.waitForFocus("vod-poster-48")
+        compose.onNodeWithTag("vod-poster-48").assertIsDisplayed()
+    }
+    @Test fun seriesPreviewDoesNotRestrictPosterVerticalScrolling() {
+        state = state.copy(kind = VodKind.SERIES)
+        board()
+        focusPoster("48")
+        compose.waitForFocus("vod-poster-48")
+        compose.onNodeWithTag("vod-poster-48").assertIsDisplayed()
+        compose.onNodeWithTag("vod-series-preview").assertExists()
+    }
     @Test fun closingDetailsReturnsToTheOriginalOffscreenPoster() {
         board(); focusPoster("24")
         compose.onNodeWithTag("vod-poster-24").performKeyInput { pressKey(Key.Enter) }
