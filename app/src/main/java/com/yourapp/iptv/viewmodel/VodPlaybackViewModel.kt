@@ -84,7 +84,8 @@ class VodPlaybackViewModel @Inject constructor(
                 saved["kind"] = if (kind == VodKind.MOVIE) "movie" else "series"
                 saved["id"] = id; saved["ext"] = ext; saved["title"] = title.take(150); saved["seriesId"] = parent
                 mutable.value = VodPlaybackState.Ready(url,title.take(150),key,kind,id,ext,resume?.positionMs ?: 0,
-                    parent, if (episodeSeries == parent) episodes?.let { VodEpisodeOrder.next(it,id) } else null)
+                    parent, if (episodeSeries == parent) episodes?.let { VodEpisodeOrder.next(it,id) } else null,
+                    episodes = if (episodeSeries == parent) episodes.orEmpty() else emptyList())
                 if (parent != null && (episodeSeries != parent || episodes == null)) loadEpisodes(parent)
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { if (ticket == generation && !blocked) mutable.value = VodPlaybackState.Error }
@@ -111,7 +112,8 @@ class VodPlaybackViewModel @Inject constructor(
                 episodeSeries = series; episodes = ordered
                 complete {
                     mutable.update { value -> if (value is VodPlaybackState.Ready && value.seriesId == series)
-                        value.copy(next = VodEpisodeOrder.next(ordered,value.id),episodesLoading = false, episodesFailed = false) else value }
+                        value.copy(next = VodEpisodeOrder.next(ordered,value.id),episodesLoading = false,
+                            episodesFailed = false,episodes = ordered) else value }
                 }
             } catch (_: TimeoutCancellationException) {
                 complete {
@@ -142,6 +144,17 @@ class VodPlaybackViewModel @Inject constructor(
         if (expected != null && (expected.id != current.id || expected.sourceKey != current.sourceKey || expected.kind != current.kind)) return
         val next = current.next ?: return
         if (!blocked) select(VodKind.SERIES,next.id,next.extension,next.name,current.seriesId)
+    }
+
+    /** Only a verified episode from the active profile and loaded series can be selected. */
+    fun playEpisode(expected: VodPlaybackState.Ready, episode: VodEpisode) {
+        val current = mutable.value as? VodPlaybackState.Ready ?: return
+        if (blocked || current.sourceKey != expected.sourceKey || current.id != expected.id ||
+            current.kind != VodKind.SERIES || current.seriesId == null ||
+            episodeSeries != current.seriesId) return
+        val verified = episodes?.firstOrNull { it.id == episode.id &&
+            it.extension == episode.extension } ?: return
+        select(VodKind.SERIES, verified.id, verified.extension, verified.name, current.seriesId)
     }
 
     fun setAutoNext(enabled: Boolean) { saved["autoNextEpisode"] = enabled }

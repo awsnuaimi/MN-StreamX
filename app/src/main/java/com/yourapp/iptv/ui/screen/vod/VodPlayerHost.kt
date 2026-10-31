@@ -207,7 +207,8 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
                 automatic = { touch(); cancelled = !it; model.setAutoNext(it) },cancelNext = { touch();cancelled = true;chrome.resetFocus() },retryEpisodes = { touch(); model.retryEpisodes() },
                 speed = { open(VodPlayerPanel.SPEED,VodControlTarget.SPEED) },
                 display = { open(VodPlayerPanel.DISPLAY,VodControlTarget.DISPLAY) },
-                scrubbing = { chrome.scrubbing = it;if (it) touch() }),playFocus,display,chrome.restore,chrome.focusEpoch,
+                scrubbing = { chrome.scrubbing = it;if (it) touch() },
+                episodes = { open(VodPlayerPanel.EPISODES,VodControlTarget.EPISODES) }),playFocus,display,chrome.restore,chrome.focusEpoch,
                 manageFocus = chrome.panel == null && !snapshot.failed,showHints = appearance.showHints,seekFeedback = seekFeedback,
                 onDockFraction = { dockFraction = (it+.02f).coerceIn(.12f,.72f) })
         if (snapshot.failed) Surface(Modifier.align(Alignment.Center).widthIn(max = 620.dp),shape = MaterialTheme.shapes.large) {
@@ -224,6 +225,10 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
                     if (audio) snapshot.audio else snapshot.subtitles,!audio,labels,
                     onSelect = { current?.selectTrack(if (audio) C.TRACK_TYPE_AUDIO else C.TRACK_TYPE_TEXT,it);closePanel() },
                     onOff = { current?.disableSubtitles();closePanel() },onClose = ::closePanel)
+            } else if (panel == VodPlayerPanel.EPISODES) {
+                VodEpisodePanel(item,labels,onSelect = { episode ->
+                    current?.save();closePanel();model.playEpisode(item,episode)
+                },onClose = ::closePanel)
             } else VodPlayerOptionDialog(panel,labels,snapshot.speed,display,
                 onSpeed = { current?.setSpeed(it);closePanel() },onDisplay = { display = it;closePanel() },
                 onRestart = { current?.restart();closePanel() },onClose = ::closePanel)

@@ -22,6 +22,7 @@ internal fun VodPlayerOptionDialog(panel: VodPlayerPanel, labels: VodPlaybackLab
         VodCinemaPanel(Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 440.dp)
             .testTag("vod-option-dialog"),scroll = true) {
                 VodPanelTitle(when (panel) { VodPlayerPanel.SPEED -> labels.speed();VodPlayerPanel.DISPLAY -> labels.picture()
+                    VodPlayerPanel.EPISODES -> labels.episodes()
                     else -> labels.restartTitle() },when (panel) { VodPlayerPanel.SPEED -> VodGlyph.SPEED;VodPlayerPanel.DISPLAY -> VodGlyph.DISPLAY;else -> VodGlyph.RESTART })
                 if (panel == VodPlayerPanel.RESTART) {
                     Text(labels.restartHint())

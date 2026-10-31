@@ -26,14 +26,18 @@ import com.yourapp.iptv.viewmodel.VodPlaybackState
 @Composable
 internal fun VodCinemaHeader(item: VodPlaybackState.Ready, snapshot: VodPlayerSnapshot, labels: VodPlaybackLabels,
     onBack: () -> Unit, back: FocusRequester, play: FocusRequester) {
-    Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .92f),.8f to Color.Black.copy(alpha = .80f),1f to Color.Transparent))
+    Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(0f to Color(0xF0071530),.8f to Color(0xDD091429),1f to Color.Transparent))
         .padding(horizontal = 32.dp,vertical = 20.dp),verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(18.dp)) {
         VodControlButton(labels.back(),VodGlyph.BACK,onBack,Modifier.focusRequester(back).focusProperties { down = play }.testTag("vod-back"))
         Column(Modifier.weight(1f),verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(if (item.kind == VodKind.SERIES) labels.series() else labels.movie(),color = Color.White.copy(alpha = .65f),
-                fontSize = 10.sp,letterSpacing = 1.sp)
-            Text(item.title,Modifier.testTag("vod-title"),color = Color.White,style = MaterialTheme.typography.titleLarge,maxLines = 2,overflow = TextOverflow.Ellipsis)
+            Text(item.title,Modifier.testTag("vod-title"),color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,maxLines = 2,overflow = TextOverflow.Ellipsis)
+            Text(if (item.kind == VodKind.SERIES) labels.series() else labels.movie(),
+                color = Color.White.copy(alpha = .72f),fontSize = 13.sp)
+            if (item.resumeMs > 0 && snapshot.seekable) Text(
+                "${labels.stay()} · ${com.yourapp.iptv.domain.model.VodSeek.time(item.resumeMs)}",
+                color = MaterialTheme.colorScheme.primary,fontSize = 12.sp)
         }
         if (snapshot.ended) Text(labels.finished(),color = Color.White.copy(alpha = .8f),style = MaterialTheme.typography.labelLarge)
     }
@@ -56,6 +60,10 @@ internal fun VodCinemaTools(item: VodPlaybackState.Ready, snapshot: VodPlayerSna
             snapshot.speedSupported,value = "${snapshot.speed}×")
         VodControlButton(labels.picture(),VodGlyph.DISPLAY,actions.display,tool(140,VodControlTarget.DISPLAY,"vod-display"),value = labels.display(display))
         VodControlButton(labels.restart(),VodGlyph.RESTART,actions.restart,tool(144,VodControlTarget.RESTART,"vod-restart"),snapshot.seekable,value = "00:00")
+        if (item.kind == VodKind.SERIES && item.episodes.isNotEmpty()) VodControlButton(
+            labels.episodes(),VodGlyph.EPISODES,actions.episodes,
+            tool(138,VodControlTarget.EPISODES,"vod-episodes"),value = labels.season(
+                item.episodes.firstOrNull { it.id == item.id }?.season ?: item.episodes.first().season))
         if (item.kind == VodKind.SERIES) VodControlButton(labels.text("تشغيل تلقائي","Auto next","Automatisch"),VodGlyph.AUTO,
             { actions.automatic(!autoNext) },Modifier.width(156.dp*scale).focusProperties { this.up = up }.testTag("vod-auto-next"),
             item.seriesId != null,value = if (autoNext) labels.automatic() else labels.off())

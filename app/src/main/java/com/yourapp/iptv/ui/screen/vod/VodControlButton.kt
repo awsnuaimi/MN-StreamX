@@ -23,7 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-internal enum class VodGlyph { PLAY, PAUSE, BACK, REWIND, FORWARD, NEXT, AUDIO, SUBTITLES, SPEED, DISPLAY, RESTART, AUTO }
+internal enum class VodGlyph { PLAY, PAUSE, BACK, REWIND, FORWARD, NEXT, AUDIO, SUBTITLES, SPEED, DISPLAY, RESTART, AUTO, EPISODES }
 
 /** Neutral player chrome stays readable over video in every application theme. */
 @Composable
@@ -31,13 +31,13 @@ internal fun VodControlButton(label: String, glyph: VodGlyph, onClick: () -> Uni
     enabled: Boolean = true, value: String? = null, prominent: Boolean = false) {
     var focused by remember { mutableStateOf(false) }
     val filled = enabled && (focused || prominent)
-    val background by animateColorAsState(if (filled) Color.White else Color(0xE0141B25),tween(140),label = "vod-pill")
+    val background by animateColorAsState(if (filled) MaterialTheme.colorScheme.primary else Color(0xE00D1D3E),tween(140),label = "vod-pill")
     Button(onClick,modifier.heightIn(min = if (value == null) 44.dp else 54.dp)
         .focusProperties { canFocus = enabled }.onFocusChanged { focused = it.isFocused },enabled = enabled,shape = CircleShape,
         contentPadding = PaddingValues(horizontal = 13.dp,vertical = 8.dp),
         border = BorderStroke(if (focused) 2.dp else 1.dp,if (focused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .13f)),
-        colors = ButtonDefaults.buttonColors(containerColor = background,contentColor = if (filled) Color(0xFF111820) else Color.White,
-            disabledContainerColor = Color(0xB0141B25),disabledContentColor = Color.White.copy(alpha = .36f))) {
+        colors = ButtonDefaults.buttonColors(containerColor = background,contentColor = if (filled) MaterialTheme.colorScheme.onPrimary else Color.White,
+            disabledContainerColor = Color(0xB00D1D3E),disabledContentColor = Color.White.copy(alpha = .36f))) {
         Row(verticalAlignment = Alignment.CenterVertically,horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             Box(Modifier.size(if (value == null) 20.dp else 28.dp).background(
                 if (filled) Color.Black.copy(alpha = .06f) else Color.White.copy(alpha = .07f),CircleShape),contentAlignment = Alignment.Center) {
@@ -96,6 +96,9 @@ internal fun VodControlIcon(glyph: VodGlyph, modifier: Modifier = Modifier) {
                 line(.13f,.25f,.15f,.55f);line(.15f,.55f,.42f,.51f)
             }
             VodGlyph.AUTO -> { triangle(.16f);line(.67f,.2f,.85f,.2f);line(.85f,.2f,.85f,.8f);line(.85f,.8f,.67f,.8f) }
+            VodGlyph.EPISODES -> {
+                for (i in 0..2) { val y = .26f + i*.23f;line(.15f,y,.26f,y);line(.38f,y,.85f,y) }
+            }
         }
     }
 }

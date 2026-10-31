@@ -22,7 +22,7 @@ internal data class VodPlayerActions(
     val restart: () -> Unit, val audio: () -> Unit, val subtitles: () -> Unit,
     val next: () -> Unit, val automatic: (Boolean) -> Unit, val cancelNext: () -> Unit,
     val retryEpisodes: () -> Unit, val speed: () -> Unit = {}, val display: () -> Unit = {},
-    val scrubbing: (Boolean) -> Unit = {}
+    val scrubbing: (Boolean) -> Unit = {}, val episodes: () -> Unit = {}
 )
 
 
@@ -45,6 +45,7 @@ internal fun VodPlayerControls(item: VodPlaybackState.Ready, snapshot: VodPlayer
                 val enabled = when (restore) {
                     VodControlTarget.SPEED -> snapshot.speedSupported
                     VodControlTarget.RESTART -> snapshot.seekable
+                    VodControlTarget.EPISODES -> item.kind == com.yourapp.iptv.domain.model.VodKind.SERIES && item.episodes.isNotEmpty()
                     else -> true
                 }
                 target(if (enabled) restore else VodControlTarget.PLAY).requestFocus()
@@ -75,7 +76,7 @@ private fun VodCinemaDock(item: VodPlaybackState.Ready, snapshot: VodPlayerSnaps
     autoNext: Boolean, countdown: Int?, actions: VodPlayerActions, display: VodDisplayMode,
     timeline: FocusRequester, play: FocusRequester, target: (VodControlTarget) -> FocusRequester, showHints: Boolean, modifier: Modifier) {
     // Independent shading under the actual controls preserves contrast over bright video frames.
-    Column(modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0x9905090F),Color(0xF005090F),Color(0xFA05090F))))
+    Column(modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0x99112345),Color(0xF0081634),Color(0xFA051024))))
         .padding(start = 32.dp,end = 32.dp,top = 14.dp,bottom = 18.dp),verticalArrangement = Arrangement.spacedBy(6.dp)) {
         VodCinemaEpisode(item,labels,countdown,actions)
         VodTimeline(snapshot,labels,timeline,actions.seek,actions.step,actions.scrubbing,target(VodControlTarget.AUDIO),play)

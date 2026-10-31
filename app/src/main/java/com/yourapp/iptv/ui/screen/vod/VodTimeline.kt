@@ -45,6 +45,16 @@ internal fun VodTimeline(snapshot: VodPlayerSnapshot, labels: VodPlaybackLabels,
     val remaining = if (snapshot.duration > 0) snapshot.duration - elapsed.coerceIn(0,snapshot.duration) else -1
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Column {
+            if (drag != null) {
+                Box(Modifier.fillMaxWidth().padding(bottom = 8.dp),contentAlignment = Alignment.Center) {
+                    Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                        color = Color(0xF00D1D3E),contentColor = Color.White,
+                        border = androidx.compose.foundation.BorderStroke(1.dp,accent)) {
+                        Text(VodSeek.time(elapsed),Modifier.padding(horizontal = 16.dp,vertical = 7.dp),
+                            style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
             Box(Modifier.fillMaxWidth(),contentAlignment = Alignment.Center) {
                 Canvas(Modifier.fillMaxWidth().padding(horizontal = 8.dp).height(3.dp).testTag("vod-buffered").progressSemantics(loaded)) {
                     val y = size.height/2
@@ -59,9 +69,9 @@ internal fun VodTimeline(snapshot: VodPlayerSnapshot, labels: VodPlaybackLabels,
                             .background(if (snapshot.seekable) Color.White else Color.Transparent,CircleShape))
                     },
                     track = {
-                        Canvas(Modifier.fillMaxWidth().height(if (focused) 4.dp else 3.dp)) {
+                        Canvas(Modifier.fillMaxWidth().height(if (focused) 6.dp else 5.dp)) {
                             val progress = if (snapshot.duration > 0) (position/duration).coerceIn(0f,1f) else 0f
-                            drawLine(if (focused) accent else Color.White,Offset(0f,size.height/2),Offset(size.width*progress,size.height/2),size.height,StrokeCap.Round)
+                            drawLine(accent,Offset(0f,size.height/2),Offset(size.width*progress,size.height/2),size.height,StrokeCap.Round)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }.focusRequester(focus)

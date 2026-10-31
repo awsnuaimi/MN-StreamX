@@ -9,7 +9,8 @@ sealed interface VodPlaybackState {
         val url: String, val title: String, val sourceKey: String,
         val kind: VodKind, val id: String, val extension: String, val resumeMs: Long,
         val seriesId: String? = null, val next: VodEpisode? = null,
-        val episodesLoading: Boolean = false, val episodesFailed: Boolean = false
+        val episodesLoading: Boolean = false, val episodesFailed: Boolean = false,
+        val episodes: List<VodEpisode> = emptyList()
     ) : VodPlaybackState
     data object Error : VodPlaybackState
 }

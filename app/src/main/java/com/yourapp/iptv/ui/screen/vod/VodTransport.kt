@@ -59,14 +59,16 @@ private fun VodTransportButton(label: String, glyph: VodGlyph, onClick: () -> Un
         Button(onClick,modifier.size(if (primary) 86.dp else 62.dp)
             .focusProperties { canFocus = enabled }.onFocusChanged { focused = it.isFocused }
             .semantics { contentDescription = label }
-            .border(if (focused) 2.dp else 0.dp,if (focused) accent else Color.Transparent,CircleShape).padding(5.dp)
-            .shadow(if (primary) 12.dp else 4.dp,CircleShape),enabled = enabled,shape = CircleShape,
+            .border(if (focused) 2.dp else 0.dp,if (focused) accent else Color.Transparent,
+                if (primary) VodCutShape else CircleShape).padding(5.dp)
+            .shadow(if (primary) 12.dp else 4.dp,if (primary) VodCutShape else CircleShape),
+            enabled = enabled,shape = if (primary) VodCutShape else CircleShape,
             contentPadding = PaddingValues(0.dp),border = BorderStroke(1.dp,Color.White.copy(alpha = if (primary) .95f else .22f)),
-            colors = ButtonDefaults.buttonColors(containerColor = if (primary || focused) Color.White else Color(0xCB141B25),
-                contentColor = if (primary || focused) Color(0xFF111820) else Color.White,
-                disabledContainerColor = Color(0x9A141B25),disabledContentColor = Color.White.copy(alpha = .35f))) {
+            colors = ButtonDefaults.buttonColors(containerColor = if (primary || focused) accent else Color(0xD51D2437),
+                contentColor = if (primary || focused) MaterialTheme.colorScheme.onPrimary else Color.White,
+                disabledContainerColor = Color(0x9A1D2437),disabledContentColor = Color.White.copy(alpha = .35f))) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (primary && buffering) CircularProgressIndicator(Modifier.size(28.dp),color = Color(0xFF111820),strokeWidth = 2.dp)
+                if (primary && buffering) CircularProgressIndicator(Modifier.size(28.dp),color = MaterialTheme.colorScheme.onPrimary,strokeWidth = 2.dp)
                 else VodControlIcon(glyph,Modifier.size(if (primary) 30.dp else 19.dp))
                 if (!primary) Text("10",fontSize = 9.sp,lineHeight = 11.sp)
             }
