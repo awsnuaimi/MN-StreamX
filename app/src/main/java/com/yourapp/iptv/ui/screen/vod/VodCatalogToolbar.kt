@@ -22,7 +22,8 @@ internal fun VodCatalogToolbar(kind: VodKind, count: Int, query: String, labels:
     onQuery: (String) -> Unit, onCategories: () -> Unit, sorted: Boolean,
     onSort: () -> Unit, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.fillMaxWidth().testTag("vod-toolbar")) {
-        val mode = vodToolbarMode(maxWidth.value)
+        val availableWidthDp = maxWidth.value
+        val mode = vodToolbarMode(availableWidthDp)
         when (mode) {
             VodToolbarMode.WIDE -> Row(Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -44,7 +45,7 @@ internal fun VodCatalogToolbar(kind: VodKind, count: Int, query: String, labels:
                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     VodToolbarBack(focus, labels, onBack)
                     VodToolbarTitle(kind, labels, Modifier.weight(1f))
-                    if (maxWidth.value >= 460f) VodToolbarCount(count, labels)
+                    if (availableWidthDp >= 460f) VodToolbarCount(count, labels)
                     if (!loading) VodToolbarRefresh(focus, onRefresh)
                 }
                 if (available) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
