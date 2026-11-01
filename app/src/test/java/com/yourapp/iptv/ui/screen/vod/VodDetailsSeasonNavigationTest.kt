@@ -25,6 +25,20 @@ class VodDetailsSeasonNavigationTest {
         assertNull(VodDetailsSeasonNavigation.rowIndex(seasons, 99))
     }
 
+    @Test fun restoresAnEpisodeOnlyWhenItStillBelongsToItsSeason() {
+        val seasons = listOf(season(1, 3), season(4, 2))
+        assertEquals("episode:4:4-2", VodDetailsSeasonNavigation.preferredKey(
+            seasons, VodDetailsPosition(4, "4-2")))
+        assertEquals("season-jump:4", VodDetailsSeasonNavigation.preferredKey(
+            seasons, VodDetailsPosition(4, "deleted")))
+        assertNull(VodDetailsSeasonNavigation.preferredKey(seasons, VodDetailsPosition(99, "unknown")))
+    }
+
+    @Test fun aSingleSeasonWithNoSavedEpisodeDoesNotCreateAnInvisibleChip() {
+        assertNull(VodDetailsSeasonNavigation.preferredKey(listOf(season(1, 4)),
+            VodDetailsPosition(1)))
+    }
+
     @Test fun emptyAndLargeSeasonsNeverProduceAnInvalidIndex() {
         assertNull(VodDetailsSeasonNavigation.rowIndex(emptyList(), 1))
         val seasons = (1..100).map { season(it, it % 12) }

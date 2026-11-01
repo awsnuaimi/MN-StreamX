@@ -33,6 +33,7 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
     actions: VodActions, completed: List<VodCompletedEpisode> = emptyList()) {
     var lastSource by rememberSaveable(state.kind) { mutableStateOf<String?>(null) }
     val focus = rememberContextFocus("vod:${state.kind}:${state.sourceKey ?: lastSource}")
+    val seasonMemory = rememberVodDetailsNavigationMemory(state.sourceKey ?: lastSource)
     SideEffect { if (state.sourceKey != null) lastSource = state.sourceKey }
     // Sort is local UI state; catalog and playback models are never reordered or mutated.
     var nameSort by rememberSaveable(state.kind, state.sourceKey ?: lastSource) { mutableStateOf(false) }
@@ -167,7 +168,7 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
         }
         state.selected?.let { selected ->
             VodDetailsDialog(state, selected, labels, progress, actions.close, actions.retryDetails,
-                completed = completed, onPlay = actions.play)
+                completed = completed, onPlay = actions.play, navigationMemory = seasonMemory)
         }
     }
 }

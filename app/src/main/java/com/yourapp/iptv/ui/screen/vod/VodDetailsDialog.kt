@@ -7,6 +7,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -22,8 +26,11 @@ import com.yourapp.iptv.viewmodel.VodUiState
 internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLabels,
     progress: List<VodProgressEntry>, onDismiss: () -> Unit, onRetry: () -> Unit,
     completed: List<VodCompletedEpisode> = emptyList(),
+    navigationMemory: VodDetailsNavigationMemory? = null,
     onPlay: (VodKind, String, String, String, String?) -> Unit) {
     val item = state.details?.item ?: chosen
+    val memory = navigationMemory ?: remember { VodDetailsNavigationMemory() }
+    val lastPosition = memory.get(chosen.id)
     val focus = rememberContextFocus("details:${state.sourceKey}:${state.kind}:${chosen.id}")
     val seasons = state.details?.seasons.orEmpty()
     val episodeKeys = remember(seasons) {
@@ -47,6 +54,19 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
         add("close")
     }
     val list = rememberLazyListState()
+    val restoredKey = VodDetailsSeasonNavigation.preferredKey(seasons, lastPosition)
+    // If details arrive asynchronously, restore only before the user's first input.
+    val openingEpoch = remember(focus) { FocusInputEpoch.value }
+    val openedWithDetails = remember(focus) { seasons.isNotEmpty() }
+    var triedAsyncRestore by remember(focus) { mutableStateOf(false) }
+    LaunchedEffect(seasons, chosen.id) {
+        if (!openedWithDetails && !triedAsyncRestore && seasons.isNotEmpty()) {
+            triedAsyncRestore = true
+            if (restoredKey != null && openingEpoch == FocusInputEpoch.value) {
+                focus.request("dialog", preferred = restoredKey)
+            }
+        }
+    }
     val rows = remember(seasons) {
         seasons.flatMap { season ->
             listOf("season:${season.number}") + season.episodes.map { "episode:${season.number}:${it.id}" }
@@ -56,7 +76,7 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
         properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
             val wide = VodDetailLayout.split(maxWidth.value)
-            focus.Resume(setOf("dialog"), "dialog", keys.firstOrNull())
+            focus.Resume(setOf("dialog"), "dialog", restoredKey ?: keys.firstOrNull())
             focus.Restore("dialog", keys, scrollTo = { index ->
                 val row = rows.indexOf(keys[index])
                 if (row >= 0) list.scrollToItem(row)
@@ -73,7 +93,7 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
                         horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                         VodDetailsArtwork(item, Modifier.width(202.dp).fillMaxHeight())
                         VodDetailsBody(state, item, chosen, labels, progress, completed,
-                            seasons, recommendation, seasonKeys, episodeKeys.size, focus, list,
+                            seasons, recommendation, seasonKeys, episodeKeys.size, focus, list, memory,
                             onDismiss, onRetry, onPlay, Modifier.weight(1f), showMetadata = true)
                     }
                 } else {
@@ -85,7 +105,7 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
                             VodDetailsMetadata(item, state.kind, labels, Modifier.weight(1f), compact = true)
                         }
                         VodDetailsBody(state, item, chosen, labels, progress, completed,
-                            seasons, recommendation, seasonKeys, episodeKeys.size, focus, list,
+                            seasons, recommendation, seasonKeys, episodeKeys.size, focus, list, memory,
                             onDismiss, onRetry, onPlay, Modifier.weight(1f), showMetadata = false)
                     }
                 }
@@ -99,7 +119,8 @@ private fun VodDetailsBody(state: VodUiState, item: VodItem, chosen: VodItem, la
     progress: List<VodProgressEntry>, completed: List<VodCompletedEpisode>, seasons: List<VodSeason>,
     recommendation: VodSeriesChoice?, seasonKeys: List<String>, episodeCount: Int,
     focus: ContextFocus,
-    list: androidx.compose.foundation.lazy.LazyListState, onDismiss: () -> Unit, onRetry: () -> Unit,
+    list: androidx.compose.foundation.lazy.LazyListState, memory: VodDetailsNavigationMemory,
+    onDismiss: () -> Unit, onRetry: () -> Unit,
     onPlay: (VodKind, String, String, String, String?) -> Unit,
     modifier: Modifier = Modifier, showMetadata: Boolean) {
     val colors = MaterialTheme.colorScheme
@@ -139,7 +160,9 @@ private fun VodDetailsBody(state: VodUiState, item: VodItem, chosen: VodItem, la
                 color = colors.onSurface)
             if (seasonKeys.isNotEmpty()) {
                 VodDetailsSeasonBar(seasons, labels, list, focus,
-                    if (recommendation != null) 1 else 0)
+                    if (recommendation != null) 1 else 0,
+                    selectedSeason = memory.get(chosen.id)?.season,
+                    onChooseSeason = { memory.selectSeason(chosen.id, it) })
             }
             if (!state.detailLoading && seasons.isEmpty()) {
                 Text(if (state.detailError) labels.failed() else labels.empty(),
@@ -151,7 +174,8 @@ private fun VodDetailsBody(state: VodUiState, item: VodItem, chosen: VodItem, la
             }
             if (seasons.isNotEmpty()) VodDetailsEpisodes(seasons, chosen.id, labels, progress, completed,
                 list, focus, seasonKeys.size + if (recommendation != null) 1 else 0, onPlay,
-                Modifier.weight(1f))
+                modifier = Modifier.weight(1f),
+                onFocusedEpisode = { episode -> memory.selectEpisode(chosen.id, episode.season, episode.id) })
         }
         if (state.kind == VodKind.MOVIE) Spacer(Modifier.weight(1f))
         TextButton(onClick = onDismiss,

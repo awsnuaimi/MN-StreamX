@@ -25,6 +25,7 @@ import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.search.SearchText
 import com.yourapp.iptv.ui.component.common.LocalizedResources
 import com.yourapp.iptv.ui.screen.vod.VodDetailsDialog
+import com.yourapp.iptv.ui.screen.vod.rememberVodDetailsNavigationMemory
 import com.yourapp.iptv.ui.screen.vod.VodLabels
 import com.yourapp.iptv.ui.state.SearchUiState
 import com.yourapp.iptv.viewmodel.*
@@ -44,6 +45,7 @@ fun SearchScreen(onBack: () -> Unit, onSettings: () -> Unit, onOpenLive: () -> U
     val language = appearance?.language ?: HomeLanguage.ARABIC
     val labels = remember(language) { SearchLabels(language) }
     val vodLabels = remember(language) { VodLabels(language) }
+    val seasonMemory = rememberVodDetailsNavigationMemory(state.sourceKey)
     val owner = LocalLifecycleOwner.current
     var restore by remember { mutableIntStateOf(0) }
     DisposableEffect(model, owner) {
@@ -80,7 +82,7 @@ fun SearchScreen(onBack: () -> Unit, onSettings: () -> Unit, onOpenLive: () -> U
             val completed = if (source != null && history.sourceKey == source && details.sourceKey == source)
                 history.completed else emptyList()
             VodDetailsDialog(details, chosen, vodLabels, progress, ::close, model::retryDetails,
-                completed = completed) { kind, id, ext, title, series ->
+                completed = completed, navigationMemory = seasonMemory) { kind, id, ext, title, series ->
                 val expected = source
                 if (expected != null && details.sourceKey == expected &&
                     model.state.value.sourceKey == expected) {

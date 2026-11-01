@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.input.InputMode
@@ -82,6 +85,27 @@ class VodDetailsVisualUiTest {
         compose.runOnIdle { assertEquals(null, played) }
         compose.onNodeWithTag("vod-episode-two-1").performClick()
         compose.runOnIdle { assertEquals("two-1", played) }
+    }
+
+    @Test fun selectedSeasonRemainsHighlightedAfterClosingAndReopeningDetails() {
+        val memory = VodDetailsNavigationMemory()
+        var show by mutableStateOf(true)
+        val details = VodDetails(chosen, listOf(
+            VodSeason(1, "First", listOf(VodEpisode("e1", "First episode", 1, 1, "mp4"))),
+            VodSeason(2, "Second", listOf(VodEpisode("e2", "Second episode", 2, 1, "mp4")))))
+        compose.setContent {
+            IPTVAppTheme {
+                if (show) VodDetailsDialog(
+                    VodUiState(kind = VodKind.SERIES, selected = chosen, sourceKey = "profile-a:source",
+                        details = details), chosen, VodLabels(HomeLanguage.GERMAN), emptyList(), {}, {},
+                    navigationMemory = memory, onPlay = { _, _, _, _, _ -> })
+            }
+        }
+        compose.onNodeWithTag("vod-season-jump-2").performClick()
+        compose.onNodeWithTag("vod-season-jump-2").assertIsSelected()
+        compose.runOnIdle { show = false }
+        compose.runOnIdle { show = true }
+        compose.onNodeWithTag("vod-season-jump-2").assertIsSelected()
     }
 
     @Test fun movieDetailsKeepThePlayControlAndCloseControl() {

@@ -25,7 +25,7 @@ import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 internal fun VodDetailsEpisodes(seasons: List<VodSeason>, seriesId: String, labels: VodLabels,
     progress: List<VodProgressEntry>, completed: List<VodCompletedEpisode>, list: LazyListState,
     focus: ContextFocus, offset: Int, onPlay: (VodKind, String, String, String, String?) -> Unit,
-    modifier: Modifier = Modifier) {
+    modifier: Modifier = Modifier, onFocusedEpisode: (VodEpisode) -> Unit = {}) {
     val all = remember(seasons) { seasons.flatMap { it.episodes } }
     val fractions = remember(all, seriesId, progress) { vodEpisodeProgress(all, seriesId, progress) }
     val watched = remember(all, seriesId, completed, progress) { vodEpisodeWatched(all, seriesId, completed, progress) }
@@ -54,9 +54,15 @@ internal fun VodDetailsEpisodes(seasons: List<VodSeason>, seriesId: String, labe
                     it.kind == VodKind.SERIES && it.seriesId == seriesId && it.id == episode.id && VodProgress.resumable(it)
                 } else null
                 var focused by remember { mutableStateOf(false) }
-                Surface(onClick = { onPlay(VodKind.SERIES, episode.id, episode.extension, episode.name, seriesId) },
+                Surface(onClick = {
+                    onFocusedEpisode(episode)
+                    onPlay(VodKind.SERIES, episode.id, episode.extension, episode.name, seriesId)
+                },
                     modifier = Modifier.fillMaxWidth().then(focus.target("dialog", key,
-                        episodeKeys.indexOf(key) + offset)).onFocusChanged { focused = it.isFocused }
+                        episodeKeys.indexOf(key) + offset)).onFocusChanged {
+                            focused = it.isFocused
+                            if (it.isFocused) onFocusedEpisode(episode)
+                        }
                         .tvFocusIndicator().testTag("vod-episode-${episode.id}"),
                     shape = RoundedCornerShape(12.dp),
                     color = if (focused) colors.primaryContainer else colors.surfaceContainerHigh,
