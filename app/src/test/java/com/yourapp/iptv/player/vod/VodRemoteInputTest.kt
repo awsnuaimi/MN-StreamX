@@ -22,6 +22,30 @@ class VodRemoteInputTest {
         assertEquals(listOf(VodRemoteCommand.FORWARD,VodRemoteCommand.FORWARD),commands)
         assertFalse(key(KeyEvent.KEYCODE_DPAD_RIGHT,shown = true))
     }
+    @Test fun longHeldSeekAcceleratesAndCoalescesRepeatedPlayerCommands() {
+        val deltas = mutableListOf<Long>()
+        val code = KeyEvent.KEYCODE_DPAD_RIGHT
+        for (repeat in 0..20) {
+            assertTrue(input.handle(code,KeyEvent.ACTION_DOWN,repeat,repeat > 0) {
+                if (it == VodRemoteCommand.FORWARD) deltas += input.seekStepMs
+            })
+        }
+        assertEquals(listOf(10_000L,10_000L,10_000L,10_000L,
+            30_000L,30_000L,30_000L,60_000L,60_000L),deltas)
+        assertTrue(key(code,KeyEvent.ACTION_UP,shown = true))
+        assertEquals(10_000L,input.seekStepMs)
+    }
+    @Test fun releasingAndRestartingASeekResetsAcceleration() {
+        val code = KeyEvent.KEYCODE_MEDIA_REWIND
+        key(code,repeat = 0,shown = true)
+        key(code,repeat = 12,shown = true)
+        assertEquals(60_000L,input.seekStepMs)
+        key(code,KeyEvent.ACTION_UP,shown = true)
+        key(code,shown = true)
+        assertEquals(10_000L,input.seekStepMs)
+        input.clear()
+        assertEquals(10_000L,input.seekStepMs)
+    }
     @Test fun mediaToggleNeverRepeatsWhileTheRemoteButtonIsHeld() {
         key(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,shown = true)
         key(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,repeat = 5,shown = true)

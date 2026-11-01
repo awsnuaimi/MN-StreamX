@@ -36,7 +36,6 @@ import androidx.media3.ui.DefaultTrackNameProvider
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.yourapp.iptv.domain.model.PlayerAppearance
-import com.yourapp.iptv.domain.model.VodSeek
 import com.yourapp.iptv.player.vod.*
 import com.yourapp.iptv.ui.component.common.AppButton
 import com.yourapp.iptv.viewmodel.VodPlaybackState
@@ -169,8 +168,8 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
                 chrome.touch()
                 when (command) {
                     VodRemoteCommand.SHOW -> Unit
-                    VodRemoteCommand.REWIND -> step(-VodSeek.STEP_MS)
-                    VodRemoteCommand.FORWARD -> step(VodSeek.STEP_MS)
+                    VodRemoteCommand.REWIND -> step(-input.seekStepMs)
+                    VodRemoteCommand.FORWARD -> step(input.seekStepMs)
                     VodRemoteCommand.TOGGLE -> current?.toggle()
                     VodRemoteCommand.PLAY -> current?.play()
                     VodRemoteCommand.PAUSE -> current?.pause()

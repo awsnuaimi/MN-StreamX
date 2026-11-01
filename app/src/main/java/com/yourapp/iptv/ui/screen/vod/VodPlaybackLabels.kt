@@ -38,8 +38,15 @@ internal class VodPlaybackLabels(private val language: HomeLanguage) {
     fun pause() = text("إيقاف مؤقت", "Pause", "Pause")
     fun rewind() = text("−١٠ ثوانٍ", "−10 seconds", "−10 Sekunden")
     fun forward() = text("+١٠ ثوانٍ", "+10 seconds", "+10 Sekunden")
+    fun seekJump(delta: Long): String {
+        if (delta == 10_000L) return forward()
+        if (delta == -10_000L) return rewind()
+        val seconds = (if (delta == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(delta)) / 1000
+        return if (delta < 0) text("−$seconds ثانية", "−$seconds seconds", "−$seconds Sekunden")
+        else text("+$seconds ثانية", "+$seconds seconds", "+$seconds Sekunden")
+    }
     fun restart() = text("من البداية", "Restart", "Von vorne")
-    fun timeline() = text("موضع المشاهدة؛ يمين ويسار للتنقل عشر ثوانٍ", "Playback position; left and right seek ten seconds", "Wiedergabeposition; links und rechts springen zehn Sekunden")
+    fun timeline() = text("موضع المشاهدة؛ يمين ويسار عشر ثوانٍ، والضغط المطوّل للتسريع", "Playback position; left and right seek ten seconds, hold to accelerate", "Wiedergabeposition; links und rechts zehn Sekunden, gedrückt halten zum Beschleunigen")
     fun audio() = text("الصوت", "Audio", "Tonspur")
     fun subtitles() = text("الترجمة", "Subtitles", "Untertitel")
     fun automatic() = text("تلقائي", "Automatic", "Automatisch")

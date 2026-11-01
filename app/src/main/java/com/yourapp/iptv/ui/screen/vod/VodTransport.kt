@@ -42,7 +42,7 @@ internal fun VodTransport(snapshot: VodPlayerSnapshot, labels: VodPlaybackLabels
     }
     Surface(color = Color(0xDD0C121B),contentColor = Color.White,shape = CircleShape,
         border = BorderStroke(1.dp,Color.White.copy(alpha = .12f))) {
-    Text(if (feedback != null) "${if (feedback.first < 0) labels.rewind() else labels.forward()} · ${VodSeek.time(feedback.second)}"
+    Text(if (feedback != null) "${labels.seekJump(feedback.first)} · ${VodSeek.time(feedback.second)}"
         else if (snapshot.buffering) labels.buffering() else if (pause) labels.pause() else labels.play(),
         Modifier.padding(horizontal = 14.dp,vertical = 5.dp).heightIn(min = 18.dp).then(if (feedback != null) Modifier.testTag("vod-seek-feedback") else Modifier),
         color = Color.White.copy(alpha = .92f),fontSize = 12.sp,maxLines = 1)

@@ -1,17 +1,30 @@
 package com.yourapp.iptv.player.vod
 
 import android.view.KeyEvent
+import com.yourapp.iptv.domain.model.VodSeek
 
 enum class VodRemoteCommand { SHOW, REWIND, FORWARD, TOGGLE, PLAY, PAUSE, NEXT }
 
 /** Own the whole press: showing controls must not turn its key-up into a button click. */
 class VodRemoteInput {
     private val held = mutableMapOf<Int,VodRemoteCommand>()
-    fun clear() { held.clear() }
+    var seekStepMs: Long = VodSeek.STEP_MS
+        private set
+    fun clear() { held.clear(); seekStepMs = VodSeek.STEP_MS }
+    private fun dispatchSeek(command: VodRemoteCommand, repeat: Int, send: (VodRemoteCommand) -> Unit) {
+        if (VodSeek.shouldDispatchRepeat(repeat)) {
+            seekStepMs = VodSeek.repeatStepMs(repeat)
+            send(command)
+        }
+    }
     fun handle(code: Int, action: Int, repeat: Int, controls: Boolean, send: (VodRemoteCommand) -> Unit): Boolean {
         held[code]?.let { command ->
-            if (action == KeyEvent.ACTION_UP) held.remove(code)
-            else if (action == KeyEvent.ACTION_DOWN && repeat > 0 && command in seek) send(command)
+            if (action == KeyEvent.ACTION_UP) {
+                held.remove(code)
+                seekStepMs = VodSeek.STEP_MS
+            } else if (action == KeyEvent.ACTION_DOWN && repeat > 0 && command in seek) {
+                dispatchSeek(command, repeat, send)
+            }
             return true
         }
         val command = when (code) {
@@ -29,7 +42,8 @@ class VodRemoteInput {
         } ?: return false
         if (action == KeyEvent.ACTION_DOWN) {
             held[code] = command
-            if (repeat == 0 || command in seek) send(command)
+            if (command in seek) dispatchSeek(command, repeat, send)
+            else if (repeat == 0) send(command)
         }
         return action == KeyEvent.ACTION_DOWN || action == KeyEvent.ACTION_UP
     }

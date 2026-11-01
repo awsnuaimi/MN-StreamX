@@ -2,6 +2,18 @@ package com.yourapp.iptv.domain.model
 
 object VodSeek {
     const val STEP_MS = 10_000L
+    /** Same policy for hidden controls and the focused timeline. */
+    fun repeatStepMs(repeatCount: Int): Long = when {
+        repeatCount < 4 -> STEP_MS
+        repeatCount < 12 -> 30_000L
+        else -> 60_000L
+    }
+    /** Android key repeats can arrive many times per second; limit player seeks. */
+    fun shouldDispatchRepeat(repeatCount: Int): Boolean = when {
+        repeatCount <= 3 -> true
+        repeatCount < 12 -> (repeatCount - 4) % 3 == 0
+        else -> (repeatCount - 12) % 5 == 0
+    }
     fun target(position: Long, duration: Long, delta: Long): Long? {
         if (duration <= 0) return null
         val start = position.coerceIn(0L, duration)

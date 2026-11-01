@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.LayoutDirection
+import kotlinx.coroutines.delay
 import com.yourapp.iptv.domain.model.VodSeek
 import com.yourapp.iptv.player.vod.VodPlayerSnapshot
 
@@ -34,18 +35,20 @@ internal fun VodTimeline(snapshot: VodPlayerSnapshot, labels: VodPlaybackLabels,
     onSeek: (Long) -> Unit, onStep: (Long) -> Unit, onScrubbing: (Boolean) -> Unit = {}, down: FocusRequester? = null, up: FocusRequester? = null) {
     var focused by remember { mutableStateOf(false) }
     var drag by remember { mutableStateOf<Float?>(null) }
+    var keyPreview by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(keyPreview) { if (keyPreview != null) { delay(1500); keyPreview = null } }
     val release by rememberUpdatedState(onScrubbing)
     DisposableEffect(Unit) { onDispose { release(false) } }
-    LaunchedEffect(snapshot.seekable) { if (!snapshot.seekable) { drag = null;release(false) } }
+    LaunchedEffect(snapshot.seekable) { if (!snapshot.seekable) { drag = null;keyPreview = null;release(false) } }
     val duration = snapshot.duration.coerceAtLeast(1).toFloat()
-    val position = if (snapshot.duration > 0) drag ?: snapshot.position.toFloat().coerceIn(0f,duration) else 0f
+    val position = if (snapshot.duration > 0) drag ?: keyPreview?.toFloat() ?: snapshot.position.toFloat().coerceIn(0f,duration) else 0f
     val loaded = if (snapshot.duration > 0) (snapshot.buffered.toFloat()/duration).coerceIn(0f,1f) else 0f
     val accent = MaterialTheme.colorScheme.primary
-    val elapsed = drag?.toLong() ?: snapshot.position.coerceAtLeast(0)
+    val elapsed = drag?.toLong() ?: keyPreview ?: snapshot.position.coerceAtLeast(0)
     val remaining = if (snapshot.duration > 0) snapshot.duration - elapsed.coerceIn(0,snapshot.duration) else -1
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Column {
-            if (drag != null) {
+            if (drag != null || keyPreview != null) {
                 Box(Modifier.fillMaxWidth().padding(bottom = 8.dp),contentAlignment = Alignment.Center) {
                     Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
                         color = Color(0xF00D1D3E),contentColor = Color.White,
@@ -74,19 +77,30 @@ internal fun VodTimeline(snapshot: VodPlayerSnapshot, labels: VodPlaybackLabels,
                             drawLine(accent,Offset(0f,size.height/2),Offset(size.width*progress,size.height/2),size.height,StrokeCap.Round)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }.focusRequester(focus)
+                    modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused; if (!it.isFocused) keyPreview = null }.focusRequester(focus)
                         .focusProperties { down?.let { this.down = it };up?.let { this.up = it } }
                         .testTag("vod-timeline").semantics { contentDescription = labels.timeline() }
                         .onPreviewKeyEvent { event ->
                             val key = event.nativeKeyEvent
-                            val delta = when (key.keyCode) {
-                                KeyEvent.KEYCODE_DPAD_LEFT -> -VodSeek.STEP_MS
-                                KeyEvent.KEYCODE_DPAD_RIGHT -> VodSeek.STEP_MS
-                                else -> null
+                            val direction = when (key.keyCode) {
+                                KeyEvent.KEYCODE_DPAD_LEFT -> -1
+                                KeyEvent.KEYCODE_DPAD_RIGHT -> 1
+                                else -> 0
                             }
-                            if (delta != null && snapshot.seekable) {
-                                if (key.action == KeyEvent.ACTION_DOWN) { drag = null;release(false);onStep(delta) }
-                                key.action == KeyEvent.ACTION_DOWN || key.action == KeyEvent.ACTION_UP
+                            if (direction != 0 && snapshot.seekable) {
+                                when (key.action) {
+                                    KeyEvent.ACTION_DOWN -> {
+                                        if (VodSeek.shouldDispatchRepeat(key.repeatCount)) {
+                                            val delta = direction * VodSeek.repeatStepMs(key.repeatCount)
+                                            drag = null; release(false)
+                                            keyPreview = VodSeek.target(snapshot.position,snapshot.duration,delta)
+                                            onStep(delta)
+                                        }
+                                        true
+                                    }
+                                    KeyEvent.ACTION_UP -> { keyPreview = null; true }
+                                    else -> false
+                                }
                             } else false
                         })
             }
