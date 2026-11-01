@@ -11,6 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.*
@@ -61,13 +64,19 @@ internal fun VodDetailsEpisodes(seasons: List<VodSeason>, seriesId: String, labe
                         if (focused) colors.primary else colors.outlineVariant.copy(alpha = .35f))) {
                     Column(Modifier.padding(horizontal = 13.dp, vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("${episode.number}.", color = colors.primary,
-                                style = MaterialTheme.typography.labelLarge)
-                            Text(episode.name, Modifier.weight(1f), maxLines = 2,
-                                overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium,
-                                color = colors.onSurface)
-                        }
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(SpanStyle(color = colors.primary)) {
+                                    append("${episode.number}.")
+                                }
+                                append(" ${episode.name}")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onSurface
+                        )
                         val status = when {
                             isResumable -> "${labels.seriesResume()} ${labels.position(saved?.positionMs ?: 0L)}"
                             isWatched -> labels.watched()
