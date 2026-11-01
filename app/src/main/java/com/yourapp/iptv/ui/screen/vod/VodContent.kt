@@ -94,7 +94,13 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
                         // previously owned a poster; sorting from an empty grid stays on the button.
                         if (focus.bookmarks.get(posters) != null) focus.request(posters)
                         nameSort = !nameSort
-                    })
+                    }, refreshing = state.refreshing || state.categoryRefreshing)
+                if (state.refreshError || state.categoryRefreshError) {
+                    Text(labels.cachedRefreshFailed(),
+                        modifier = Modifier.testTag("vod-cache-refresh-warning"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                }
                 when {
                     state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()

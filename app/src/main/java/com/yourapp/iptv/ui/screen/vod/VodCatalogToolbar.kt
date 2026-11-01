@@ -20,7 +20,7 @@ import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 internal fun VodCatalogToolbar(kind: VodKind, count: Int, query: String, labels: VodLabels,
     focus: ContextFocus, loading: Boolean, available: Boolean, onBack: () -> Unit, onRefresh: () -> Unit,
     onQuery: (String) -> Unit, onCategories: () -> Unit, sorted: Boolean,
-    onSort: () -> Unit, modifier: Modifier = Modifier) {
+    onSort: () -> Unit, modifier: Modifier = Modifier, refreshing: Boolean = false) {
     BoxWithConstraints(modifier.fillMaxWidth().testTag("vod-toolbar")) {
         val availableWidthDp = maxWidth.value
         val mode = vodToolbarMode(availableWidthDp)
@@ -37,7 +37,7 @@ internal fun VodCatalogToolbar(kind: VodKind, count: Int, query: String, labels:
                     VodToolbarFilter(labels, onCategories)
                     VodToolbarSort(labels, sorted, onSort)
                 }
-                if (!loading) VodToolbarRefresh(focus, onRefresh)
+                if (!loading) VodToolbarRefresh(focus, onRefresh, refreshing)
             }
             VodToolbarMode.STACKED -> Column(Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -46,7 +46,7 @@ internal fun VodCatalogToolbar(kind: VodKind, count: Int, query: String, labels:
                     VodToolbarBack(focus, labels, onBack)
                     VodToolbarTitle(kind, labels, Modifier.weight(1f))
                     if (availableWidthDp >= 460f) VodToolbarCount(count, labels)
-                    if (!loading) VodToolbarRefresh(focus, onRefresh)
+                    if (!loading) VodToolbarRefresh(focus, onRefresh, refreshing)
                 }
                 if (available) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -61,7 +61,7 @@ internal fun VodCatalogToolbar(kind: VodKind, count: Int, query: String, labels:
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     VodToolbarBack(focus, labels, onBack)
                     VodToolbarTitle(kind, labels, Modifier.weight(1f))
-                    if (!loading) VodToolbarRefresh(focus, onRefresh)
+                    if (!loading) VodToolbarRefresh(focus, onRefresh, refreshing)
                 }
                 if (available) {
                     VodToolbarQuery(query, labels, focus, onQuery, Modifier.fillMaxWidth())
@@ -125,12 +125,15 @@ private fun VodToolbarSort(labels: VodLabels, sorted: Boolean, onSort: () -> Uni
 }
 
 @Composable
-private fun VodToolbarRefresh(focus: ContextFocus, onRefresh: () -> Unit) {
+private fun VodToolbarRefresh(focus: ContextFocus, onRefresh: () -> Unit, refreshing: Boolean) {
     OutlinedButton(onClick = onRefresh,
         modifier = Modifier.then(focus.target("controls", "refresh", 1))
             .tvFocusIndicator().testTag("vod-refresh"),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        contentPadding = PaddingValues(horizontal = 12.dp)) { Text("↻") }
+        contentPadding = PaddingValues(horizontal = 12.dp)) {
+        if (refreshing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        else Text("↻")
+    }
 }
 
 /** Narrow in-catalog rail; only documented actions are interactive. */

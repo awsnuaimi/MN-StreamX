@@ -5,60 +5,111 @@ import com.yourapp.iptv.data.cache.VodCatalogCachePolicy
 import com.yourapp.iptv.data.cache.VodCatalogSnapshot
 import com.yourapp.iptv.data.source.xtream.XtreamVodDataSource
 import com.yourapp.iptv.domain.model.*
+import com.yourapp.iptv.domain.repository.VodLoad
 import com.yourapp.iptv.domain.repository.VodRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.last
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
-/** Cached below ProtectedVod: every read is still checked against current parental permissions. */
+/** Cached below ProtectedVod: all emissions still go through parental permissions. */
 @Singleton
 class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context) : VodRepository {
     private val source = XtreamVodDataSource()
     private val disk = VodCatalogSnapshot(context.cacheDir.resolve("vod_catalog_v1"))
     private val memory = LinkedHashMap<String, VodCatalogSnapshot.Saved>(8, .75f, true)
     private val lock = Any()
+    private data class Gate(val mutex: Mutex = Mutex(), var users: Int = 0)
+    private val gates = HashMap<String, Gate>()
+    private var network: suspend (AppSettings, VodKind, String?) -> VodCatalog = { account, kind, category ->
+        if (category == null) source.catalog(account, kind)
+        else VodCatalog(emptyList(), source.category(account, kind, category))
+    }
+
+    /** Test seam that exercises the real disk/cache/coalescing code without provider access. */
+    internal constructor(context: Context, fetch: suspend (AppSettings, VodKind, String?) -> VodCatalog) : this(context) {
+        network = fetch
+    }
 
     override fun supports(settings: AppSettings) = source.supports(settings)
 
     override suspend fun catalog(settings: AppSettings, kind: VodKind): VodCatalog =
-        load(settings, kind, null, force = false)
+        catalogUpdates(settings, kind).last().value
 
     override suspend fun refreshCatalog(settings: AppSettings, kind: VodKind): VodCatalog =
-        load(settings, kind, null, force = true)
+        catalogUpdates(settings, kind, force = true).last().value
 
     override suspend fun category(settings: AppSettings, kind: VodKind, categoryId: String): List<VodItem> =
-        load(settings, kind, categoryId, force = false).items
+        categoryUpdates(settings, kind, categoryId).last().value
 
     override suspend fun refreshCategory(settings: AppSettings, kind: VodKind, categoryId: String): List<VodItem> =
-        load(settings, kind, categoryId, force = true).items
+        categoryUpdates(settings, kind, categoryId, force = true).last().value
 
-    private suspend fun load(settings: AppSettings, kind: VodKind, category: String?,
-        force: Boolean): VodCatalog {
-        val key = VodCatalogCachePolicy.key(PlaylistCacheKey.of(settings), kind.name, category)
-        val cached = read(key)
-        val now = System.currentTimeMillis()
-        if (!force && cached != null && VodCatalogCachePolicy.fresh(cached.writtenAtMs, now)) {
-            return cached.catalog
+    override fun catalogUpdates(settings: AppSettings, kind: VodKind, force: Boolean): Flow<VodLoad<VodCatalog>> =
+        changes(settings, kind, null, force)
+
+    override fun categoryUpdates(settings: AppSettings, kind: VodKind, categoryId: String,
+        force: Boolean): Flow<VodLoad<List<VodItem>>> =
+        changes(settings, kind, categoryId, force).map { event ->
+            VodLoad(event.value.items, event.refreshing, event.refreshFailed)
         }
-        return try {
-            val latest = if (category == null) source.catalog(settings, kind)
-                else VodCatalog(emptyList(), source.category(settings, kind, category))
-            val saved = VodCatalogSnapshot.Saved(latest, System.currentTimeMillis())
-            remember(key, saved)
-            // Disk is an optional optimization: a storage problem must not prevent displaying data.
-            try { withContext(Dispatchers.IO) { disk.write(key, latest, saved.writtenAtMs) } }
-            catch (error: CancellationException) { throw error }
-            catch (_: Exception) { }
-            latest
+
+    private fun changes(settings: AppSettings, kind: VodKind, category: String?,
+        force: Boolean): Flow<VodLoad<VodCatalog>> = flow {
+        val key = VodCatalogCachePolicy.key(PlaylistCacheKey.of(settings), kind.name, category)
+        val cached = if (force) null else read(key)
+        val now = System.currentTimeMillis()
+        val usable = cached?.takeIf { VodCatalogCachePolicy.usableOffline(it.writtenAtMs, now) }
+        val fresh = usable != null && VodCatalogCachePolicy.fresh(usable.writtenAtMs, now)
+        if (usable != null) {
+            emit(VodLoad(usable.catalog, refreshing = !fresh))
+            if (fresh) return@flow
+        }
+        try {
+            val latest = fetch(settings, kind, category, key, force)
+            emit(VodLoad(latest))
         } catch (error: CancellationException) { throw error }
         catch (error: Exception) {
-            if (!force && cached != null &&
-                VodCatalogCachePolicy.usableOffline(cached.writtenAtMs, System.currentTimeMillis())) {
-                cached.catalog
-            } else throw error
+            if (usable == null) throw error
+            // Keep cached content visible; do not present a network failure as an empty library.
+            emit(VodLoad(usable.catalog, refreshFailed = true))
+        }
+    }
+
+    private suspend fun fetch(settings: AppSettings, kind: VodKind, category: String?,
+        key: String, force: Boolean): VodCatalog = gated(key) {
+        // Waiting callers reuse the fresh result rather than making identical provider requests.
+        if (!force) read(key)?.takeIf {
+            VodCatalogCachePolicy.fresh(it.writtenAtMs, System.currentTimeMillis())
+        }?.let { return@gated it.catalog }
+        val latest = network(settings, kind, category)
+        val saved = VodCatalogSnapshot.Saved(latest, System.currentTimeMillis())
+        remember(key, saved)
+        // Disk storage is optional; it must never prevent a successful provider response.
+        try { withContext(Dispatchers.IO) { disk.write(key, latest, saved.writtenAtMs) } }
+        catch (error: CancellationException) { throw error }
+        catch (_: Exception) { }
+        latest
+    }
+
+    private suspend fun <T> gated(key: String, block: suspend () -> T): T {
+        val gate = synchronized(lock) {
+            gates.getOrPut(key) { Gate() }.also { it.users++ }
+        }
+        try { return gate.mutex.withLock { block() } }
+        finally {
+            synchronized(lock) {
+                gate.users--
+                if (gate.users == 0 && gates[key] === gate) gates.remove(key)
+            }
         }
     }
 
@@ -73,7 +124,6 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
 
     private fun remember(key: String, saved: VodCatalogSnapshot.Saved) = synchronized(lock) {
         memory[key] = saved
-        // Keep only a small number of potentially huge Xtream lists resident in RAM.
         while (memory.size > 4 ||
             (memory.size > 1 && memory.values.sumOf { it.catalog.items.size } > 80_000)) {
             memory.remove(memory.keys.first())

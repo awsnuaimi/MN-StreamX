@@ -17,6 +17,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -39,7 +40,11 @@ data class VodUiState(
     val detailError: Boolean = false,
     val sourceKey: String? = null,
     val filteredItems: List<VodItem>? = null,
-    val filtering: Boolean = false
+    val filtering: Boolean = false,
+    val refreshing: Boolean = false,
+    val refreshError: Boolean = false,
+    val categoryRefreshing: Boolean = false,
+    val categoryRefreshError: Boolean = false
 ) {
     // Synthetic UI/test states can still derive visibility without a ViewModel.
     val visible: List<VodItem> get() = filteredItems
@@ -85,16 +90,38 @@ class VodViewModel @Inject constructor(
                         return@collectLatest
                     }
                     try {
-                        val catalog = if (refresh) repository.refreshCatalog(source, kind)
-                            else repository.catalog(source, kind)
-                        currentCoroutineContext().ensureActive()
-                        if (current != generation) return@collectLatest
-                        updateVisible(mutable.value.copy(loading = false, catalog = catalog))
-                        if (catalog.categoryScoped) catalog.categories.firstOrNull()?.let { filter(it.id, retry = refresh) }
+                        repository.catalogUpdates(source, kind, force = refresh).collect { event ->
+                            currentCoroutineContext().ensureActive()
+                            if (current != generation) return@collect
+                            val state = mutable.value
+                            val catalog = event.value
+                            // Updating category metadata must not discard an active category's items.
+                            val keepCategory = catalog.categoryScoped && state.catalog.categoryScoped &&
+                                state.categoryId != null && catalog.categories.any { it.id == state.categoryId }
+                            val keepFilter = !catalog.categoryScoped && !state.catalog.categoryScoped &&
+                                state.categoryId != null && catalog.categories.any { it.id == state.categoryId }
+                            val shown = if (keepCategory) catalog.copy(items = state.catalog.items) else catalog
+                            val next = state.copy(loading = false, catalog = shown,
+                                refreshing = event.refreshing, refreshError = event.refreshFailed,
+                                categoryId = if (keepCategory || keepFilter) state.categoryId else null,
+                                categoryLoading = if (keepCategory) state.categoryLoading else false,
+                                categoryRefreshing = if (keepCategory) state.categoryRefreshing else false)
+                            if (shown.items === state.catalog.items && next.categoryId == state.categoryId) {
+                                mutable.value = next
+                            } else updateVisible(next)
+                            if (catalog.categoryScoped && !keepCategory) {
+                                catalog.categories.firstOrNull()?.let { filter(it.id, retry = refresh) }
+                            }
+                        }
                     } catch (error: CancellationException) { throw error }
                     catch (error: Exception) {
                         DiagnosticFailures.record(if (kind == VodKind.MOVIE) DiagnosticArea.MOVIE_CATALOG else DiagnosticArea.SERIES_CATALOG,error,PlaylistCacheKey.of(source))
-                        if (current == generation) mutable.value = mutable.value.copy(loading = false, error = true)
+                        if (current == generation) {
+                            val existing = mutable.value
+                            mutable.value = existing.copy(loading = false, refreshing = false,
+                                error = existing.catalog.items.isEmpty() && existing.catalog.categories.isEmpty(),
+                                refreshError = existing.catalog.items.isNotEmpty() || existing.catalog.categories.isNotEmpty())
+                        }
                     }
                 }
             } catch (error: CancellationException) { throw error }
@@ -116,21 +143,25 @@ class VodViewModel @Inject constructor(
         val request = ++categoryRequest
         val current = generation
         updateVisible(mutable.value.copy(categoryId = category.id, categoryLoading = true,
-            categoryError = false, catalog = state.catalog.copy(items = emptyList())))
+            categoryError = false, categoryRefreshError = false, categoryRefreshing = false,
+            catalog = state.catalog.copy(items = emptyList())))
         categoryJob = viewModelScope.launch {
             try {
-                val items = if (retry) repository.refreshCategory(source, state.kind, category.id)
-                    else repository.category(source, state.kind, category.id)
-                currentCoroutineContext().ensureActive()
-                if (current == generation && request == categoryRequest) {
-                    updateVisible(mutable.value.copy(categoryLoading = false,
-                        catalog = mutable.value.catalog.copy(items = items)))
+                repository.categoryUpdates(source, state.kind, category.id, force = retry).collect { event ->
+                    currentCoroutineContext().ensureActive()
+                    if (current == generation && request == categoryRequest) {
+                        updateVisible(mutable.value.copy(categoryLoading = false,
+                            categoryRefreshing = event.refreshing,
+                            categoryRefreshError = event.refreshFailed,
+                            catalog = mutable.value.catalog.copy(items = event.value)))
+                    }
                 }
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
                 DiagnosticFailures.record(if (state.kind == VodKind.MOVIE) DiagnosticArea.MOVIE_CATALOG else DiagnosticArea.SERIES_CATALOG,error,PlaylistCacheKey.of(source))
                 if (current == generation && request == categoryRequest) {
-                    mutable.value = mutable.value.copy(categoryLoading = false, categoryError = true)
+                    mutable.value = mutable.value.copy(categoryLoading = false,
+                        categoryRefreshing = false, categoryError = true)
                 }
             }
         }

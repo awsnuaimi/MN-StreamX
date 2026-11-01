@@ -4,6 +4,9 @@ import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.parental.*
 import com.yourapp.iptv.domain.repository.*
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.collect
 
 internal class ProtectedVod(private val raw: VodRepository, private val parental: ParentalControl) : VodRepository {
     override fun supports(settings: AppSettings) = raw.supports(settings)
@@ -27,6 +30,28 @@ internal class ProtectedVod(private val raw: VodRepository, private val parental
         val value = raw.refreshCategory(settings, kind, categoryId)
         return if (parental.state.value.allows(kind)) value else emptyList()
     }
+    override fun catalogUpdates(settings: AppSettings, kind: VodKind,
+        force: Boolean): Flow<VodLoad<VodCatalog>> = flow {
+        if (!parental.state.value.allows(kind)) {
+            emit(VodLoad(VodCatalog(emptyList(), emptyList())))
+            return@flow
+        }
+        combine(raw.catalogUpdates(settings, kind, force), parental.state) { event, access ->
+            event.copy(value = if (access.allows(kind)) event.value else VodCatalog(emptyList(), emptyList()))
+        }.collect { emit(it) }
+    }
+
+    override fun categoryUpdates(settings: AppSettings, kind: VodKind, categoryId: String,
+        force: Boolean): Flow<VodLoad<List<VodItem>>> = flow {
+        if (!parental.state.value.allows(kind)) {
+            emit(VodLoad(emptyList()))
+            return@flow
+        }
+        combine(raw.categoryUpdates(settings, kind, categoryId, force), parental.state) { event, access ->
+            event.copy(value = if (access.allows(kind)) event.value else emptyList())
+        }.collect { emit(it) }
+    }
+
     override suspend fun details(settings: AppSettings, kind: VodKind, item: VodItem): VodDetails {
         requireAccess(kind)
         return raw.details(settings,kind,item).also { requireAccess(kind) }

@@ -21,6 +21,9 @@ internal class VodLabels(val language: HomeLanguage) {
     fun all() = text("جميع التصنيفات", "All categories", "Alle Kategorien")
     fun search() = text("ابحث عن عنوان", "Search titles", "Titel suchen")
     fun refresh() = text("تحديث القائمة", "Refresh catalog", "Katalog aktualisieren")
+    fun cachedRefreshFailed() = text("القائمة المحفوظة متاحة، لكن تعذر تحديثها من الخادم.",
+        "Showing saved titles; could not refresh from the server.",
+        "Gespeicherte Titel werden angezeigt. Aktualisierung fehlgeschlagen.")
     fun categoryMode() = text("لم يوفر الخادم قائمة كاملة؛ يُحمّل التصنيف المختار فقط. البحث داخل هذا التصنيف.",
         "The server did not provide a complete list; only the selected category is loaded. Search is within that category.",
         "Der Server liefert keine vollständige Liste; nur die gewählte Kategorie wird geladen. Die Suche gilt für diese Kategorie.")
