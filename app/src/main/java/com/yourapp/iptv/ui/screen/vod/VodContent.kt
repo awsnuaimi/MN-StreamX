@@ -38,9 +38,7 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
     // Sort is local UI state; catalog and playback models are never reordered or mutated.
     var nameSort by rememberSaveable(state.kind, state.sourceKey ?: lastSource) { mutableStateOf(false) }
     val original = remember(state.catalog.items, state.categoryId, state.query, state.filteredItems) { state.visible }
-    val visible = remember(original, nameSort) {
-        if (nameSort) original.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }) else original
-    }
+    val visible = rememberVodCatalogOrder(original, nameSort)
     val posters = vodPosterContext(state.categoryId, state.query)
     val posterKeys = remember(visible) { visible.map { it.id } }
     val contexts = setOf("controls", "categories", posters, "continued", "category-status")
@@ -63,18 +61,18 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
     }
     BackHandler(state.selected != null, actions.close)
     // Focused artwork is local and keyed by catalog scope; it cannot bleed between profiles.
-    var highlighted by remember(state.kind, state.sourceKey ?: lastSource, state.categoryId, state.query) {
-        mutableStateOf<String?>(null)
-    }
+    var highlighted by remember(state.kind, state.sourceKey ?: lastSource,
+        state.categoryId, state.query, original) { mutableStateOf<VodItem?>(null) }
     var hoverCandidate by remember(state.kind, state.sourceKey ?: lastSource,
-        state.categoryId, state.query) { mutableStateOf<String?>(null) }
+        state.categoryId, state.query, original) { mutableStateOf<VodItem?>(null) }
     LaunchedEffect(hoverCandidate) {
         if (hoverCandidate != null) {
             delay(180)
             highlighted = hoverCandidate
         }
     }
-    val featured = visible.firstOrNull { it.id == highlighted } ?: visible.firstOrNull()
+    // Hover reports the current item itself: avoid an O(catalog-size) scan per focus move.
+    val featured = highlighted ?: visible.firstOrNull()
     val continued = remember(progress, state.kind) { progress.filter { it.kind == state.kind }.take(8) }
     // Resolve artwork only for saved titles: do not allocate a map of the entire VOD catalog.
     val continuedArtwork = remember(state.catalog.items, continued) {
@@ -136,7 +134,7 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
                                     else -> VodPosterGrid(visible, focus, posters, state.selected == null,
                                         labels, state.catalog.items.isEmpty() && state.query.isBlank(),
                                         Modifier.weight(1f).fillMaxHeight(),
-                                        onFocused = { hoverCandidate = it.id },
+                                        onFocused = { hoverCandidate = it },
                                         header = {
                                             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                                 if (state.kind == VodKind.MOVIE && featured != null) {

@@ -187,13 +187,19 @@ class VodViewModel @Inject constructor(
             mutable.value = next.copy(filteredItems = null, filtering = false)
             return
         }
+        val previous = mutable.value
+        val candidates = VodCatalogFilter.refinedCandidates(
+            entries, next.categoryId, next.query, previous.catalog.items,
+            previous.categoryId, previous.query,
+            if (previous.filtering) null else previous.filteredItems
+        )
         val token = visibleRequest
         val category = next.categoryId
         val query = next.query
         mutable.value = next.copy(filteredItems = emptyList(), filtering = true)
         visibleJob = viewModelScope.launch {
             val result = withContext(Dispatchers.Default) {
-                VodCatalogFilter.matchCancellable(entries, category, query)
+                VodCatalogFilter.matchCancellable(candidates, category, query)
             }
             currentCoroutineContext().ensureActive()
             val state = mutable.value

@@ -8,6 +8,23 @@ import kotlinx.coroutines.ensureActive
 internal object VodCatalogFilter {
     const val BACKGROUND_THRESHOLD = 400
 
+    /** A longer search can only remove matches from a completed result for the same list.
+     * Identity checks also prevent reuse when subscriptions or category pages change.
+     */
+    fun refinedCandidates(
+        items: List<VodItem>, category: String?, query: String,
+        previousItems: List<VodItem>, previousCategory: String?, previousQuery: String,
+        previousResult: List<VodItem>?
+    ): List<VodItem> {
+        val old = previousQuery.trim()
+        val current = query.trim()
+        return if (items === previousItems && category == previousCategory &&
+            previousResult != null && old.isNotEmpty() &&
+            current.length > old.length && current.startsWith(old, ignoreCase = true)) {
+            previousResult
+        } else items
+    }
+
     fun match(items: List<VodItem>, category: String?, query: String): List<VodItem> {
         val needle = query.trim()
         if (category == null && needle.isEmpty()) return items
