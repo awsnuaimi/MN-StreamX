@@ -91,7 +91,12 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
                     state.loading, !state.loading && !state.unavailable && !state.error,
                     actions.back, actions.refresh,
                     { focus.cancel(); actions.search(it) },
-                    { focus.request("categories") }, nameSort, { nameSort = !nameSort })
+                    { focus.request("categories") }, nameSort, {
+                        // Reorder by stable IDs, not old indices. Restore only if the grid
+                        // previously owned a poster; sorting from an empty grid stays on the button.
+                        if (focus.bookmarks.get(posters) != null) focus.request(posters)
+                        nameSort = !nameSort
+                    })
                 when {
                     state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()

@@ -12,9 +12,19 @@ internal class ProtectedVod(private val raw: VodRepository, private val parental
         val value = raw.catalog(settings,kind)
         return if (parental.state.value.allows(kind)) value else VodCatalog(emptyList(),emptyList())
     }
+    override suspend fun refreshCatalog(settings: AppSettings, kind: VodKind): VodCatalog {
+        if (!parental.state.value.allows(kind)) return VodCatalog(emptyList(), emptyList())
+        val value = raw.refreshCatalog(settings, kind)
+        return if (parental.state.value.allows(kind)) value else VodCatalog(emptyList(), emptyList())
+    }
     override suspend fun category(settings: AppSettings, kind: VodKind, categoryId: String): List<VodItem> {
         if (!parental.state.value.allows(kind)) return emptyList()
         val value = raw.category(settings,kind,categoryId)
+        return if (parental.state.value.allows(kind)) value else emptyList()
+    }
+    override suspend fun refreshCategory(settings: AppSettings, kind: VodKind, categoryId: String): List<VodItem> {
+        if (!parental.state.value.allows(kind)) return emptyList()
+        val value = raw.refreshCategory(settings, kind, categoryId)
         return if (parental.state.value.allows(kind)) value else emptyList()
     }
     override suspend fun details(settings: AppSettings, kind: VodKind, item: VodItem): VodDetails {

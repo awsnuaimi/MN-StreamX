@@ -10,6 +10,7 @@ internal object VodCatalogFilter {
 
     fun match(items: List<VodItem>, category: String?, query: String): List<VodItem> {
         val needle = query.trim()
+        if (category == null && needle.isEmpty()) return items
         return items.filter { item ->
             (category == null || item.belongsTo(category)) &&
                 (needle.isEmpty() || item.name.contains(needle, ignoreCase = true))
@@ -19,6 +20,7 @@ internal object VodCatalogFilter {
     suspend fun matchCancellable(items: List<VodItem>, category: String?, query: String): List<VodItem> {
         val context = currentCoroutineContext()
         val needle = query.trim()
+        if (category == null && needle.isEmpty()) return items
         val output = ArrayList<VodItem>()
         items.forEachIndexed { index, item ->
             if ((index and 63) == 0) context.ensureActive()

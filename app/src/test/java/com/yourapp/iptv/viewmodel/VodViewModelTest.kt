@@ -21,6 +21,8 @@ class VodViewModelTest {
     }
     private class Catalog : VodRepository {
         var loads = 0
+        var forcedLoads = 0
+        var forcedCategories = 0
         val categoryRequests = mutableListOf<String>()
         var catalogBlock: suspend (AppSettings, VodKind) -> VodCatalog = { settings, _ ->
             VodCatalog(emptyList(), listOf(VodItem("1", settings.xtreamUsername, "7")))
@@ -30,6 +32,14 @@ class VodViewModelTest {
         override fun supports(settings: AppSettings) = settings.source == PlaylistSource.XTREAM
         override suspend fun catalog(settings: AppSettings, kind: VodKind): VodCatalog {
             loads++; return catalogBlock(settings, kind)
+        }
+        override suspend fun refreshCatalog(settings: AppSettings, kind: VodKind): VodCatalog {
+            forcedLoads++
+            return catalog(settings, kind)
+        }
+        override suspend fun refreshCategory(settings: AppSettings, kind: VodKind, categoryId: String): List<VodItem> {
+            forcedCategories++
+            return category(settings, kind, categoryId)
         }
         override suspend fun category(settings: AppSettings, kind: VodKind, categoryId: String): List<VodItem> {
             categoryRequests += categoryId; return categoryBlock(categoryId)
@@ -109,6 +119,33 @@ class VodViewModelTest {
         catalog.catalogBlock = { _, _ -> VodCatalog(emptyList(), listOf(VodItem("1", "Recovered", null))) }
         model.load(VodKind.MOVIE, refresh = true); runCurrent()
         assertFalse(model.uiState.value.error); assertEquals("Recovered", model.uiState.value.visible.single().name)
+    }
+
+    @Test fun largeUnfilteredCatalogIsVisibleImmediatelyWithoutBackgroundCopy() = runTest(dispatcher) {
+        val items = (0 until 10_000).map { VodItem("$it", "Film $it", null) }
+        catalog.catalogBlock = { _, _ -> VodCatalog(emptyList(), items) }
+        val model = model(); model.load(VodKind.MOVIE); runCurrent()
+        assertSame(items, model.uiState.value.visible)
+        assertFalse(model.uiState.value.filtering)
+        assertEquals(10_000, model.uiState.value.visible.size)
+    }
+
+    @Test fun explicitRefreshBypassesCatalogCacheWhileNormalNavigationDoesNot() = runTest(dispatcher) {
+        val model = model(); model.load(VodKind.MOVIE); runCurrent()
+        assertEquals(1, catalog.loads); assertEquals(0, catalog.forcedLoads)
+        model.load(VodKind.MOVIE); runCurrent()
+        assertEquals(1, catalog.loads)
+        model.load(VodKind.MOVIE, refresh = true); runCurrent()
+        assertEquals(2, catalog.loads); assertEquals(1, catalog.forcedLoads)
+    }
+
+    @Test fun categoryRetryBypassesCachedCategoryAndRequestsNetwork() = runTest(dispatcher) {
+        catalog.catalogBlock = { _, _ -> scoped() }
+        val model = model(); model.load(VodKind.SERIES); runCurrent()
+        assertEquals(listOf("7"), catalog.categoryRequests)
+        model.filter("7", retry = true); runCurrent()
+        assertEquals(listOf("7", "7"), catalog.categoryRequests)
+        assertEquals(1, catalog.forcedCategories)
     }
 
     @Test fun categoryFilteringIncludesEveryCategoryAssignedToATitle() = runTest(dispatcher) {

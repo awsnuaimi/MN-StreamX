@@ -85,6 +85,15 @@ class VodFocusUiTest {
         compose.onNodeWithTag("vod-poster-1").performKeyInput { pressKey(Key.DirectionLeft) }
         compose.waitForFocus("vod-poster-2")
     }
+    @Test fun sortingKeepsThePreviouslyFocusedPosterByItsIdInsteadOfOldIndex() {
+        board(); focusPoster("24")
+        compose.waitForFocus("vod-poster-24")
+        compose.onNodeWithTag("vod-sort").performClick()
+        compose.waitForFocus("vod-poster-24")
+        compose.onNodeWithTag("vod-poster-24").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, plays) }
+    }
+
     @Test fun categorySelectionRecallsItsOwnLastPoster() {
         state = state.copy(categoryId = "a")
         board(); focusPoster("20")

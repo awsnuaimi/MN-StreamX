@@ -42,7 +42,9 @@ data class VodUiState(
     val filtering: Boolean = false
 ) {
     // Synthetic UI/test states can still derive visibility without a ViewModel.
-    val visible: List<VodItem> get() = filteredItems ?: VodCatalogFilter.match(catalog.items, categoryId, query)
+    val visible: List<VodItem> get() = filteredItems
+        ?: if (categoryId == null && query.isBlank()) catalog.items
+        else VodCatalogFilter.match(catalog.items, categoryId, query)
 }
 
 @HiltViewModel
@@ -83,11 +85,12 @@ class VodViewModel @Inject constructor(
                         return@collectLatest
                     }
                     try {
-                        val catalog = repository.catalog(source, kind)
+                        val catalog = if (refresh) repository.refreshCatalog(source, kind)
+                            else repository.catalog(source, kind)
                         currentCoroutineContext().ensureActive()
                         if (current != generation) return@collectLatest
                         updateVisible(mutable.value.copy(loading = false, catalog = catalog))
-                        if (catalog.categoryScoped) catalog.categories.firstOrNull()?.let { filter(it.id) }
+                        if (catalog.categoryScoped) catalog.categories.firstOrNull()?.let { filter(it.id, retry = refresh) }
                     } catch (error: CancellationException) { throw error }
                     catch (error: Exception) {
                         DiagnosticFailures.record(if (kind == VodKind.MOVIE) DiagnosticArea.MOVIE_CATALOG else DiagnosticArea.SERIES_CATALOG,error,PlaylistCacheKey.of(source))
@@ -116,7 +119,8 @@ class VodViewModel @Inject constructor(
             categoryError = false, catalog = state.catalog.copy(items = emptyList())))
         categoryJob = viewModelScope.launch {
             try {
-                val items = repository.category(source, state.kind, category.id)
+                val items = if (retry) repository.refreshCategory(source, state.kind, category.id)
+                    else repository.category(source, state.kind, category.id)
                 currentCoroutineContext().ensureActive()
                 if (current == generation && request == categoryRequest) {
                     updateVisible(mutable.value.copy(categoryLoading = false,
@@ -178,7 +182,8 @@ class VodViewModel @Inject constructor(
     private fun updateVisible(next: VodUiState) {
         cancelVisible()
         val entries = next.catalog.items
-        if (entries.size < VodCatalogFilter.BACKGROUND_THRESHOLD) {
+        if (entries.size < VodCatalogFilter.BACKGROUND_THRESHOLD ||
+            (next.categoryId == null && next.query.isBlank())) {
             mutable.value = next.copy(filteredItems = null, filtering = false)
             return
         }
