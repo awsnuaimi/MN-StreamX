@@ -1,6 +1,7 @@
 package com.yourapp.iptv.ui.screen.vod
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -29,6 +30,7 @@ import com.yourapp.iptv.ui.component.common.tvFocusIndicator
 import kotlinx.coroutines.launch
 
 /** Each chip jumps within the existing LazyColumn; focus and playback remain unchanged. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun VodDetailsSeasonBar(seasons: List<VodSeason>, labels: VodLabels,
     episodesList: LazyListState, focus: ContextFocus, offset: Int,
