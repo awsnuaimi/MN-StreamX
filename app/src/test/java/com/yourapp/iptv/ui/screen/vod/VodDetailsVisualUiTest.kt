@@ -60,6 +60,30 @@ class VodDetailsVisualUiTest {
         compose.runOnIdle { assertEquals("21", played) }
     }
 
+    @Test fun seasonChipsJumpToOtherSeasonsWithoutStartingPlayback() {
+        val many = (1..14).map { VodEpisode("one-$it", "Episode $it", 1, it, "mp4") }
+        val other = listOf(VodEpisode("two-1", "Next season", 2, 1, "mp4"))
+        compose.setContent {
+            IPTVAppTheme {
+                val mode = LocalInputModeManager.current
+                SideEffect { mode.requestInputMode(InputMode.Keyboard) }
+                val details = VodDetails(chosen, listOf(
+                    VodSeason(1, "Season 1", many), VodSeason(2, "Season 2", other)))
+                VodDetailsDialog(VodUiState(kind = VodKind.SERIES, loading = false,
+                    sourceKey = "p:source", selected = chosen, details = details),
+                    chosen, VodLabels(HomeLanguage.GERMAN), emptyList(), {}, {},
+                    onPlay = { _, id, _, _, _ -> played = id })
+            }
+        }
+        compose.onNodeWithTag("vod-details-seasons").assertExists()
+        compose.onNodeWithTag("vod-season-jump-2").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("vod-episode-two-1").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(null, played) }
+        compose.onNodeWithTag("vod-episode-two-1").performClick()
+        compose.runOnIdle { assertEquals("two-1", played) }
+    }
+
     @Test fun movieDetailsKeepThePlayControlAndCloseControl() {
         compose.setContent { Content(VodKind.MOVIE) }
         compose.onNodeWithTag("vod-details-artwork").assertExists()

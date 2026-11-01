@@ -29,6 +29,9 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
     val episodeKeys = remember(seasons) {
         seasons.flatMap { season -> season.episodes.map { "episode:${season.number}:${it.id}" } }
     }
+    val seasonKeys = remember(state.kind, seasons) {
+        if (state.kind == VodKind.SERIES) VodDetailsSeasonNavigation.keys(seasons) else emptyList()
+    }
     val recommendation = remember(state.kind, chosen.id, seasons, progress, completed) {
         if (state.kind == VodKind.SERIES) VodSeriesContinuation.choose(chosen.id, seasons, progress, completed)
         else null
@@ -36,6 +39,7 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
     val keys = buildList {
         if (state.kind == VodKind.MOVIE) add("play") else {
             if (recommendation != null) add("series-recommend")
+            addAll(seasonKeys)
             addAll(episodeKeys)
         }
         if (state.kind == VodKind.SERIES && !state.detailLoading &&
@@ -69,7 +73,7 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
                         horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                         VodDetailsArtwork(item, Modifier.width(202.dp).fillMaxHeight())
                         VodDetailsBody(state, item, chosen, labels, progress, completed,
-                            seasons, recommendation, episodeKeys.size, focus, list,
+                            seasons, recommendation, seasonKeys, episodeKeys.size, focus, list,
                             onDismiss, onRetry, onPlay, Modifier.weight(1f), showMetadata = true)
                     }
                 } else {
@@ -81,7 +85,7 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
                             VodDetailsMetadata(item, state.kind, labels, Modifier.weight(1f), compact = true)
                         }
                         VodDetailsBody(state, item, chosen, labels, progress, completed,
-                            seasons, recommendation, episodeKeys.size, focus, list,
+                            seasons, recommendation, seasonKeys, episodeKeys.size, focus, list,
                             onDismiss, onRetry, onPlay, Modifier.weight(1f), showMetadata = false)
                     }
                 }
@@ -93,7 +97,8 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
 @Composable
 private fun VodDetailsBody(state: VodUiState, item: VodItem, chosen: VodItem, labels: VodLabels,
     progress: List<VodProgressEntry>, completed: List<VodCompletedEpisode>, seasons: List<VodSeason>,
-    recommendation: VodSeriesChoice?, episodeCount: Int, focus: ContextFocus,
+    recommendation: VodSeriesChoice?, seasonKeys: List<String>, episodeCount: Int,
+    focus: ContextFocus,
     list: androidx.compose.foundation.lazy.LazyListState, onDismiss: () -> Unit, onRetry: () -> Unit,
     onPlay: (VodKind, String, String, String, String?) -> Unit,
     modifier: Modifier = Modifier, showMetadata: Boolean) {
@@ -132,21 +137,27 @@ private fun VodDetailsBody(state: VodUiState, item: VodItem, chosen: VodItem, la
             }
             Text("${labels.episodes()} · $episodeCount", style = MaterialTheme.typography.titleMedium,
                 color = colors.onSurface)
+            if (seasonKeys.isNotEmpty()) {
+                VodDetailsSeasonBar(seasons, labels, list, focus,
+                    if (recommendation != null) 1 else 0)
+            }
             if (!state.detailLoading && seasons.isEmpty()) {
                 Text(if (state.detailError) labels.failed() else labels.empty(),
                     style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                 if (state.detailError) TextButton(onClick = onRetry,
-                    modifier = focus.target("dialog", "retry", episodeCount + if (recommendation != null) 1 else 0)
+                    modifier = focus.target("dialog", "retry", episodeCount + seasonKeys.size +
+                        if (recommendation != null) 1 else 0)
                         .tvFocusIndicator()) { Text(labels.tryAgain()) }
             }
             if (seasons.isNotEmpty()) VodDetailsEpisodes(seasons, chosen.id, labels, progress, completed,
-                list, focus, if (recommendation != null) 1 else 0, onPlay,
+                list, focus, seasonKeys.size + if (recommendation != null) 1 else 0, onPlay,
                 Modifier.weight(1f))
         }
         if (state.kind == VodKind.MOVIE) Spacer(Modifier.weight(1f))
         TextButton(onClick = onDismiss,
             modifier = focus.target("dialog", "close",
-                episodeCount + (if (state.kind == VodKind.MOVIE || recommendation != null) 1 else 0) +
+                episodeCount + seasonKeys.size +
+                    (if (state.kind == VodKind.MOVIE || recommendation != null) 1 else 0) +
                     (if (state.kind == VodKind.SERIES && !state.detailLoading && seasons.isEmpty() && state.detailError) 1 else 0))
                 .tvFocusIndicator().testTag("vod-details-close")) {
             Text(labels.back())
