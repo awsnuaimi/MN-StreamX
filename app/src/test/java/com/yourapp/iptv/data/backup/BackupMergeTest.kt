@@ -64,6 +64,25 @@ class BackupMergeTest {
         assertEquals(80_000L, VodProgressCodec.decode(result.getValue(BackupStore.VOD)[vod]).single().positionMs)
         assertEquals("preserve", result.getValue(BackupStore.HOME)[stringPreferencesKey("future_local")])
     }
+    @Test fun restoringVodCompletionRetainsWatchedEpisodesAndNewerBookmarks() {
+        val payload = backupPayload()
+        val key = PlaylistCacheKey.of(payload.subscriptions.active.settings)
+        val vod = stringPreferencesKey("vod_$key")
+        val local = BackupStore.entries.associateWith { mutablePreferencesOf() }
+        val completed = VodCompletedEpisode("42","800",200)
+        local.getValue(BackupStore.VOD)[vod] = VodProgressCodec.encodeState(
+            VodProgressSnapshot(completed = listOf(completed)))
+        val incoming = BackupValue(BackupValueType.STRING,VodProgressCodec.encode(listOf(
+            VodProgressEntry(VodKind.SERIES,"42","Old","mp4",50_000,120_000,100,"800"))))
+        val areas = payload.areas + (BackupStore.VOD to mapOf(vod.name to incoming))
+        val restored = BackupMerge.stores(local,payload.copy(areas = areas),BackupRestoreOptions())
+        val result = VodProgressCodec.decodeState(restored.getValue(BackupStore.VOD)[vod])
+        assertEquals(listOf(completed),result.completed)
+        assertTrue(result.entries.isEmpty())
+        val encodedBackup = BackupValue(BackupValueType.STRING,VodProgressCodec.encodeState(result))
+        assertEquals(encodedBackup,PortablePreferences.canonicalRecord(BackupStore.VOD,vod.name,encodedBackup))
+    }
+
     @Test fun disablingSettingsRestoreKeepsLocalAppearanceAndTheCurrentActiveAccount() {
         val current = BackupStore.entries.associateWith { mutablePreferencesOf() }
         HomeAppearanceCodec.encode(current.getValue(BackupStore.HOME), HomeAppearance(theme = HomeTheme.RED))

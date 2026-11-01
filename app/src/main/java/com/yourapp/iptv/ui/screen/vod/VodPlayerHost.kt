@@ -228,9 +228,10 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
             } else if (panel == VodPlayerPanel.EPISODES) {
                 // Collection is active only while the episode drawer is visible.
                 val episodeProgress by model.episodeProgress.collectAsStateWithLifecycle()
+                val completedEpisodes by model.episodeCompleted.collectAsStateWithLifecycle()
                 VodEpisodePanel(item,labels,onSelect = { episode ->
                     current?.save();closePanel();model.playEpisode(item,episode)
-                },onClose = ::closePanel,progressRows = episodeProgress)
+                },onClose = ::closePanel,progressRows = episodeProgress,completedRows = completedEpisodes)
             } else VodPlayerOptionDialog(panel,labels,snapshot.speed,display,
                 onSpeed = { current?.setSpeed(it);closePanel() },onDisplay = { display = it;closePanel() },
                 onRestart = { current?.restart();closePanel() },onClose = ::closePanel)

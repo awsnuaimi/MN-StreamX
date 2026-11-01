@@ -56,6 +56,18 @@ class VodEpisodePanelTest {
         compose.onNodeWithTag("vod-episode-21").assertExists()
     }
 
+    @Test fun completedEpisodeShowsFullBarAndKeepsEpisodeFocusTags() {
+        val numbered = item.copy(id = "22",seriesId = "800",episodes = listOf(
+            VodEpisode("21","First",1,1,"mp4"),VodEpisode("22","Second",1,2,"mp4")))
+        val completed = listOf(VodCompletedEpisode("21","800",100L))
+        compose.setContent { IPTVAppTheme { LocalizedResources(HomeLanguage.GERMAN) {
+            VodEpisodePanel(numbered,VodPlaybackLabels(HomeLanguage.GERMAN),{}, {},completedRows = completed)
+        } } }
+        compose.onNodeWithTag("vod-episode-21").assertExists()
+        compose.onNodeWithTag("vod-episode-progress-21",useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("vod-episode-22").assertExists()
+    }
+
     @Test fun choosingTheCurrentlyPlayingEpisodeDismissesRatherThanRestartingIt() {
         var dismissed = 0
         var selections = 0

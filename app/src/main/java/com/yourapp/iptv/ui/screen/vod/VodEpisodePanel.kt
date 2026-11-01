@@ -18,18 +18,23 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.yourapp.iptv.domain.model.VodEpisode
 import com.yourapp.iptv.domain.model.VodProgressEntry
+import com.yourapp.iptv.domain.model.VodCompletedEpisode
 import com.yourapp.iptv.viewmodel.VodPlaybackState
 
 /** Right-hand episode drawer: real provider episodes, with explicit season selection. */
 @Composable
 internal fun VodEpisodePanel(item: VodPlaybackState.Ready, labels: VodPlaybackLabels,
     onSelect: (VodEpisode) -> Unit, onClose: () -> Unit,
-    progressRows: List<VodProgressEntry> = emptyList()) {
+    progressRows: List<VodProgressEntry> = emptyList(),
+    completedRows: List<VodCompletedEpisode> = emptyList()) {
     val seasons = remember(item.episodes) { vodSeasonNumbers(item.episodes) }
     val initialSeason = remember(item.episodes,item.id) { vodInitialSeason(item.episodes,item.id) }
     var season by remember(item.sourceKey,item.seriesId,item.id) { mutableStateOf(initialSeason) }
     val fractions = remember(item.seriesId,item.episodes,progressRows) {
         vodEpisodeProgress(item.episodes,item.seriesId,progressRows)
+    }
+    val watched = remember(item.seriesId,item.episodes,completedRows,progressRows) {
+        vodEpisodeWatched(item.episodes,item.seriesId,completedRows,progressRows)
     }
     val visible = remember(item.episodes,season) {
         season?.let { vodEpisodesInSeason(item.episodes,it) }.orEmpty()
@@ -73,12 +78,18 @@ internal fun VodEpisodePanel(item: VodPlaybackState.Ready, labels: VodPlaybackLa
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(visible,key = { _,episode -> episode.id }) { index,episode ->
                         val isCurrent = episode.id == item.id
-                        VodChoiceRow("${labels.episode(episode.number)} · ${episode.name}",isCurrent,
+                        val status = when {
+                            episode.id in fractions -> labels.continueEpisode()
+                            episode.id in watched -> labels.watched()
+                            else -> labels.newEpisode()
+                        }
+                        VodChoiceRow("${labels.episode(episode.number)} · ${episode.name} · $status",isCurrent,
                             { if (isCurrent) onClose() else onSelect(episode) },
                             Modifier.fillMaxWidth().then(if (index == initialIndex && season == initialSeason)
                                 Modifier.focusRequester(initial) else Modifier)
                                 .testTag("vod-episode-${episode.id}"),glyph = if (isCurrent) null else VodGlyph.PLAY,
-                            progress = fractions[episode.id],progressTag = "vod-episode-progress-${episode.id}")
+                            progress = fractions[episode.id] ?: if (episode.id in watched) 1f else null,
+                            progressTag = "vod-episode-progress-${episode.id}")
                     }
                 }
                 VodControlButton(labels.close(),VodGlyph.BACK,onClose,

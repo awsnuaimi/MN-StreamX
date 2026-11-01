@@ -24,6 +24,24 @@ class ProfileIsolationTest {
         assertEquals("old",history.observe(a).first().single().channelId);assertEquals("new",history.observe(b).first().single().channelId)
         assertEquals("42",progress.observe(a).first().single().id);assertTrue(progress.observe(b).first().isEmpty())
     }
+    @Test fun completedEpisodesAreIsolatedByProfileAndSource() = runTest {
+        val people = people();val settings = ProfileSettings();val disk = ProfileMemory()
+        val progress = VodProgressDataStore(disk,settings,backgroundScope,people)
+        val source = PlaylistCacheKey.of(settings.values.value)
+        val a = ProfileScope.key(PROFILE_A,source);val b = ProfileScope.key(PROFILE_B,source)
+        progress.record(a,VodProgressEntry(VodKind.SERIES,"42","Episode","mp4",110_000,
+            120_000,100,"800"),completed = true)
+        runCurrent()
+        assertTrue(progress.observe(a).first().isEmpty())
+        assertEquals("42",progress.observeCompleted(a).first().single().id)
+        assertTrue(progress.observeCompleted(b).first().isEmpty())
+        progress.record(b,VodProgressEntry(VodKind.SERIES,"43","Episode","mp4",110_000,
+            120_000,101,"801"),completed = true)
+        runCurrent()
+        assertEquals("42",progress.observeCompleted(a).first().single().id)
+        assertEquals("43",progress.observeCompleted(b).first().single().id)
+    }
+
     @Test fun deletedProfileRejectsQueuedRecordsAndSearchWrites() = runTest {
         val people = people();val settings = ProfileSettings();val disk = ProfileMemory()
         val history = WatchHistoryDataStore(disk,settings,backgroundScope,people)

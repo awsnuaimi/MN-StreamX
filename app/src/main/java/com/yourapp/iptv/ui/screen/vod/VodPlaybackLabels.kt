@@ -57,6 +57,9 @@ internal class VodPlaybackLabels(private val language: HomeLanguage) {
     fun episodes() = text("الحلقات", "Episodes", "Folgen")
     fun season(number: Int) = text("الموسم $number", "Season $number", "Staffel $number")
     fun episode(number: Int) = text("الحلقة $number", "Episode $number", "Folge $number")
+    fun watched() = text("تمت المشاهدة", "Watched", "Gesehen")
+    fun continueEpisode() = text("متابعة", "Continue", "Fortsetzen")
+    fun newEpisode() = text("لم تُشاهد", "Not watched", "Nicht angesehen")
     fun autoNext(enabled: Boolean) = text("الحلقة التالية تلقائيًا: ${if (enabled) "نعم" else "لا"}",
         "Auto next: ${if (enabled) "On" else "Off"}", "Automatisch weiter: ${if (enabled) "An" else "Aus"}")
     fun nextIn(seconds: Int) = text("تبدأ الحلقة التالية خلال $seconds ثوانٍ", "Next episode starts in $seconds seconds", "Nächste Folge startet in $seconds Sekunden")

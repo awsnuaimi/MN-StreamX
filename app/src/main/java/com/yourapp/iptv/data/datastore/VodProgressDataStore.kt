@@ -12,6 +12,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.yourapp.iptv.domain.model.PlaylistCacheKey
 import com.yourapp.iptv.domain.model.VodProgress
 import com.yourapp.iptv.domain.model.VodProgressEntry
+import com.yourapp.iptv.domain.model.VodCompletedEpisode
+import com.yourapp.iptv.domain.model.VodEpisodeHistory
 import com.yourapp.iptv.domain.repository.SettingsRepository
 import com.yourapp.iptv.domain.repository.VodProgressRepository
 import kotlinx.coroutines.CancellationException
@@ -50,6 +52,11 @@ class VodProgressDataStore(
         return store.data.map { VodProgressCodec.decode(it[key(sourceKey)]) }.distinctUntilChanged()
     }
 
+    override fun observeCompleted(sourceKey: String): Flow<List<VodCompletedEpisode>> {
+        require(validSource(sourceKey))
+        return store.data.map { VodProgressCodec.decodeState(it[key(sourceKey)]).completed }.distinctUntilChanged()
+    }
+
     override fun record(sourceKey: String, entry: VodProgressEntry, completed: Boolean) {
         if (!validSource(sourceKey) || !VodProgress.isValid(entry)) return
         pending.trySend(Command(sourceKey, entry, completed))
@@ -61,11 +68,11 @@ class VodProgressDataStore(
         store.editAppData { preferences ->
             check(ProfileScope.belongs(command.source,profiles.state.value))
             val itemKey = key(command.source)
-            val previous = VodProgressCodec.decode(preferences[itemKey])
-            val updated = VodProgress.record(previous, command.entry, command.completed)
+            val previous = VodProgressCodec.decodeState(preferences[itemKey])
+            val updated = VodEpisodeHistory.record(previous, command.entry, command.completed)
             if (previous != updated) {
-                if (updated.isEmpty()) preferences.remove(itemKey)
-                else preferences[itemKey] = VodProgressCodec.encode(updated)
+                if (updated.entries.isEmpty() && updated.completed.isEmpty()) preferences.remove(itemKey)
+                else preferences[itemKey] = VodProgressCodec.encodeState(updated)
             }
         }
     }

@@ -31,6 +31,9 @@ internal class ProtectedProgress(private val raw: VodProgressRepository, private
     override fun observe(sourceKey: String) = combine(raw.observe(sourceKey),parental.state) { rows, access ->
         rows.filter { access.allows(it.kind) }
     }
+    override fun observeCompleted(sourceKey: String) = combine(raw.observeCompleted(sourceKey),parental.state) { rows, access ->
+        if (access.allows(VodKind.SERIES)) rows else emptyList()
+    }
     override fun record(sourceKey: String, entry: VodProgressEntry, completed: Boolean) = raw.record(sourceKey,entry,completed)
 }
 

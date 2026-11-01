@@ -34,6 +34,12 @@ class VodPlaybackViewModel @Inject constructor(
         .distinctUntilChanged()
         .flatMapLatest { key -> if (key == null) flowOf(emptyList()) else progress.observe(key) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val episodeCompleted = state.map { (it as? VodPlaybackState.Ready)?.sourceKey }
+        .distinctUntilChanged().flatMapLatest { key ->
+            if (key == null) flowOf(emptyList()) else progress.observeCompleted(key)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList<VodCompletedEpisode>())
+
     private var account: AppSettings? = null
     private var source: String? = null
     private var blocked = false

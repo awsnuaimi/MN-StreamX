@@ -72,7 +72,8 @@ internal object PortablePreferences {
         require(value.type == BackupValueType.STRING)
         if (area == BackupStore.ORGANIZATION && name.startsWith("live_"))
             return BackupValue(BackupValueType.STRING, LiveTvPreferencesCodec.encode(LiveTvPreferencesCodec.decode(value.text)))
-        val root = record(value.text, if (area == BackupStore.ORGANIZATION) 8 * 1024 * 1024 else 64 * 1024)
+        val root = record(value.text, if (area == BackupStore.ORGANIZATION) 8 * 1024 * 1024 else 64 * 1024,
+            allowV2 = area == BackupStore.VOD)
         val text = when (area) {
             BackupStore.ORGANIZATION -> OrganizationCodec.encode(OrganizationCodec.decode(value.text, name.removePrefix("source_")))
             BackupStore.HISTORY -> {
@@ -81,9 +82,11 @@ internal object PortablePreferences {
                 WatchHistoryCodec.encode(rows, WatchHistoryCodec.updated(value.text))
             }
             BackupStore.VOD -> {
-                val rows = VodProgressCodec.decode(value.text)
-                require(root.getAsJsonArray("entries").size() == rows.size)
-                VodProgressCodec.encode(rows)
+                val snapshot = VodProgressCodec.decodeState(value.text)
+                require(root.getAsJsonArray("entries").size() == snapshot.entries.size)
+                if (root.get("version").asInt == 2)
+                    require(root.getAsJsonArray("completed").size() == snapshot.completed.size)
+                VodProgressCodec.encodeState(snapshot)
             }
             BackupStore.SEARCH -> {
                 val queries = root.getAsJsonArray("queries").also { require(it.size() <= 20) }.map {
@@ -101,6 +104,8 @@ internal object PortablePreferences {
         }
         return BackupValue(BackupValueType.STRING, text)
     }
-    private fun record(text: String, limit: Int): JsonObject = BackupJson.read(text.toByteArray(Charsets.UTF_8), limit)
-        .also { require(it.get("version").asInt == 1) }
+    private fun record(text: String, limit: Int, allowV2: Boolean = false): JsonObject =
+        BackupJson.read(text.toByteArray(Charsets.UTF_8), limit).also {
+            require(it.get("version").asInt == 1 || (allowV2 && it.get("version").asInt == 2))
+        }
 }

@@ -57,9 +57,9 @@ internal object BackupMerge {
                     old[name] = BackupValue(BackupValueType.STRING, WatchHistoryCodec.encode(rows, System.currentTimeMillis()))
                 }
                 area == BackupStore.VOD -> {
-                    val rows = (VodProgressCodec.decode(old[name]?.text) + VodProgressCodec.decode(value.text))
-                        .sortedByDescending { it.updatedAtMs }.distinctBy { it.kind to it.id }.take(VodProgress.LIMIT)
-                    old[name] = BackupValue(BackupValueType.STRING, VodProgressCodec.encode(rows))
+                    val merged = VodEpisodeHistory.merge(VodProgressCodec.decodeState(old[name]?.text),
+                        VodProgressCodec.decodeState(value.text))
+                    old[name] = BackupValue(BackupValueType.STRING, VodProgressCodec.encodeState(merged))
                 }
                 area == BackupStore.SEARCH -> old[name] = mergeSearch(old[name], value)
             }
