@@ -38,6 +38,13 @@ internal class VodLabels(val language: HomeLanguage) {
         val minutes = (ms / 60_000L).coerceAtLeast(0L)
         return "%02d:%02d".format(java.util.Locale.ROOT, minutes / 60, minutes % 60)
     }
+    fun seriesResume() = text("متابعة الحلقة", "Resume episode", "Folge fortsetzen")
+    fun seriesStart() = text("ابدأ المشاهدة", "Start watching", "Jetzt ansehen")
+    fun seriesReplay() = text("إعادة مشاهدة المسلسل", "Watch again", "Erneut ansehen")
+    fun watched() = text("شوهدت", "Watched", "Gesehen")
+    fun notWatched() = text("لم تُشاهد", "Not watched", "Nicht angesehen")
+    fun seasonEpisode(season: Int, episode: Int) = text("الموسم $season · الحلقة $episode",
+        "Season $season · Episode $episode", "Staffel $season · Folge $episode")
     fun episodes() = text("الحلقات", "Episodes", "Folgen")
     fun empty() = text("لا توجد نتائج", "No results", "Keine Ergebnisse")
     fun failed() = text("تعذر تحميل المحتوى من السيرفر.", "Could not load the catalog.", "Katalog konnte nicht geladen werden.")

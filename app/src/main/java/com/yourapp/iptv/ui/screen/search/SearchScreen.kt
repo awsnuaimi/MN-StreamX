@@ -39,7 +39,7 @@ fun SearchScreen(onBack: () -> Unit, onSettings: () -> Unit, onOpenLive: () -> U
     progressModel: VodProgressViewModel = hiltViewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
     val details by model.details.collectAsStateWithLifecycle()
-    val progress by progressModel.entries.collectAsStateWithLifecycle()
+    val history by progressModel.scopedHistory.collectAsStateWithLifecycle()
     val appearance by appearanceModel.appearance.collectAsStateWithLifecycle()
     val language = appearance?.language ?: HomeLanguage.ARABIC
     val labels = remember(language) { SearchLabels(language) }
@@ -75,9 +75,15 @@ fun SearchScreen(onBack: () -> Unit, onSettings: () -> Unit, onOpenLive: () -> U
             onVod = { kind, item -> if (source != null) model.open(kind, item, source) }
         ), restore)
         details.selected?.let { chosen ->
-            VodDetailsDialog(details, chosen, vodLabels, progress, ::close, model::retryDetails) { kind, id, ext, title, series ->
+            val progress = if (source != null && history.sourceKey == source && details.sourceKey == source)
+                history.entries else emptyList()
+            val completed = if (source != null && history.sourceKey == source && details.sourceKey == source)
+                history.completed else emptyList()
+            VodDetailsDialog(details, chosen, vodLabels, progress, ::close, model::retryDetails,
+                completed = completed) { kind, id, ext, title, series ->
                 val expected = source
-                if (expected != null && model.state.value.sourceKey == expected) {
+                if (expected != null && details.sourceKey == expected &&
+                    model.state.value.sourceKey == expected) {
                     close()
                     onPlayVod(kind, id, ext, title, expected, series)
                 }

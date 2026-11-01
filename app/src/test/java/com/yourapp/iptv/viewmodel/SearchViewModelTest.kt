@@ -3,6 +3,7 @@ package com.yourapp.iptv.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
 import com.yourapp.iptv.domain.model.*
+import com.yourapp.iptv.domain.profile.ProfileScope
 import com.yourapp.iptv.testing.*
 import java.io.IOException
 import kotlinx.coroutines.*
@@ -123,6 +124,7 @@ class SearchViewModelTest {
         val model = model(); runCurrent(); model.updateQuery("shared"); model.submit(); runCurrent()
         history.fail = true
         model.open(VodKind.SERIES, model.state.value.series.results.single(), accounts.key); runCurrent()
+        assertEquals(ProfileScope.of(accounts.values.value), model.details.value.sourceKey)
         assertEquals("99", model.details.value.details!!.seasons.single().episodes.single().id)
         assertTrue(model.state.value.historyError)
         model.closeDetails(); assertNull(model.details.value.selected)

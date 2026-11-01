@@ -15,12 +15,28 @@ import com.yourapp.iptv.ui.component.common.*
 
 @Composable
 internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLabels,
-    progress: List<VodProgressEntry>, onDismiss: () -> Unit, onRetry: () -> Unit, onPlay: (VodKind, String, String, String, String?) -> Unit) {
+    progress: List<VodProgressEntry>, onDismiss: () -> Unit, onRetry: () -> Unit,
+    completed: List<VodCompletedEpisode> = emptyList(),
+    onPlay: (VodKind, String, String, String, String?) -> Unit) {
     val item = state.details?.item ?: chosen
     val focus = rememberContextFocus("details:${state.sourceKey}:${state.kind}:${chosen.id}")
-    val episodes = state.details?.seasons.orEmpty().flatMap { season -> season.episodes.map { "episode:${season.number}:${it.id}" } }
+    val seasons = state.details?.seasons.orEmpty()
+    val episodes = seasons.flatMap { season -> season.episodes.map { "episode:${season.number}:${it.id}" } }
+    val recommendation = remember(state.kind, chosen.id, seasons, progress, completed) {
+        if (state.kind == VodKind.SERIES) VodSeriesContinuation.choose(chosen.id, seasons, progress, completed)
+        else null
+    }
+    val progressFractions = remember(seasons, chosen.id, progress) {
+        vodEpisodeProgress(seasons.flatMap { it.episodes }, chosen.id, progress)
+    }
+    val watched = remember(seasons, chosen.id, completed, progress) {
+        vodEpisodeWatched(seasons.flatMap { it.episodes }, chosen.id, completed, progress)
+    }
     val keys = buildList {
-        if (state.kind == VodKind.MOVIE) add("play") else addAll(episodes)
+        if (state.kind == VodKind.MOVIE) add("play") else {
+            if (recommendation != null) add("series-recommend")
+            addAll(episodes)
+        }
         if (state.kind == VodKind.SERIES && !state.detailLoading && state.details?.seasons.isNullOrEmpty() && state.detailError) add("retry")
         add("close")
     }
@@ -52,10 +68,32 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
                         Text(labels.play())
                     }
                 } else {
+                    recommendation?.let { choice ->
+                        val action = when (choice.kind) {
+                            VodSeriesChoiceKind.RESUME -> labels.seriesResume()
+                            VodSeriesChoiceKind.START -> labels.seriesStart()
+                            VodSeriesChoiceKind.REWATCH -> labels.seriesReplay()
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Button(onClick = { onPlay(VodKind.SERIES, choice.episode.id,
+                                choice.episode.extension, choice.episode.name, chosen.id) },
+                                modifier = focus.target("dialog", "series-recommend", 0)
+                                    .tvFocusIndicator().testTag("vod-series-recommend")) {
+                                Text(action)
+                            }
+                            Text("${labels.seasonEpisode(choice.episode.season, choice.episode.number)} · ${choice.episode.name}",
+                                style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                            if (choice.kind == VodSeriesChoiceKind.RESUME) {
+                                Text("${labels.resume()}: ${labels.position(choice.positionMs)}",
+                                    style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
                     Text(labels.episodes(), style = MaterialTheme.typography.titleMedium)
                     if (!state.detailLoading && state.details?.seasons.isNullOrEmpty()) {
                         Text(if (state.detailError) labels.failed() else labels.empty())
-                        if (state.detailError) TextButton(onClick = onRetry, modifier = focus.target("dialog", "retry", episodes.size)
+                        if (state.detailError) TextButton(onClick = onRetry, modifier = focus.target("dialog", "retry",
+                            episodes.size + if (recommendation != null) 1 else 0)
                             .tvFocusIndicator()) { Text(labels.tryAgain()) }
                     }
                     LazyColumn(Modifier.weight(1f, fill = false), state = list, verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -68,12 +106,22 @@ internal fun VodDetailsDialog(state: VodUiState, chosen: VodItem, labels: VodLab
                                 OutlinedButton(onClick = {
                                     onPlay(VodKind.SERIES, episode.id, episode.extension, episode.name, chosen.id)
                                 }, modifier = Modifier.fillMaxWidth().then(focus.target("dialog", "episode:${season.number}:${episode.id}",
-                                    episodes.indexOf("episode:${season.number}:${episode.id}"))).tvFocusIndicator()
+                                    episodes.indexOf("episode:${season.number}:${episode.id}") +
+                                        if (recommendation != null) 1 else 0)).tvFocusIndicator()
                                     .testTag("vod-episode-${episode.id}")) {
-                                    val position = VodProgress.find(progress, VodKind.SERIES, episode.id)
+                                    val position = progress.firstOrNull {
+                                        it.kind == VodKind.SERIES && it.seriesId == chosen.id &&
+                                            it.id == episode.id && VodProgress.resumable(it)
+                                    }
+                                    val isWatched = episode.id in watched
+                                    val isResumable = episode.id in progressFractions && !isWatched
                                     Text(buildString {
                                         append("${episode.number}. ${episode.name}")
-                                        if (position != null) append("  •  ${labels.resume()} ${labels.position(position.positionMs)}")
+                                        when {
+                                            isResumable -> append("  •  ${labels.seriesResume()} ${labels.position(position?.positionMs ?: 0L)}")
+                                            isWatched -> append("  •  ${labels.watched()}")
+                                            else -> Unit // Preserve the existing episode title and UI test semantics.
+                                        }
                                     }, maxLines = 2)
                                 }
                             }

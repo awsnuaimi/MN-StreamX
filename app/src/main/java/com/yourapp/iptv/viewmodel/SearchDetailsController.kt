@@ -1,6 +1,7 @@
 package com.yourapp.iptv.viewmodel
 
 import com.yourapp.iptv.domain.model.*
+import com.yourapp.iptv.domain.profile.ProfileScope
 import com.yourapp.iptv.domain.repository.UnifiedSearchRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +20,8 @@ internal class SearchDetailsController(private val scope: CoroutineScope,
         val account = source ?: return
         job?.cancel()
         val token = ++request
-        mutable.value = VodUiState(kind = kind, loading = false, selected = item, detailLoading = true)
+        mutable.value = VodUiState(kind = kind, loading = false, selected = item,
+            detailLoading = true, sourceKey = ProfileScope.of(account))
         job = scope.launch {
             try {
                 val details = repository.details(account, kind, item)

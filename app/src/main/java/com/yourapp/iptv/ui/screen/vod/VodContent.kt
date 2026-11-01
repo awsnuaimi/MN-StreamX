@@ -29,7 +29,8 @@ internal data class VodActions(val back: () -> Unit, val refresh: () -> Unit, va
 internal fun vodPosterContext(category: String?, query: String) = "posters:${category?.length ?: -1}:$category:$query"
 
 @Composable
-internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, labels: VodLabels, actions: VodActions) {
+internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, labels: VodLabels,
+    actions: VodActions, completed: List<VodCompletedEpisode> = emptyList()) {
     var lastSource by rememberSaveable(state.kind) { mutableStateOf<String?>(null) }
     val focus = rememberContextFocus("vod:${state.kind}:${state.sourceKey ?: lastSource}")
     SideEffect { if (state.sourceKey != null) lastSource = state.sourceKey }
@@ -165,7 +166,8 @@ internal fun VodContent(state: VodUiState, progress: List<VodProgressEntry>, lab
             }
         }
         state.selected?.let { selected ->
-            VodDetailsDialog(state, selected, labels, progress, actions.close, actions.retryDetails, actions.play)
+            VodDetailsDialog(state, selected, labels, progress, actions.close, actions.retryDetails,
+                completed = completed, onPlay = actions.play)
         }
     }
 }
