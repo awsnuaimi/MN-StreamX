@@ -55,22 +55,16 @@ internal fun VodPosterCard(item: VodItem, modifier: Modifier = Modifier,
                         Text("▶", color = colors.primary, style = MaterialTheme.typography.displaySmall)
                     }
                 }
-                item.year?.takeIf { it.isNotBlank() }?.let { year ->
-                    Surface(Modifier.align(Alignment.BottomStart).padding(5.dp),
-                        color = colors.surfaceContainerLowest.copy(alpha = .93f),
-                        shape = RoundedCornerShape(5.dp)) {
-                        Text(year, Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                            color = colors.onSurface, style = MaterialTheme.typography.labelSmall)
-                    }
-                }
             }
         }
-        Text(item.name, Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp),
+        Text(item.name, Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp)
+            .heightIn(min = 38.dp),
             style = MaterialTheme.typography.labelLarge, color = colors.onSurface,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
-        item.year?.takeIf { it.isNotBlank() }?.let {
-            Text(it, Modifier.padding(start = 2.dp), style = MaterialTheme.typography.labelSmall,
-                color = colors.onSurfaceVariant)
-        }
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
+        val metadata = listOfNotNull(item.year?.takeIf(String::isNotBlank),
+            item.rating?.takeIf(String::isNotBlank)?.let { "★ $it" }).joinToString(" · ")
+        if (metadata.isNotEmpty()) Text(metadata, Modifier.padding(start = 2.dp, end = 2.dp),
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
     }
 }

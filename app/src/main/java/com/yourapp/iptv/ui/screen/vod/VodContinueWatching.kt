@@ -44,7 +44,7 @@ internal fun VodContinueWatching(entries: List<VodProgressEntry>, labels: VodLab
                     poster?.let { ImageRequest.Builder(context).data(it).size(110, 160).build() }
                 }
                 Surface(onClick = { focus?.record("continued", keys[index], index); onPlay(entry) },
-                    modifier = Modifier.width(224.dp).height(94.dp)
+                    modifier = Modifier.width(242.dp).height(108.dp)
                         .then(focus?.target("continued", keys[index], index) ?: Modifier)
                         .tvFocusIndicator().onFocusChanged { focused = it.isFocused },
                     color = if (focused) colors.primaryContainer else colors.surfaceContainerLow,
@@ -52,16 +52,17 @@ internal fun VodContinueWatching(entries: List<VodProgressEntry>, labels: VodLab
                     shape = RoundedCornerShape(11.dp)) {
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                         if (request != null) AsyncImage(model = request, contentDescription = null,
-                            modifier = Modifier.width(63.dp).fillMaxHeight(), contentScale = ContentScale.Crop)
-                        Column(Modifier.weight(1f).padding(vertical = 10.dp, horizontal = 6.dp),
+                            modifier = Modifier.width(72.dp).fillMaxHeight(), contentScale = ContentScale.Crop)
+                        Column(Modifier.weight(1f).padding(vertical = 9.dp, horizontal = 7.dp),
                             verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Text(entry.title, maxLines = 2, overflow = TextOverflow.Ellipsis,
                                 color = colors.onSurface, style = MaterialTheme.typography.labelMedium)
                             Spacer(Modifier.weight(1f))
                             val fraction = if (entry.durationMs > 0L)
                                 (entry.positionMs.toFloat() / entry.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
-                            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
-                            Text(labels.position(entry.positionMs), color = colors.onSurfaceVariant,
+                            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth().height(5.dp))
+                            Text("${labels.position(entry.positionMs)} / ${labels.position(entry.durationMs)}",
+                                color = colors.onSurfaceVariant,
                                 style = MaterialTheme.typography.labelSmall)
                         }
                     }

@@ -12,6 +12,15 @@ class VodBrowseLayoutTest {
         assertNull(vodSeriesPreviewWidthDp(Float.NaN))
     }
 
+    @Test fun heroIsBoundedAndGrowsOnlyWhenSpaceAllows() {
+        assertEquals(156f, vodMovieHeroHeightDp(320f), 0.001f)
+        assertEquals(156f, vodMovieHeroHeightDp(Float.NaN), 0.001f)
+        assertEquals(184f, vodMovieHeroHeightDp(480f), 0.001f)
+        assertEquals(184f, vodMovieHeroHeightDp(759.9f), 0.001f)
+        assertEquals(208f, vodMovieHeroHeightDp(760f), 0.001f)
+        assertEquals(208f, vodMovieHeroHeightDp(4000f), 0.001f)
+    }
+
     @Test fun wideScreensScalePreviewWithoutStarvingGrid() {
         assertEquals(210f, vodSeriesPreviewWidthDp(680f)!!, 0.001f)
         assertEquals(288f, vodSeriesPreviewWidthDp(960f)!!, 0.001f)

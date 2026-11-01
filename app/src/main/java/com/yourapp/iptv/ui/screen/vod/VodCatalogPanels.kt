@@ -1,6 +1,8 @@
 package com.yourapp.iptv.ui.screen.vod
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -41,32 +44,39 @@ private fun Cover(item: VodItem, modifier: Modifier, size: Int) {
     }
 }
 
-/** A still image only: no video decoder, connection or additional repository call. */
+/** Still image only. The whole hero scrolls away with the lazy catalog header. */
 @Composable
 internal fun VodMovieHero(item: VodItem, labels: VodLabels, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
-    Box(modifier.fillMaxWidth().height(148.dp).clip(RoundedCornerShape(17.dp))
-        .background(colors.surfaceContainerLow).testTag("vod-movie-hero")) {
-        Cover(item, Modifier.fillMaxHeight().fillMaxWidth(.58f).align(Alignment.CenterEnd), 640)
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(
-            colors.surfaceContainerLow, colors.surfaceContainerLow.copy(alpha = .96f),
-            colors.surfaceContainerLow.copy(alpha = .28f), Color.Transparent))))
-        Column(Modifier.fillMaxHeight().fillMaxWidth(.66f).padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(labels.featured(), color = colors.primary, style = MaterialTheme.typography.labelSmall)
-            Text(item.name, style = MaterialTheme.typography.headlineSmall, color = colors.onSurface,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(item.year, item.rating?.let { "★ $it" }).joinToString("  ·  "),
-                color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-            item.plot?.takeIf { it.isNotBlank() }?.let {
-                Text(it, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Spacer(Modifier.weight(1f))
-            Button(onClick = onOpen, modifier = Modifier.height(40.dp).tvFocusIndicator(VodCutShape)
-                .testTag("vod-featured-open"), contentPadding = PaddingValues(horizontal = 18.dp),
-                shape = VodCutShape) {
-                Text(labels.details())
+    BoxWithConstraints(modifier.fillMaxWidth().testTag("vod-movie-hero")) {
+        val compact = maxWidth.value < 480f
+        val spacious = maxWidth.value >= 760f
+        Box(Modifier.fillMaxWidth().height(vodMovieHeroHeightDp(maxWidth.value).dp)
+            .clip(RoundedCornerShape(18.dp)).background(colors.surfaceContainerLow)
+            .border(BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .42f)), RoundedCornerShape(18.dp))) {
+            Cover(item, Modifier.fillMaxHeight().fillMaxWidth(.59f).align(Alignment.CenterEnd), 640)
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(
+                colors.surfaceContainerLow, colors.surfaceContainerLow.copy(alpha = .98f),
+                colors.surfaceContainerLow.copy(alpha = .40f), Color.Transparent))))
+            Column(Modifier.fillMaxHeight().fillMaxWidth(if (compact) .78f else .65f)
+                .padding(horizontal = if (compact) 14.dp else 22.dp, vertical = 13.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(labels.featured(), color = colors.primary, style = MaterialTheme.typography.labelMedium)
+                Text(item.name, style = if (compact) MaterialTheme.typography.titleMedium
+                    else MaterialTheme.typography.headlineSmall, color = colors.onSurface,
+                    maxLines = if (spacious) 2 else 1, overflow = TextOverflow.Ellipsis)
+                val details = listOfNotNull(item.year?.takeIf(String::isNotBlank),
+                    item.rating?.takeIf(String::isNotBlank)?.let { "★ $it" }).joinToString("  ·  ")
+                if (details.isNotEmpty()) Text(details, color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                item.plot?.takeIf { !compact && it.isNotBlank() }?.let {
+                    Text(it, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.weight(1f))
+                Button(onClick = onOpen, modifier = Modifier.height(40.dp).tvFocusIndicator(VodCutShape)
+                    .testTag("vod-featured-open"), contentPadding = PaddingValues(horizontal = 18.dp),
+                    shape = VodCutShape) { Text(labels.details()) }
             }
         }
     }
@@ -77,19 +87,21 @@ internal fun VodMovieHero(item: VodItem, labels: VodLabels, onOpen: () -> Unit, 
 internal fun VodSeriesPreview(item: VodItem?, progress: List<VodProgressEntry>, labels: VodLabels,
     onOpen: (VodItem) -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
-    Column(modifier.clip(RoundedCornerShape(18.dp)).background(colors.surfaceContainerLow)
-        .testTag("vod-series-preview")) {
+    Column(modifier.clip(RoundedCornerShape(18.dp))
+        .background(colors.surfaceContainerLow)
+        .border(BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .45f)), RoundedCornerShape(18.dp))
+        .testTag("vod-series-preview").verticalScroll(rememberScrollState())) {
         if (item == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().heightIn(min = 200.dp), contentAlignment = Alignment.Center) {
                 Text(labels.empty(), color = colors.onSurfaceVariant)
             }
         } else {
-            Box(Modifier.fillMaxWidth().height(130.dp)) {
+            Box(Modifier.fillMaxWidth().height(160.dp)) {
                 Cover(item, Modifier.fillMaxSize(), 512)
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(
                     Color.Transparent, colors.surfaceContainerLow.copy(alpha = .25f), colors.surfaceContainerLow))))
             }
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(item.name, style = MaterialTheme.typography.headlineSmall, color = colors.onSurface,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -100,8 +112,9 @@ internal fun VodSeriesPreview(item: VodItem?, progress: List<VodProgressEntry>, 
                         maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 // A saved episode can belong to this series; never show progress for another series.
-                val last = progress.firstOrNull { it.kind == VodKind.SERIES &&
+                val last = progress.filter { it.kind == VodKind.SERIES &&
                     it.seriesId == item.id && VodProgress.resumable(it) }
+                    .maxByOrNull { it.updatedAtMs }
                 if (last != null) {
                     Text("${labels.resume()}: ${last.title}", color = colors.onSurfaceVariant,
                         style = MaterialTheme.typography.labelMedium, maxLines = 1)

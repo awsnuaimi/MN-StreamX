@@ -9,3 +9,10 @@ internal fun vodSeriesPreviewWidthDp(availableDp: Float): Float? {
     if (!availableDp.isFinite() || availableDp < 680f) return null
     return (availableDp * 0.30f).coerceIn(210f, 340f)
 }
+
+/** Hero belongs to the lazy catalog header; height stays bounded on compact TVs. */
+internal fun vodMovieHeroHeightDp(availableDp: Float): Float = when {
+    !availableDp.isFinite() || availableDp < 480f -> 156f
+    availableDp < 760f -> 184f
+    else -> 208f
+}
