@@ -27,4 +27,24 @@ class VodBrowseLayoutTest {
         assertEquals(340f, vodSeriesPreviewWidthDp(1400f)!!, 0.001f)
         assertEquals(340f, vodSeriesPreviewWidthDp(5000f)!!, 0.001f)
     }
+
+    @Test fun toolbarKeepsActionsInlineWhenThereIsRoom() {
+        assertEquals(VodToolbarMode.WIDE, vodToolbarMode(760f))
+        assertEquals(VodToolbarMode.WIDE, vodToolbarMode(960f))
+        assertEquals(VodToolbarMode.WIDE, vodToolbarMode(3840f))
+    }
+
+    @Test fun toolbarStacksActionsOnCompactScreens() {
+        assertEquals(VodToolbarMode.STACKED, vodToolbarMode(430f))
+        assertEquals(VodToolbarMode.STACKED, vodToolbarMode(600f))
+        assertEquals(VodToolbarMode.STACKED, vodToolbarMode(759.9f))
+    }
+
+    @Test fun veryNarrowOrInvalidWidthsUseThreeRows() {
+        assertEquals(VodToolbarMode.NARROW, vodToolbarMode(320f))
+        assertEquals(VodToolbarMode.NARROW, vodToolbarMode(429.9f))
+        assertEquals(VodToolbarMode.NARROW, vodToolbarMode(Float.NaN))
+        assertEquals(VodToolbarMode.NARROW, vodToolbarMode(Float.POSITIVE_INFINITY))
+        assertEquals(VodToolbarMode.NARROW, vodToolbarMode(-100f))
+    }
 }

@@ -16,3 +16,12 @@ internal fun vodMovieHeroHeightDp(availableDp: Float): Float = when {
     availableDp < 760f -> 184f
     else -> 208f
 }
+
+/** Layout decisions do not depend on Android APIs and can be regression-tested on the JVM. */
+internal enum class VodToolbarMode { WIDE, STACKED, NARROW }
+
+internal fun vodToolbarMode(availableDp: Float): VodToolbarMode = when {
+    !availableDp.isFinite() || availableDp < 430f -> VodToolbarMode.NARROW
+    availableDp < 760f -> VodToolbarMode.STACKED
+    else -> VodToolbarMode.WIDE
+}
