@@ -157,7 +157,8 @@ internal class ContextFocus(val bookmarks: FocusBookmarks) {
                 request(context, place = previous.place)
             }
             if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && active?.context == context && pending == null) {
-                keys.indexOf(active.key).takeIf { it >= 0 }?.let { bookmarks.record(context, active.key, it) }
+                val index = FocusBookmarks.locate(keys, active.key, bookmarks.get(context)?.index)
+                if (index >= 0) bookmarks.record(context, active.key, index)
             }
             previous.ready = ready
             previous.place = bookmarks.get(context)

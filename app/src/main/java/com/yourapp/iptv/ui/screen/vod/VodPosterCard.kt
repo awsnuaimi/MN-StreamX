@@ -28,6 +28,10 @@ internal fun VodPosterCard(item: VodItem, modifier: Modifier = Modifier,
     var focused by remember { mutableStateOf(false) }
     val bring = remember { BringIntoViewRequester() }
     LaunchedEffect(focused) { if (focused) bring.bringIntoView() }
+    val metadata = remember(item.year, item.rating) {
+        listOfNotNull(item.year?.takeIf(String::isNotBlank),
+            item.rating?.takeIf(String::isNotBlank)?.let { "★ $it" }).joinToString(" · ")
+    }
     val colors = MaterialTheme.colorScheme
     val context = LocalContext.current
     val image = remember(context, item.poster) {
@@ -61,8 +65,6 @@ internal fun VodPosterCard(item: VodItem, modifier: Modifier = Modifier,
             .heightIn(min = 38.dp),
             style = MaterialTheme.typography.labelLarge, color = colors.onSurface,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
-        val metadata = listOfNotNull(item.year?.takeIf(String::isNotBlank),
-            item.rating?.takeIf(String::isNotBlank)?.let { "★ $it" }).joinToString(" · ")
         if (metadata.isNotEmpty()) Text(metadata, Modifier.padding(start = 2.dp, end = 2.dp),
             maxLines = 1, overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)

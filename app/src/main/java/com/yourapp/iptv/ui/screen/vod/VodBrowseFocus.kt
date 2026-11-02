@@ -14,6 +14,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yourapp.iptv.domain.model.VodItem
+import com.yourapp.iptv.domain.performance.PerformanceJournal
+import com.yourapp.iptv.domain.performance.PerformanceOutcome
+import com.yourapp.iptv.domain.performance.PerformanceStage
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import com.yourapp.iptv.ui.component.common.*
 import com.yourapp.iptv.viewmodel.VodUiState
 
@@ -22,11 +27,14 @@ import com.yourapp.iptv.viewmodel.VodUiState
 internal fun VodCategories(state: VodUiState, labels: VodLabels, focus: ContextFocus, posters: String,
     modifier: Modifier, onPick: (String?) -> Unit) {
     val list = rememberLazyListState()
-    val choices = buildList {
-        if (!state.catalog.categoryScoped) add(Triple("all", labels.allShort(), null))
-        state.catalog.categories.forEach { add(Triple("category:${it.id}", it.name, it.id)) }
+    val choices = remember(state.catalog.categories, state.catalog.categoryScoped, labels.language) {
+        buildList {
+            if (!state.catalog.categoryScoped) add(Triple("all", labels.allShort(), null))
+            state.catalog.categories.forEach { add(Triple("category:${it.id}", it.name, it.id)) }
+        }
     }
-    focus.Restore("categories", choices.map { it.first }, scrollTo = { list.scrollToItem(it) })
+    val categoryKeys = remember(choices) { choices.map { it.first } }
+    focus.Restore("categories", categoryKeys, scrollTo = { list.scrollToItem(it) })
     LazyRow(state = list, modifier = modifier.onPreviewKeyEvent {
         if (it.key != Key.DirectionDown) false else {
             if (it.type == KeyEventType.KeyDown) focus.request(posters)
@@ -63,6 +71,22 @@ internal fun VodPosterGrid(items: List<VodItem>, focus: ContextFocus, context: S
     onPick: (Int, VodItem) -> Unit) {
     val list = rememberLazyGridState()
     val keys = remember(items) { items.map { it.id } }
+    // Measures the first laid-out grid cell, not image decoding or the first video frame.
+    // A data/scope change starts a new span. Cancellation never records a false success.
+    val layoutStart = remember(context, items) { PerformanceJournal.recorder.now() }
+    LaunchedEffect(context, items) {
+        if (items.isEmpty()) return@LaunchedEffect
+        var completed = false
+        try {
+            snapshotFlow { list.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
+            PerformanceJournal.recorder.recordSince(PerformanceStage.VOD_GRID_LAYOUT, layoutStart)
+            completed = true
+        } catch (cancel: CancellationException) {
+            if (!completed) PerformanceJournal.recorder.recordSince(
+                PerformanceStage.VOD_GRID_LAYOUT, layoutStart, PerformanceOutcome.CANCELLED)
+            throw cancel
+        }
+    }
     // Returning from a dialog may target a Continue Watching card whose lazy header
     // has been disposed after scrolling. Bring the header back before restoring focus.
     val pendingContext = focus.pending?.context

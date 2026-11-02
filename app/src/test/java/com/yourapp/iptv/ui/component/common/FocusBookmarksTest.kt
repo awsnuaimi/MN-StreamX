@@ -4,6 +4,32 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FocusBookmarksTest {
+    @Test fun largeUnchangedCatalogRestoresWithoutScanningEveryPoster() {
+        var reads = 0
+        val ids = object : AbstractList<String>() {
+            override val size = 60_000
+            override fun get(index: Int): String {
+                reads++
+                return "poster-$index"
+            }
+        }
+        val place = FocusBookmarks.Place("poster-44000", 44000)
+        assertEquals(44000, FocusBookmarks.resolve(place, ids))
+        assertTrue("Expected direct indexed lookup, got $reads reads", reads <= 2)
+        reads = 0
+        assertEquals(44000, FocusBookmarks.locate(ids, place.key, place.index))
+        assertTrue("Expected direct indexed lookup, got $reads reads", reads <= 2)
+    }
+
+    @Test fun staleIndexStillFindsSamePosterAfterReorder() {
+        val ids = listOf("poster-c", "poster-b", "poster-a")
+        assertEquals(0, FocusBookmarks.locate(ids, "poster-c", 2))
+        assertEquals(1, FocusBookmarks.resolve(FocusBookmarks.Place("poster-b", 0), ids))
+        assertEquals(2, FocusBookmarks.resolve(FocusBookmarks.Place("deleted", 2), ids))
+        assertEquals(0, FocusBookmarks.resolve(FocusBookmarks.Place("poster-b", 1), ids, "poster-c"))
+        assertEquals(-1, FocusBookmarks.locate(ids, "missing", 1))
+    }
+
     @Test fun exactIdentitySurvivesReordering() {
         val memory = FocusBookmarks()
         memory.record("films", "b", 1)
@@ -60,5 +86,4 @@ class FocusBookmarksTest {
         focus.bookmarks.record("films", "temporary", 8)
         assertEquals(2, FocusBookmarks.resolve(focus.pending?.place, listOf("a", "b", "original", "temporary")))
     }
-
 }
