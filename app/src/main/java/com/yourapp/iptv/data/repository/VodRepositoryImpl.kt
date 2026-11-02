@@ -3,6 +3,7 @@ package com.yourapp.iptv.data.repository
 import android.content.Context
 import com.yourapp.iptv.data.cache.VodCatalogCachePolicy
 import com.yourapp.iptv.data.cache.VodCatalogSnapshot
+import com.yourapp.iptv.data.cache.VodSnapshotWriteQueue
 import com.yourapp.iptv.data.source.xtream.XtreamVodDataSource
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.performance.PerformanceJournal
@@ -27,6 +28,10 @@ import kotlinx.coroutines.withContext
 class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context) : VodRepository {
     private val source = XtreamVodDataSource()
     private val disk = VodCatalogSnapshot(context.cacheDir.resolve("vod_catalog_v1"))
+    private var persistSnapshot: suspend (String, VodCatalogSnapshot.Saved) -> Unit = { key, saved ->
+        disk.write(key, saved.catalog, saved.writtenAtMs)
+    }
+    private val writeQueue = VodSnapshotWriteQueue(persist = { key, saved -> persistSnapshot(key, saved) })
     private val memory = LinkedHashMap<String, VodCatalogSnapshot.Saved>(8, .75f, true)
     private val lock = Any()
     private data class Gate(val mutex: Mutex = Mutex(), var users: Int = 0)
@@ -39,6 +44,12 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
     /** Test seam that exercises the real disk/cache/coalescing code without provider access. */
     internal constructor(context: Context, fetch: suspend (AppSettings, VodKind, String?) -> VodCatalog) : this(context) {
         network = fetch
+    }
+
+    /** Allows a blocking synthetic cache writer to verify publication ordering. */
+    internal constructor(context: Context, fetch: suspend (AppSettings, VodKind, String?) -> VodCatalog,
+        persist: suspend (String, VodCatalogSnapshot.Saved) -> Unit) : this(context, fetch) {
+        persistSnapshot = persist
     }
 
     override fun supports(settings: AppSettings) = source.supports(settings)
@@ -97,13 +108,9 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
         }
         val saved = VodCatalogSnapshot.Saved(latest, System.currentTimeMillis())
         remember(key, saved)
-        // Disk storage is optional; it must never prevent a successful provider response.
-        try {
-            PerformanceJournal.measure(PerformanceStage.VOD_CACHE_WRITE) {
-                withContext(Dispatchers.IO) { disk.write(key, latest, saved.writtenAtMs) }
-            }
-        } catch (error: CancellationException) { throw error }
-        catch (_: Exception) { }
+        // Publishing is independent of slow gzip/disk writes. The single bounded
+        // worker persists snapshots in order, including after the screen closes.
+        writeQueue.offer(key, saved)
         latest
     }
 

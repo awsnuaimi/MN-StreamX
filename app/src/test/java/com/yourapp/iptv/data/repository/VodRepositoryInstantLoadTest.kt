@@ -12,6 +12,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -124,4 +125,26 @@ class VodRepositoryInstantLoadTest {
             assertEquals(1, calls)
         }
     }
+
+    @Test fun providerResultsArePublishedBeforeSlowCachePersistenceFinishes() = withDisk { _, context ->
+        val writing = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val repo = VodRepositoryImpl(context, fetch = { _, _, _ ->
+            VodCatalog(emptyList(), listOf(VodItem("99", "Available", null)))
+        }, persist = { _, _ ->
+            writing.complete(Unit)
+            release.await()
+        })
+        try {
+            runBlocking {
+                val loaded = withTimeout(5_000) { repo.catalog(account, VodKind.MOVIE) }
+                assertEquals("99", loaded.items.single().id)
+                withTimeout(5_000) { writing.await() }
+                // The cache writer is still blocked; the library is already usable.
+                assertFalse(release.isCompleted)
+                assertEquals("99", repo.catalog(account, VodKind.MOVIE).items.single().id)
+            }
+        } finally { release.complete(Unit) }
+    }
+
 }
