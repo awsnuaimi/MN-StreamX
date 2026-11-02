@@ -5,6 +5,8 @@ import com.yourapp.iptv.data.cache.VodCatalogCachePolicy
 import com.yourapp.iptv.data.cache.VodCatalogSnapshot
 import com.yourapp.iptv.data.source.xtream.XtreamVodDataSource
 import com.yourapp.iptv.domain.model.*
+import com.yourapp.iptv.domain.performance.PerformanceJournal
+import com.yourapp.iptv.domain.performance.PerformanceStage
 import com.yourapp.iptv.domain.repository.VodLoad
 import com.yourapp.iptv.domain.repository.VodRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -90,12 +92,17 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
         if (!force) read(key)?.takeIf {
             VodCatalogCachePolicy.fresh(it.writtenAtMs, System.currentTimeMillis())
         }?.let { return@gated it.catalog }
-        val latest = network(settings, kind, category)
+        val latest = PerformanceJournal.measure(PerformanceStage.VOD_PROVIDER_FETCH) {
+            network(settings, kind, category)
+        }
         val saved = VodCatalogSnapshot.Saved(latest, System.currentTimeMillis())
         remember(key, saved)
         // Disk storage is optional; it must never prevent a successful provider response.
-        try { withContext(Dispatchers.IO) { disk.write(key, latest, saved.writtenAtMs) } }
-        catch (error: CancellationException) { throw error }
+        try {
+            PerformanceJournal.measure(PerformanceStage.VOD_CACHE_WRITE) {
+                withContext(Dispatchers.IO) { disk.write(key, latest, saved.writtenAtMs) }
+            }
+        } catch (error: CancellationException) { throw error }
         catch (_: Exception) { }
         latest
     }
@@ -113,14 +120,15 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
         }
     }
 
-    private suspend fun read(key: String): VodCatalogSnapshot.Saved? {
-        synchronized(lock) { memory[key] }?.let { return it }
-        val saved = try { withContext(Dispatchers.IO) { disk.read(key) } }
-        catch (error: CancellationException) { throw error }
-        catch (_: Exception) { null } ?: return null
-        remember(key, saved)
-        return saved
-    }
+    private suspend fun read(key: String): VodCatalogSnapshot.Saved? =
+        PerformanceJournal.measure(PerformanceStage.VOD_CACHE_READ) {
+            synchronized(lock) { memory[key] }?.let { return@measure it }
+            val saved = try { withContext(Dispatchers.IO) { disk.read(key) } }
+            catch (error: CancellationException) { throw error }
+            catch (_: Exception) { null } ?: return@measure null
+            remember(key, saved)
+            saved
+        }
 
     private fun remember(key: String, saved: VodCatalogSnapshot.Saved) = synchronized(lock) {
         memory[key] = saved

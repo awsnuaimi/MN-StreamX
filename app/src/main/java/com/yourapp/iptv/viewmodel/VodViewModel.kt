@@ -8,8 +8,12 @@ import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.repository.SettingsRepository
 import com.yourapp.iptv.domain.repository.VodRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.yourapp.iptv.domain.performance.PerformanceJournal
+import com.yourapp.iptv.domain.performance.PerformanceOutcome
+import com.yourapp.iptv.domain.performance.PerformanceStage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
@@ -62,6 +66,8 @@ class VodViewModel @Inject constructor(
     private var catalogJob: Job? = null
     private var categoryJob: Job? = null
     private var detailsJob: Job? = null
+    private var warmupJob: Job? = null
+    private val warmupAttempted = linkedSetOf<String>()
     private var visibleJob: Job? = null
     private var visibleRequest = 0L
     private var loadedKind: VodKind? = null
@@ -73,6 +79,8 @@ class VodViewModel @Inject constructor(
     fun load(kind: VodKind, refresh: Boolean = false) {
         if (!refresh && loadedKind == kind && catalogJob?.isActive == true) return
         catalogJob?.cancel()
+        warmupJob?.cancel()
+        warmupAttempted.clear()
         cancelSelection()
         cancelVisible()
         loadedKind = kind
@@ -82,6 +90,7 @@ class VodViewModel @Inject constructor(
                 settings.observeSettings().distinctUntilChangedBy(ProfileScope::of).collectLatest { source ->
                     cancelSelection()
                     cancelVisible()
+                    warmupAttempted.clear()
                     val current = ++generation
                     account = source
                     mutable.value = VodUiState(kind = kind, sourceKey = ProfileScope.of(source))
@@ -89,10 +98,16 @@ class VodViewModel @Inject constructor(
                         mutable.value = mutable.value.copy(loading = false, unavailable = true)
                         return@collectLatest
                     }
+                    val catalogStart = PerformanceJournal.recorder.now()
+                    var measuredCatalog = false
                     try {
                         repository.catalogUpdates(source, kind, force = refresh).collect { event ->
                             currentCoroutineContext().ensureActive()
                             if (current != generation) return@collect
+                            if (!measuredCatalog) {
+                                PerformanceJournal.recorder.recordSince(PerformanceStage.VOD_CATALOG_READY, catalogStart)
+                                measuredCatalog = true
+                            }
                             val state = mutable.value
                             val catalog = event.value
                             // Updating category metadata must not discard an active category's items.
@@ -113,8 +128,13 @@ class VodViewModel @Inject constructor(
                                 catalog.categories.firstOrNull()?.let { filter(it.id, retry = refresh) }
                             }
                         }
-                    } catch (error: CancellationException) { throw error }
-                    catch (error: Exception) {
+                    } catch (error: CancellationException) {
+                        if (!measuredCatalog) PerformanceJournal.recorder.recordSince(
+                            PerformanceStage.VOD_CATALOG_READY, catalogStart, PerformanceOutcome.CANCELLED)
+                        throw error
+                    } catch (error: Exception) {
+                        if (!measuredCatalog) PerformanceJournal.recorder.recordSince(
+                            PerformanceStage.VOD_CATALOG_READY, catalogStart, PerformanceOutcome.FAILED)
                         DiagnosticFailures.record(if (kind == VodKind.MOVIE) DiagnosticArea.MOVIE_CATALOG else DiagnosticArea.SERIES_CATALOG,error,PlaylistCacheKey.of(source))
                         if (current == generation) {
                             val existing = mutable.value
@@ -139,6 +159,7 @@ class VodViewModel @Inject constructor(
         val category = state.catalog.categories.firstOrNull { it.id == categoryId } ?: return
         if (!retry && state.categoryId == category.id && !state.categoryError) return
         categoryJob?.cancel()
+        warmupJob?.cancel()
         close()
         val request = ++categoryRequest
         val current = generation
@@ -146,24 +167,58 @@ class VodViewModel @Inject constructor(
             categoryError = false, categoryRefreshError = false, categoryRefreshing = false,
             catalog = state.catalog.copy(items = emptyList())))
         categoryJob = viewModelScope.launch {
+            val categoryStart = PerformanceJournal.recorder.now()
+            var measuredCategory = false
             try {
                 repository.categoryUpdates(source, state.kind, category.id, force = retry).collect { event ->
                     currentCoroutineContext().ensureActive()
                     if (current == generation && request == categoryRequest) {
+                        if (!measuredCategory) {
+                            PerformanceJournal.recorder.recordSince(PerformanceStage.VOD_CATEGORY_READY, categoryStart)
+                            measuredCategory = true
+                        }
                         updateVisible(mutable.value.copy(categoryLoading = false,
                             categoryRefreshing = event.refreshing,
                             categoryRefreshError = event.refreshFailed,
                             catalog = mutable.value.catalog.copy(items = event.value)))
+                        if (!retry && !event.refreshing && !event.refreshFailed) {
+                            scheduleCategoryWarmup(source, state.kind, category.id, current)
+                        }
                     }
                 }
-            } catch (error: CancellationException) { throw error }
-            catch (error: Exception) {
+            } catch (error: CancellationException) {
+                if (!measuredCategory) PerformanceJournal.recorder.recordSince(
+                    PerformanceStage.VOD_CATEGORY_READY, categoryStart, PerformanceOutcome.CANCELLED)
+                throw error
+            } catch (error: Exception) {
+                if (!measuredCategory) PerformanceJournal.recorder.recordSince(
+                    PerformanceStage.VOD_CATEGORY_READY, categoryStart, PerformanceOutcome.FAILED)
                 DiagnosticFailures.record(if (state.kind == VodKind.MOVIE) DiagnosticArea.MOVIE_CATALOG else DiagnosticArea.SERIES_CATALOG,error,PlaylistCacheKey.of(source))
                 if (current == generation && request == categoryRequest) {
                     mutable.value = mutable.value.copy(categoryLoading = false,
                         categoryRefreshing = false, categoryError = true)
                 }
             }
+        }
+    }
+
+    /** One low-priority neighbour; no work after leaving this profile or category. */
+    private fun scheduleCategoryWarmup(source: AppSettings, kind: VodKind,
+        currentId: String, expectedGeneration: Long) {
+        val target = VodCategoryWarmup.next(mutable.value.catalog.categories,
+            currentId, warmupAttempted) ?: return
+        warmupAttempted.add(target)
+        warmupJob?.cancel()
+        warmupJob = viewModelScope.launch {
+            delay(VodCategoryWarmup.IDLE_DELAY_MS)
+            if (expectedGeneration != generation || account !== source ||
+                mutable.value.kind != kind || mutable.value.categoryId != currentId) return@launch
+            try {
+                PerformanceJournal.measure(PerformanceStage.VOD_CATEGORY_WARMUP) {
+                    repository.category(source, kind, target)
+                }
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { /* Prefetch is optional; user-selected loads still retry. */ }
         }
     }
 
@@ -242,6 +297,7 @@ class VodViewModel @Inject constructor(
     }
 
     private fun cancelSelection() {
+        warmupJob?.cancel()
         categoryJob?.cancel()
         categoryRequest++
         close()

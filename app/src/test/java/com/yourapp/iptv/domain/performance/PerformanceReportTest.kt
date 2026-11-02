@@ -31,6 +31,27 @@ class PerformanceReportTest {
             assertTrue(report.contains("p95=8")); assertTrue(report.toByteArray().size < DiagnosticReport.MAX_BYTES)
         }
     }
+    @Test fun vodMetricsDescribeCacheProviderAndFirstResultsWithoutAccountIdentifiers() {
+        val recorder = PerformanceRecorder()
+        recorder.recordMillis(PerformanceStage.VOD_CACHE_READ, 7)
+        recorder.recordMillis(PerformanceStage.VOD_PROVIDER_FETCH, 125)
+        recorder.recordMillis(PerformanceStage.VOD_CATALOG_READY, 9)
+        recorder.recordMillis(PerformanceStage.VOD_CATEGORY_READY, 12)
+        recorder.recordMillis(PerformanceStage.VOD_CATEGORY_WARMUP, 70)
+        for (language in HomeLanguage.entries) {
+            val report = DiagnosticReport.build(diagnosticSnapshot().copy(performance = recorder.snapshot()),
+                DiagnosticSource.NONE, null, emptyList(), emptyList(), language)
+            assertTrue(report.contains("VOD_CACHE_READ | n=1"))
+            assertTrue(report.contains("VOD_PROVIDER_FETCH | n=1"))
+            assertTrue(report.contains("VOD_CATALOG_READY | n=1"))
+            assertTrue(report.contains("VOD_CATEGORY_READY | n=1"))
+            assertTrue(report.contains("VOD_CATEGORY_WARMUP | n=1"))
+            assertTrue(PerformanceReport.note(language).contains("VOD"))
+            assertFalse(report.contains("synthetic-provider-secret"))
+            assertTrue(report.toByteArray().size < DiagnosticReport.MAX_BYTES)
+        }
+    }
+
     @Test fun invalidAndDuplicateNumericSummariesAreDroppedAndExportsRemainBounded() {
         val valid = PerformanceSummary(PerformanceStage.ACTIVITY_HOME,null,1,1,0,0,5,5,5,5,0)
         val rows = List(1000) { valid.copy(lastMs = Long.MAX_VALUE) } + List(1000) { valid }

@@ -27,12 +27,15 @@ class VodInstantLoadViewModelTest {
     private val pending = CompletableDeferred<Unit>()
     private var forced = 0
     private var scoped = false
+    private val categoryCalls = mutableListOf<Pair<String, String>>()
 
     private val catalog = object : VodRepository {
         override fun supports(settings: AppSettings) = true
         override suspend fun catalog(settings: AppSettings, kind: VodKind): VodCatalog = listing("network")
-        override suspend fun category(settings: AppSettings, kind: VodKind, categoryId: String): List<VodItem> =
-            listOf(VodItem("new-$categoryId", "New", categoryId))
+        override suspend fun category(settings: AppSettings, kind: VodKind, categoryId: String): List<VodItem> {
+            categoryCalls += settings.xtreamUsername to categoryId
+            return listOf(VodItem("new-$categoryId", "New", categoryId))
+        }
         override fun catalogUpdates(settings: AppSettings, kind: VodKind,
             force: Boolean): Flow<VodLoad<VodCatalog>> = flow {
             if (force) forced++ else {
@@ -89,6 +92,25 @@ class VodInstantLoadViewModelTest {
         pending.complete(Unit); runCurrent()
         assertEquals("b", model.uiState.value.categoryId)
         assertEquals("new-b", model.uiState.value.catalog.items.single().id)
+    }
+
+    @Test fun neighbourCategoryIsWarmedOnlyAfterIdleTime() = runTest(dispatcher) {
+        scoped = true
+        val model = model(); model.load(VodKind.SERIES); runCurrent()
+        assertEquals(listOf("one" to "a"), categoryCalls)
+        advanceTimeBy(VodCategoryWarmup.IDLE_DELAY_MS - 1); runCurrent()
+        assertEquals(listOf("one" to "a"), categoryCalls)
+        advanceTimeBy(1); runCurrent()
+        assertEquals(listOf("one" to "a", "one" to "b"), categoryCalls)
+    }
+
+    @Test fun switchingProfileCancelsPreviousCategoryWarmup() = runTest(dispatcher) {
+        scoped = true
+        val model = model(); model.load(VodKind.MOVIE); runCurrent()
+        accounts.values.value = account("two"); runCurrent()
+        advanceTimeBy(VodCategoryWarmup.IDLE_DELAY_MS); runCurrent()
+        assertFalse(categoryCalls.contains("one" to "b"))
+        assertTrue(categoryCalls.contains("two" to "b"))
     }
 
     private fun listing(id: String) = VodCatalog(emptyList(), listOf(VodItem(id, "New", null)))
