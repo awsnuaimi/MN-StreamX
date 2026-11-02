@@ -2,6 +2,8 @@ package com.yourapp.iptv.data.source.xtream
 
 import com.yourapp.iptv.domain.model.VodItem
 import com.yourapp.iptv.domain.model.VodKind
+import com.yourapp.iptv.domain.performance.PerformanceJournal
+import com.yourapp.iptv.domain.performance.PerformanceStage
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.StringReader
@@ -18,6 +20,40 @@ class XtreamVodParserTest {
         assertEquals(1, streams.size)
         assertEquals("mkv", streams.single().extension)
         assertEquals("5", streams.single().categoryId)
+    }
+
+    @Test fun streamingDeduplicationPreservesFirstItemAndCategoryOrder() {
+        val items = XtreamVodParser.items(StringReader("""[
+            {"stream_id":"9","name":"First","category_id":"3","category_ids":["4","3","5"]},
+            {"stream_id":"9","name":"Later","category_id":"7"},
+            {"stream_id":"10","name":"Second","category_id":"5"}
+        ]"""), VodKind.MOVIE) { true }
+        assertEquals(listOf("9", "10"), items.map { it.id })
+        assertEquals("First", items.first().name)
+        assertEquals(listOf("3", "4", "5"), items.first().categoryIds)
+        val categories = XtreamVodParser.categories(StringReader("""[
+            {"category_id":"3","category_name":"Original"},
+            {"category_id":"3","category_name":"Duplicate"},
+            {"category_id":"5","category_name":"Next"}
+        ]""")) { true }
+        assertEquals(listOf("Original", "Next"), categories.map { it.name })
+        assertTrue(PerformanceJournal.snapshot().any { it.stage == PerformanceStage.VOD_JSON_PARSE })
+    }
+
+    @Test fun largeSyntheticCatalogDeduplicatesWithoutChangingTheFirstOccurrence() {
+        val json = buildString {
+            append('[')
+            repeat(3000) { index ->
+                if (index != 0) append(',')
+                append("{\"stream_id\":\"").append(index / 2 + 1)
+                    .append("\",\"name\":\"Movie ").append(index).append("\"}")
+            }
+            append(']')
+        }
+        val result = XtreamVodParser.items(StringReader(json), VodKind.MOVIE) { true }
+        assertEquals(1500, result.size)
+        assertEquals("Movie 0", result.first().name)
+        assertEquals("Movie 2998", result.last().name)
     }
 
     @Test fun errorsAndNonArrayResponsesCannotSilentlyBecomeEmptyCatalogs() {
