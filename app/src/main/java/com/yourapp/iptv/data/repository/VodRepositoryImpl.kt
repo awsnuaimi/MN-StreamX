@@ -122,8 +122,15 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
 
     private suspend fun read(key: String): VodCatalogSnapshot.Saved? =
         PerformanceJournal.measure(PerformanceStage.VOD_CACHE_READ) {
-            synchronized(lock) { memory[key] }?.let { return@measure it }
-            val saved = try { withContext(Dispatchers.IO) { disk.read(key) } }
+            val inMemory = PerformanceJournal.measure(PerformanceStage.VOD_CACHE_MEMORY_LOOKUP) {
+                synchronized(lock) { memory[key] }
+            }
+            inMemory?.let { return@measure it }
+            val saved = try {
+                PerformanceJournal.measure(PerformanceStage.VOD_CACHE_DISK_LOAD) {
+                    withContext(Dispatchers.IO) { disk.read(key) }
+                }
+            }
             catch (error: CancellationException) { throw error }
             catch (_: Exception) { null } ?: return@measure null
             remember(key, saved)

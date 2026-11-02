@@ -10,6 +10,7 @@ import java.io.DataOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.zip.GZIPInputStream
@@ -104,12 +105,20 @@ internal class VodCatalogSnapshot(private val directory: File) {
                     output.flush()
                     zipped.finish()
                     buffered.flush()
-                    stream.fd.sync()
+                    // Disposable cache: close and atomic rename are sufficient. Forcing an
+                    // fsync here stalls large-library publication on slow TV storage.
                 } finally { output.close() }
             }
             require(temporary.length() in 1..MAX_FILE)
-            Files.move(temporary.toPath(), File(directory, "$key.vod.gz").toPath(),
-                StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            val destination = File(directory, "$key.vod.gz").toPath()
+            try {
+                Files.move(temporary.toPath(), destination,
+                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } catch (_: AtomicMoveNotSupportedException) {
+                // Some Android filesystems cannot guarantee an atomic move. The
+                // temporary file has already been fully closed at this point.
+                Files.move(temporary.toPath(), destination, StandardCopyOption.REPLACE_EXISTING)
+            }
             trim()
         } finally { temporary.delete() }
     }

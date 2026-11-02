@@ -75,4 +75,19 @@ class VodCatalogSnapshotTest {
             assertEquals("Video 5000", restored?.last()?.name)
         } finally { dir.deleteRecursively() }
     }
+    @Test fun replacingASnapshotLeavesOneReadableCacheFileAndNoTemporaryFiles() {
+        val dir = Files.createTempDirectory("synthetic-vod-cache").toFile()
+        try {
+            val store = VodCatalogSnapshot(dir)
+            val id = key("replacement")
+            val first = VodCatalog(emptyList(), listOf(VodItem("1", "Old", null)))
+            val newer = VodCatalog(emptyList(), listOf(VodItem("2", "New", null)))
+            store.write(id, first, 100)
+            store.write(id, newer, 200)
+            assertEquals(newer, store.read(id)?.catalog)
+            assertEquals(200L, store.read(id)?.writtenAtMs)
+            assertEquals(listOf("$id.vod.gz"), dir.list()?.sorted())
+        } finally { dir.deleteRecursively() }
+    }
+
 }

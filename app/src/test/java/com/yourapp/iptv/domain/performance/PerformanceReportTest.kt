@@ -34,6 +34,8 @@ class PerformanceReportTest {
     @Test fun vodMetricsDescribeCacheProviderAndFirstResultsWithoutAccountIdentifiers() {
         val recorder = PerformanceRecorder()
         recorder.recordMillis(PerformanceStage.VOD_CACHE_READ, 7)
+        recorder.recordMillis(PerformanceStage.VOD_CACHE_MEMORY_LOOKUP, 1)
+        recorder.recordMillis(PerformanceStage.VOD_CACHE_DISK_LOAD, 6)
         recorder.recordMillis(PerformanceStage.VOD_PROVIDER_FETCH, 125)
         recorder.recordMillis(PerformanceStage.VOD_CATALOG_READY, 9)
         recorder.recordMillis(PerformanceStage.VOD_CATEGORY_READY, 12)
@@ -42,6 +44,8 @@ class PerformanceReportTest {
             val report = DiagnosticReport.build(diagnosticSnapshot().copy(performance = recorder.snapshot()),
                 DiagnosticSource.NONE, null, emptyList(), emptyList(), language)
             assertTrue(report.contains("VOD_CACHE_READ | n=1"))
+            assertTrue(report.contains("VOD_CACHE_MEMORY_LOOKUP | n=1"))
+            assertTrue(report.contains("VOD_CACHE_DISK_LOAD | n=1"))
             assertTrue(report.contains("VOD_PROVIDER_FETCH | n=1"))
             assertTrue(report.contains("VOD_CATALOG_READY | n=1"))
             assertTrue(report.contains("VOD_CATEGORY_READY | n=1"))

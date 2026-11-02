@@ -31,7 +31,7 @@ internal class XtreamVodDataSource(
         val folders = categoryResult.getOrNull().orEmpty()
         when {
             items.isNotEmpty() -> VodCatalog(folders.ifEmpty {
-                items.flatMap { it.categoryIds }.distinct().map { VodCategory(it, it) }
+                VodCategoryFallback.fromItems(items)
             }, items, categoriesUnavailable = categoryResult.isFailure)
             folders.isNotEmpty() -> VodCatalog(folders, emptyList(), categoryScoped = true)
             itemResult.isFailure -> throw itemResult.exceptionOrNull()!!
