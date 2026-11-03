@@ -37,11 +37,11 @@ def locate_json(output):
             data = json.loads(file.read_text(encoding="utf-8"))
         except (ValueError, OSError, UnicodeError):
             continue
-        if isinstance(data, dict) and isinstance(data.get("benchmarks"), list):
+        if isinstance(data, dict) and isinstance(data.get("benchmarks"), list) and data["benchmarks"]:
             candidates.append(file)
     if not candidates:
         raise RuntimeError("No AndroidX benchmark JSON found. Inspect test output and device logs.")
-    return max(candidates, key=lambda path: path.stat().st_mtime)
+    return max(candidates, key=lambda path: (path.stat().st_mtime_ns, str(path)))
 
 
 def run(args):
