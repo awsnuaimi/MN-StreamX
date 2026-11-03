@@ -52,7 +52,8 @@ android {
         applicationId 'com.yourapp.iptv'
         minSdk 29
         targetSdk 35
-        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        // AndroidX Microbenchmark needs its dedicated instrumentation runner.
+        testInstrumentationRunner 'androidx.benchmark.junit4.AndroidBenchmarkRunner'
         versionCode updateVersionCode.toInteger()
         versionName updateVersionName
         buildConfigField 'String', 'UPDATE_REPOSITORY', '"' + updateRepository + '"'
@@ -79,6 +80,11 @@ android {
             }
         }
     }
+    // Generate the androidTest variant against the non-debuggable benchmark app.
+    // Without this, AGP creates the instrumentation variant only for debug and
+    // compileBenchmarkAndroidTestKotlin does not exist.
+    testBuildType 'benchmark'
+
     buildTypes {
         debug {
             if (stableSigningReady) signingConfig signingConfigs.stable
