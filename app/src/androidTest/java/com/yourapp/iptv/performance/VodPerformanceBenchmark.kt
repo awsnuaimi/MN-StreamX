@@ -87,6 +87,53 @@ class VodPerformanceBenchmark {
     }
 
     @Test
+    fun restoreFocusAfterCatalogReordering() {
+        val keys = library.map { it.id }
+        val selected = keys[43_210]
+        val reordered = keys.asReversed()
+        val saved = FocusBookmarks.Place(selected, 43_210)
+        val expected = reordered.size - 1 - 43_210
+        check(reordered[expected] == selected)
+
+        benchmarkRule.measureRepeated {
+            check(FocusBookmarks.resolve(saved, reordered) == expected)
+        }
+    }
+
+    @Test
+    fun restoreFocusWhenSelectedTitleWasRemoved() {
+        val keys = library.map { it.id }
+        val selectedIndex = 43_210
+        val saved = FocusBookmarks.Place(keys[selectedIndex], selectedIndex)
+        val remaining = keys.filterIndexed { index, _ -> index != selectedIndex }
+        check(saved.key !in remaining)
+
+        benchmarkRule.measureRepeated {
+            check(FocusBookmarks.resolve(saved, remaining) == selectedIndex)
+        }
+    }
+
+    @Test
+    fun categorySwitchInvalidatesIncrementalSearchCandidates() {
+        val previous = VodCatalogFilter.match(library, "cat-3", "Drama")
+        check(previous.isNotEmpty())
+        benchmarkRule.measureRepeated {
+            val candidates = VodCatalogFilter.refinedCandidates(
+                items = library,
+                category = "cat-4",
+                query = "Drama 1",
+                previousItems = library,
+                previousCategory = "cat-3",
+                previousQuery = "Drama",
+                previousResult = previous
+            )
+            check(candidates === library)
+            val matches = VodCatalogFilter.match(candidates, "cat-4", "Drama 1")
+            check(matches.all { it.belongsTo("cat-4") })
+        }
+    }
+
+    @Test
     fun readCompressedVodSnapshotFromDeviceCache() {
         val snapshot = VodCatalogSnapshot(cacheDirectory)
         val catalog = syntheticCacheCatalog()
