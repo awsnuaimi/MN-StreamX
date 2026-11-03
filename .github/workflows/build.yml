@@ -40,6 +40,9 @@ jobs:
       - name: Test update publishing rules
         run: python -m unittest discover -s .github/scripts -p 'test_*.py'
 
+      - name: Validate benchmark Python tooling
+        run: python -m unittest discover -s tools -p 'test_*.py' -v
+
       - name: Unit tests, lint, and device benchmark compilation
         run: gradle --no-daemon testDebugUnitTest lintDebug :app:compileBenchmarkAndroidTestKotlin
 

@@ -1,21 +1,21 @@
-# MN StreamX — Android TV Benchmark Guide (v35.0.46.0)
+# MN StreamX — Android TV Benchmark Guide (v35.0.46.1)
 
-## Scope
+## What is measured
 
-The eight `VodPerformanceBenchmark.kt` instrumentation tests measure isolated operations using synthetic data. They cover VOD filtering, incremental search, focus bookmark resolution (unchanged/reordered/removed selection), category switching, and compressed VOD cache reads/writes.
+`app/src/androidTest/java/com/yourapp/iptv/performance/VodPerformanceBenchmark.kt` contains eight AndroidX microbenchmarks using synthetic VOD data: filtering, incremental search, focus restoration for stable/reordered/removed items, category switching, and compressed-cache read/write. These are operation-level measurements. They **do not** measure real remote-button latency, Compose frame timing, app startup, memory usage, or playback quality.
 
-**Not measured:** actual DPAD-to-focus latency, Compose frame times, application startup, playback quality, or total memory usage. Successful GitHub Actions compilation is **not** evidence that benchmarks ran on an Android TV device.
+GitHub Actions compiles the benchmark tests but **does not run them on a TV**. Its Python test step validates the report, comparison, and device-runner scripts offline.
 
-## Prerequisites
+## Requirements
 
-- A physical Android TV device with Developer options and USB or wireless debugging enabled.
-- A computer with Android SDK (`adb`), JDK 17, Gradle 8.7, and the Android SDK components required by the repository.
-- The checked-out MN StreamX repository and a working device connection.
-- A stable test environment: keep the TV awake, close unrelated apps, and avoid comparing measurements taken under very different thermal conditions.
+- Physical Android TV with developer options and ADB debugging enabled; connect it to a computer.
+- Android SDK with `adb`, JDK 17, Gradle 8.7 and the Android SDK packages required by the project.
+- Checked-out MN StreamX source; run all commands from the repository root.
+- Prefer a single authorized ADB device. Keep the TV awake and thermal conditions similar between runs.
 
-The repository's CI uses a system `gradle` command; the archive may not contain a Gradle wrapper (`gradlew`).
+The GitHub workflow uses the system `gradle` executable. If your checkout has a working Gradle wrapper, you can substitute `./gradlew` (or `gradlew.bat` on Windows) in manual commands.
 
-## 1. Verify the device
+## 1. Check the connected device
 
 ```sh
-adb devices
+adb devices -l
