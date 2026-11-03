@@ -1,13 +1,13 @@
-# MN StreamX — Android TV Benchmark Guide (v35.0.45.5)
+# MN StreamX — Android TV Benchmark Guide (v35.0.45.6)
 
-The existing `VodPerformanceBenchmark.kt` suite measures eight isolated operations on synthetic VOD data. It does **not** measure Compose frame times, DPAD-to-focus latency, app startup, or memory consumption. GitHub Actions only compiles benchmark tests; a successful APK build is not a device benchmark run.
+The eight `VodPerformanceBenchmark.kt` tests measure **isolated operations** with synthetic data. They do not measure DPAD-to-focus latency, Compose frames, full startup, or memory. GitHub Actions compiles the tests but does not run them on a TV.
 
 ## Run on an Android TV device
 
-1. Enable developer options and USB/wireless debugging on the device.
-2. Install Android SDK platform-tools on the host computer, connect the TV, and run `adb devices`. Confirm the device is listed as `device`.
-3. Keep the TV awake, avoid concurrent workloads, and allow it to cool between runs.
-4. From the project root, with Android SDK and Gradle installed, execute:
+1. Enable developer options and USB/wireless debugging on the TV. Connect the TV to a computer with Android SDK and Gradle installed.
+2. Run `adb devices` and confirm exactly the intended device is listed as `device` (not `unauthorized`). If multiple devices are connected, select the target with `ANDROID_SERIAL`.
+3. Keep the TV awake, close unrelated applications, and run both baseline and candidate builds under similar temperature and power conditions.
+4. From the repository root, run:
 
    ```sh
    gradle --no-daemon :app:connectedBenchmarkAndroidTest
