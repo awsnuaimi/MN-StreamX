@@ -21,8 +21,8 @@ EXPECTED_BENCHMARKS = frozenset({
 })
 
 
-def execute(args, *, check=True, capture=True, env=None):
-    return subprocess.run(args, check=check, text=True, capture=capture, env=env)
+def execute(args, *, check=True, capture=True, env=None, cwd=None):
+    return subprocess.run(args, check=check, text=True, capture=capture, env=env, cwd=cwd)
 
 
 def choose_device(adb, serial):
@@ -80,18 +80,19 @@ def validate_suite(capture):
 def run(args):
     serial = choose_device(args.adb, args.serial)
     output = args.output.resolve()
+    project_root = Path(__file__).resolve().parent.parent
     output.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["ANDROID_SERIAL"] = serial
     print(f"Target device: {serial}", flush=True)
     # Android Gradle Plugin retrieves instrumentation output into build/outputs/connected_android_test_additional_output.
     command = [args.gradle, "--no-daemon", ":app:connectedBenchmarkAndroidTest"]
-    source_dir = Path("app/build/outputs/connected_android_test_additional_output")
+    source_dir = project_root / "app/build/outputs/connected_android_test_additional_output"
     # Remove old captures so a successful run cannot accidentally report stale results.
     from shutil import rmtree
     if source_dir.exists():
         rmtree(source_dir)
-    execute(command, capture=False, env=env)
+    execute(command, capture=False, env=env, cwd=project_root)
     if not source_dir.exists():
         raise RuntimeError(f"No device output directory: {source_dir}. Check instrumentation results.")
     found = locate_json(source_dir)

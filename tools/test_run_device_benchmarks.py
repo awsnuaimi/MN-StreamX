@@ -1,4 +1,3 @@
-
 """Offline tests for the Android TV benchmark capture helper."""
 import importlib.util
 from pathlib import Path
@@ -92,6 +91,23 @@ class RunnerTests(unittest.TestCase):
             ]}), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "duplicate benchmarks"):
                 runner.validate_suite(file)
+
+    def test_runs_gradle_from_project_root_not_callers_directory(self):
+        from argparse import Namespace
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "results"
+            with patch.object(runner, "choose_device", return_value="TV1"), \
+                 patch.object(runner, "execute") as execute, \
+                 patch.object(runner, "locate_json", side_effect=RuntimeError("stop")):
+                # A capture directory is needed to reach the locator.
+                source = Path(runner.__file__).resolve().parent.parent / \
+                    "app/build/outputs/connected_android_test_additional_output"
+                with patch.object(Path, "exists", autospec=True, return_value=True), \
+                     patch("shutil.rmtree"):
+                    with self.assertRaisesRegex(RuntimeError, "stop"):
+                        runner.run(Namespace(adb="adb", serial=None, gradle="gradle", output=output))
+                self.assertEqual(execute.call_args.kwargs["cwd"],
+                                 Path(runner.__file__).resolve().parent.parent)
 
     def test_rejects_missing_results(self):
         with tempfile.TemporaryDirectory() as tmp:
