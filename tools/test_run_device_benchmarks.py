@@ -32,7 +32,7 @@ class RunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
             (folder / "unrelated.json").write_text('{"x": 1}')
-            (folder / "results.json").write_text('{"benchmarks": [{"name": "sample"}]}')
+            (folder / "results.json").write_text('{"benchmarks": [{"name": "sample", "metrics": {"timeNs": {"median": 12345}}}]}')
             self.assertEqual(runner.locate_json(folder).name, "results.json")
 
     def test_rejects_empty_benchmark_capture(self):
@@ -40,6 +40,23 @@ class RunnerTests(unittest.TestCase):
             (Path(tmp) / "empty.json").write_text('{"benchmarks": []}')
             with self.assertRaisesRegex(RuntimeError, "No AndroidX"):
                 runner.locate_json(Path(tmp))
+
+    def test_rejects_capture_without_timing_measurements(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "incomplete.json").write_text(
+                '{"benchmarks": [{"name": "sample"}]}', encoding="utf-8"
+            )
+            with self.assertRaisesRegex(RuntimeError, "No AndroidX"):
+                runner.locate_json(Path(tmp))
+
+    def test_rejects_multiple_valid_captures(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            payload = '{"benchmarks": [{"name": "sample", "metrics": {"timeNs": {"median": 12345}}}]}'
+            (folder / "first.json").write_text(payload, encoding="utf-8")
+            (folder / "second.json").write_text(payload, encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "Found 2 benchmark JSON"):
+                runner.locate_json(folder)
 
     def test_rejects_missing_results(self):
         with tempfile.TemporaryDirectory() as tmp:

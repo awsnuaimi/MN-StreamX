@@ -7,6 +7,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from benchmark_report import parse_results
+
 PACKAGE = "com.yourapp.iptv"
 
 
@@ -37,11 +39,16 @@ def locate_json(output):
             data = json.loads(file.read_text(encoding="utf-8"))
         except (ValueError, OSError, UnicodeError):
             continue
-        if isinstance(data, dict) and isinstance(data.get("benchmarks"), list) and data["benchmarks"]:
+        if isinstance(data, dict) and isinstance(data.get("benchmarks"), list) and parse_results(data):
             candidates.append(file)
     if not candidates:
         raise RuntimeError("No AndroidX benchmark JSON found. Inspect test output and device logs.")
-    return max(candidates, key=lambda path: (path.stat().st_mtime_ns, str(path)))
+    if len(candidates) != 1:
+        raise RuntimeError(
+            f"Found {len(candidates)} benchmark JSON captures; cannot safely select one: "
+            + ", ".join(str(path) for path in sorted(candidates))
+        )
+    return candidates[0]
 
 
 def run(args):
