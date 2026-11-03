@@ -9,11 +9,20 @@ import sys
 
 from benchmark_report import parse_results
 
-PACKAGE = "com.yourapp.iptv"
+EXPECTED_BENCHMARKS = frozenset({
+    "fullCategoryAndSearchFilterOnSixtyThousandTitles",
+    "incrementalSearchRefinesThePreviousResult",
+    "restoreAnUnchangedFocusPositionInSixtyThousandKeys",
+    "restoreFocusAfterCatalogReordering",
+    "restoreFocusWhenSelectedTitleWasRemoved",
+    "categorySwitchInvalidatesIncrementalSearchCandidates",
+    "readCompressedVodSnapshotFromDeviceCache",
+    "writeCompressedVodSnapshotToDeviceCache",
+})
 
 
 def execute(args, *, check=True, capture=True, env=None):
-    return subprocess.run(args, check=check, text=True, capture_output=capture, env=env)
+    return subprocess.run(args, check=check, text=True, capture=capture, env=env)
 
 
 def choose_device(adb, serial):
@@ -51,6 +60,23 @@ def locate_json(output):
     return candidates[0]
 
 
+def validate_suite(capture):
+    """Require a timing measurement for each expected benchmark method."""
+    payload = json.loads(capture.read_text(encoding="utf-8"))
+    rows = parse_results(payload)
+    names = [name.rsplit(".", 1)[-1] for name, _ in rows]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    missing = sorted(EXPECTED_BENCHMARKS.difference(names))
+    if duplicates or missing:
+        problems = []
+        if missing:
+            problems.append("missing benchmarks: " + ", ".join(missing))
+        if duplicates:
+            problems.append("duplicate benchmarks: " + ", ".join(duplicates))
+        raise RuntimeError("Incomplete AndroidX benchmark suite (" + "; ".join(problems) + ")")
+    return rows
+
+
 def run(args):
     serial = choose_device(args.adb, args.serial)
     output = args.output.resolve()
@@ -69,6 +95,7 @@ def run(args):
     if not source_dir.exists():
         raise RuntimeError(f"No device output directory: {source_dir}. Check instrumentation results.")
     found = locate_json(source_dir)
+    validate_suite(found)
     from shutil import copy2
     destination = output / "benchmark-results.json"
     copy2(found, destination)

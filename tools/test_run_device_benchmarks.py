@@ -1,3 +1,4 @@
+
 """Offline tests for the Android TV benchmark capture helper."""
 import importlib.util
 from pathlib import Path
@@ -57,6 +58,40 @@ class RunnerTests(unittest.TestCase):
             (folder / "second.json").write_text(payload, encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "Found 2 benchmark JSON"):
                 runner.locate_json(folder)
+
+    def test_rejects_partial_benchmark_suite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / "partial.json"
+            file.write_text(
+                '{"benchmarks": [{"name": "fullCategoryAndSearchFilterOnSixtyThousandTitles", '
+                '"metrics": {"timeNs": {"median": 100}}}]}', encoding="utf-8"
+            )
+            with self.assertRaisesRegex(RuntimeError, "missing benchmarks"):
+                runner.validate_suite(file)
+
+    def test_accepts_all_eight_benchmarks(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / "complete.json"
+            file.write_text(json.dumps({"benchmarks": [
+                {"name": "com.yourapp.iptv.performance.VodPerformanceBenchmark." + name,
+                 "metrics": {"timeNs": {"median": 100}}}
+                for name in sorted(runner.EXPECTED_BENCHMARKS)
+            ]}), encoding="utf-8")
+            self.assertEqual(len(runner.validate_suite(file)), 8)
+
+    def test_rejects_duplicate_benchmark_names(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / "duplicate.json"
+            names = list(sorted(runner.EXPECTED_BENCHMARKS))
+            names.append(names[0])
+            file.write_text(json.dumps({"benchmarks": [
+                {"name": name, "metrics": {"timeNs": {"median": 100}}}
+                for name in names
+            ]}), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "duplicate benchmarks"):
+                runner.validate_suite(file)
 
     def test_rejects_missing_results(self):
         with tempfile.TemporaryDirectory() as tmp:
