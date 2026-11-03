@@ -116,11 +116,34 @@ class VodViewModel @Inject constructor(
                             val keepFilter = !catalog.categoryScoped && !state.catalog.categoryScoped &&
                                 state.categoryId != null && catalog.categories.any { it.id == state.categoryId }
                             val shown = if (keepCategory) catalog.copy(items = state.catalog.items) else catalog
+                            // A background refresh can replace the catalog while a details dialog is
+                            // open. Keep the selection by stable ID when it still exists, refresh its
+                            // metadata, and close it if the provider removed that item. Otherwise a
+                            // stale dialog could launch playback for a title no longer in this profile.
+                            val previousSelection = state.selected
+                            val refreshedSelection = previousSelection?.let { selected ->
+                                shown.items.firstOrNull { it.id == selected.id }
+                            }
+                            val selectionRemoved = previousSelection != null && refreshedSelection == null
+                            if (selectionRemoved) {
+                                detailsJob?.cancel()
+                                detailRequest++
+                            }
+                            val refreshedDetails = when {
+                                selectionRemoved -> null
+                                refreshedSelection != null && state.details != null ->
+                                    state.details.copy(item = refreshedSelection)
+                                else -> state.details
+                            }
                             val next = state.copy(loading = false, catalog = shown,
                                 refreshing = event.refreshing, refreshError = event.refreshFailed,
                                 categoryId = if (keepCategory || keepFilter) state.categoryId else null,
                                 categoryLoading = if (keepCategory) state.categoryLoading else false,
-                                categoryRefreshing = if (keepCategory) state.categoryRefreshing else false)
+                                categoryRefreshing = if (keepCategory) state.categoryRefreshing else false,
+                                selected = if (selectionRemoved) null else refreshedSelection ?: state.selected,
+                                details = refreshedDetails,
+                                detailLoading = if (selectionRemoved) false else state.detailLoading,
+                                detailError = if (selectionRemoved) false else state.detailError)
                             if (shown.items === state.catalog.items && next.categoryId == state.categoryId) {
                                 mutable.value = next
                             } else updateVisible(next)
@@ -239,14 +262,19 @@ class VodViewModel @Inject constructor(
                 val details = repository.details(source, kind, item)
                 currentCoroutineContext().ensureActive()
                 if (current == generation && request == detailRequest) {
-                    mutable.value = mutable.value.copy(details = details, detailLoading = false)
+                    // The catalog may have refreshed while the details request was in flight.
+                    // Keep the richer response (seasons/episodes) but use the latest catalog item.
+                    val currentItem = mutable.value.selected?.takeIf { it.id == item.id } ?: details.item
+                    mutable.value = mutable.value.copy(
+                        details = details.copy(item = currentItem), detailLoading = false)
                 }
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
                 DiagnosticFailures.record(DiagnosticArea.DETAILS,error,PlaylistCacheKey.of(source))
                 if (current == generation && request == detailRequest) {
+                    val currentItem = mutable.value.selected?.takeIf { it.id == item.id } ?: item
                     mutable.value = mutable.value.copy(detailLoading = false, detailError = true,
-                        details = VodDetails(item))
+                        details = VodDetails(currentItem))
                 }
             }
         }

@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModelStore
 import com.yourapp.iptv.domain.model.*
 import com.yourapp.iptv.domain.repository.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -27,6 +30,8 @@ class VodInstantLoadViewModelTest {
     private val pending = CompletableDeferred<Unit>()
     private var forced = 0
     private var scoped = false
+    private var refreshedCatalog: VodCatalog? = null
+    private var detailsBlock: suspend (VodItem) -> VodDetails = { VodDetails(it) }
     private val categoryCalls = mutableListOf<Pair<String, String>>()
 
     private val catalog = object : VodRepository {
@@ -43,9 +48,9 @@ class VodInstantLoadViewModelTest {
                 emit(VodLoad(old, refreshing = true))
             }
             if (settings.xtreamUsername == "one") pending.await()
-            emit(VodLoad(if (scoped) scopedListing() else listing("new-${settings.xtreamUsername}")))
+            emit(VodLoad(refreshedCatalog ?: if (scoped) scopedListing() else listing("new-${settings.xtreamUsername}")))
         }
-        override suspend fun details(settings: AppSettings, kind: VodKind, item: VodItem) = VodDetails(item)
+        override suspend fun details(settings: AppSettings, kind: VodKind, item: VodItem) = detailsBlock(item)
         override fun playbackUrl(settings: AppSettings, kind: VodKind, id: String, extension: String) = "unused"
     }
 
@@ -92,6 +97,45 @@ class VodInstantLoadViewModelTest {
         pending.complete(Unit); runCurrent()
         assertEquals("b", model.uiState.value.categoryId)
         assertEquals("new-b", model.uiState.value.catalog.items.single().id)
+    }
+
+
+    @Test fun backgroundRefreshClosesSelectionWhenTheSelectedTitleWasRemoved() = runTest(dispatcher) {
+        detailsBlock = { item ->
+            withContext(NonCancellable) { delay(100) }
+            VodDetails(item)
+        }
+        val model = model(); model.load(VodKind.MOVIE); runCurrent()
+        val selected = model.uiState.value.visible.single()
+        model.open(selected); runCurrent()
+        assertEquals(selected.id, model.uiState.value.selected?.id)
+        refreshedCatalog = listing("replacement")
+        pending.complete(Unit); runCurrent()
+        assertEquals("replacement", model.uiState.value.visible.single().id)
+        assertNull(model.uiState.value.selected)
+        assertNull(model.uiState.value.details)
+        assertFalse(model.uiState.value.detailLoading)
+        advanceTimeBy(101); runCurrent()
+        assertNull(model.uiState.value.selected)
+        assertNull(model.uiState.value.details)
+    }
+
+    @Test fun backgroundRefreshKeepsSelectionAndUpdatesItsCatalogMetadataByStableId() = runTest(dispatcher) {
+        detailsBlock = { item ->
+            withContext(NonCancellable) { delay(100) }
+            VodDetails(item)
+        }
+        val model = model(); model.load(VodKind.MOVIE); runCurrent()
+        val original = model.uiState.value.visible.single()
+        model.open(original); runCurrent()
+        val updated = original.copy(name = "Updated title", poster = "https://synthetic.invalid/new.jpg")
+        refreshedCatalog = VodCatalog(emptyList(), listOf(updated))
+        pending.complete(Unit); runCurrent()
+        assertEquals(original.id, model.uiState.value.selected?.id)
+        assertEquals("Updated title", model.uiState.value.selected?.name)
+        advanceTimeBy(101); runCurrent()
+        assertEquals("Updated title", model.uiState.value.details?.item?.name)
+        assertEquals(updated.poster, model.uiState.value.details?.item?.poster)
     }
 
     @Test fun neighbourCategoryIsWarmedOnlyAfterIdleTime() = runTest(dispatcher) {
