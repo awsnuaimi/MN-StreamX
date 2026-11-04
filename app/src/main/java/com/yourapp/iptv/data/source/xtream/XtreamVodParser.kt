@@ -11,6 +11,7 @@ import com.yourapp.iptv.domain.performance.PerformanceOutcome
 import com.yourapp.iptv.domain.performance.PerformanceStage
 import java.io.Reader
 import java.util.concurrent.CancellationException
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 internal object XtreamVodParser {
     fun categories(reader: Reader, active: () -> Boolean): List<VodCategory> =
@@ -32,7 +33,8 @@ internal object XtreamVodParser {
                 year = obj.string("releaseDate") ?: obj.string("year"))
         }, uniqueId = { it.id })
 
-    fun details(reader: Reader, kind: VodKind, original: VodItem): VodDetails {
+    fun details(reader: Reader, kind: VodKind, original: VodItem,
+        directUrl: (String) -> String? = ::absoluteDirectUrl): VodDetails {
         val root = JsonParser.parseReader(reader).takeIf { it.isJsonObject }?.asJsonObject
             ?: return VodDetails(original)
         val info = root.obj("info")
@@ -43,9 +45,13 @@ internal object XtreamVodParser {
         val movieData = root.obj("movie_data")
         val item = original.copy(poster = poster, plot = plot, rating = rating, year = year,
             extension = if (kind == VodKind.MOVIE)
-                XtreamVodFormat.safeExtension(movieData?.string("container_extension") ?: original.extension)
+                XtreamVodFormat.knownExtension(movieData?.string("container_extension"))
+                    ?: XtreamVodFormat.safeExtension(original.extension)
             else original.extension)
-        if (kind == VodKind.MOVIE) return VodDetails(item)
+        if (kind == VodKind.MOVIE) {
+            val direct = movieData?.string("direct_source")?.let(directUrl)
+            return VodDetails(item,playback = direct?.let { VodPlaybackSource(it,item.extension) })
+        }
 
         val episodes = root.obj("episodes") ?: return VodDetails(item)
         val result = ArrayList<VodSeason>()
@@ -122,10 +128,16 @@ internal object XtreamVodParser {
     }
     private fun JsonObject.obj(key: String): JsonObject? = get(key)?.takeIf { it.isJsonObject }?.asJsonObject
     private fun String.isValidXtreamId() = length in 1..18 && all { it in '0'..'9' }
+
+    private fun absoluteDirectUrl(value: String): String? = value.trim().takeIf {
+        it.length <= 16_384 && it.none { ch -> ch.code < 32 || ch.code == 127 }
+    }?.toHttpUrlOrNull()?.takeIf { it.username.isEmpty() && it.password.isEmpty() }
+        ?.newBuilder()?.fragment(null)?.build()?.toString()
 }
 
 internal object XtreamVodFormat {
-    private val extensions = setOf("mp4", "mkv", "avi", "mov", "ts", "m3u8", "webm")
-    fun safeExtension(value: String?): String = value?.lowercase(java.util.Locale.ROOT)
-        ?.removePrefix(".")?.takeIf { it in extensions } ?: "mp4"
+    private val extensions = setOf("mp4", "mkv", "avi", "mov", "ts", "m3u8", "webm", "m4v", "flv", "mpg", "mpeg", "m2ts", "3gp")
+    fun knownExtension(value: String?): String? = value?.trim()?.lowercase(java.util.Locale.ROOT)
+        ?.removePrefix(".")?.takeIf { it in extensions }
+    fun safeExtension(value: String?): String = knownExtension(value) ?: "mp4"
 }

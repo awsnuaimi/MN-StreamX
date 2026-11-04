@@ -26,4 +26,20 @@ class XtreamVodUrlTest {
         assertTrue(runCatching { urls.vodApi("get_vod_info", "7/2") }.isFailure)
         assertTrue(runCatching { urls.vodApi("get_vod_streams", "1") }.isFailure)
     }
+
+    @Test fun vodCredentialsAreStrictlyEncodedOnceWithoutChangingTheirValue() {
+        val url = XtreamUrls("https://example.org", "u+&", "p/a%?é")
+            .vodStream(VodKind.MOVIE,"7","m4v").toHttpUrl()
+        assertEquals("/movie/u%2B%26/p%2Fa%25%3F%C3%A9/7.m4v",url.encodedPath)
+        assertEquals(listOf("movie","u+&","p/a%?é","7.m4v"),url.pathSegments)
+    }
+
+    @Test fun directTargetsPreserveSignedQueriesWithoutAddingAccountCredentials() {
+        val urls = XtreamUrls("https://example.org/panel", "u", "p")
+        assertEquals("https://cdn.test/play?token=a%2Bb&sig=x%26y",
+            urls.directVodSource("https://cdn.test/play?token=a%2Bb&sig=x%26y#ignored"))
+        assertEquals("https://example.org/media/7.mkv?token=x",urls.directVodSource("/media/7.mkv?token=x"))
+        for (value in listOf("0","false","null","file:///tmp/x","javascript:alert(1)",
+            "https://user:pass@cdn.test/play","https://cdn.test/a\r\nb")) assertNull(urls.directVodSource(value))
+    }
 }

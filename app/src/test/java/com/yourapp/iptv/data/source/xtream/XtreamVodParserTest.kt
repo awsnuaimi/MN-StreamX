@@ -104,4 +104,30 @@ class XtreamVodParserTest {
         }.exceptionOrNull()
         assertTrue(failed is java.util.concurrent.CancellationException)
     }
+
+    @Test fun movieDetailsKeepSupportedContainersAndPreserveCatalogFallbacks() {
+        val movie = VodItem("44","Film",null,extension = "mkv")
+        for (ext in listOf("m4v","flv","mpeg","m2ts","3gp")) {
+            val result = XtreamVodParser.details(StringReader("""{"movie_data":{"container_extension":"$ext"}}"""),VodKind.MOVIE,movie)
+            assertEquals(ext,result.item.extension)
+        }
+        for (ext in listOf("","../invalid","exe")) {
+            val result = XtreamVodParser.details(StringReader("""{"movie_data":{"container_extension":"$ext"}}"""),VodKind.MOVIE,movie)
+            assertEquals("mkv",result.item.extension)
+        }
+    }
+
+    @Test fun directPlaybackIsEphemeralAndOnlyComesFromMovieData() {
+        val movie = VodItem("44","Film",null)
+        val result = XtreamVodParser.details(StringReader("""{"movie_data":{"container_extension":"m3u8",
+            "direct_source":"https://cdn.test/play?sig=a%2Bb"}}"""),VodKind.MOVIE,movie)
+        assertEquals("https://cdn.test/play?sig=a%2Bb",result.playback?.url)
+        assertEquals("m3u8",result.playback?.extension)
+        assertFalse(result.playback.toString().contains("sig="))
+        for (target in listOf("0","file:///tmp/test","https://u:p@cdn.test/a")) {
+            assertNull(XtreamVodParser.details(StringReader("""{"movie_data":{"direct_source":"$target"}}"""),VodKind.MOVIE,movie).playback)
+        }
+        assertNull(XtreamVodParser.details(StringReader("""{"info":{},"episodes":{},
+            "movie_data":{"direct_source":"https://cdn.test/a"}}"""),VodKind.SERIES,movie).playback)
+    }
 }

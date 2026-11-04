@@ -89,17 +89,17 @@ class VodPlaybackViewModel @Inject constructor(
         mutable.value = VodPlaybackState.Loading
         selection = viewModelScope.launch {
             try {
-                val url = repository.playbackUrl(credentials, kind, id, ext)
+                val playback = repository.resolvePlayback(credentials, kind, id, ext)
                 val previous = progress.observe(key).first()
                 val resume = VodProgress.find(previous, kind, id)
                 val parent = if (kind == VodKind.SERIES) (series ?: resume?.seriesId)
                     ?.takeIf(VodEpisodeOrder::validId) else null
                 if (ticket != generation || blocked) return@launch
                 saved["kind"] = if (kind == VodKind.MOVIE) "movie" else "series"
-                saved["id"] = id; saved["ext"] = ext; saved["title"] = title.take(150); saved["seriesId"] = parent
-                mutable.value = VodPlaybackState.Ready(url,title.take(150),key,kind,id,ext,resume?.positionMs ?: 0,
+                saved["id"] = id; saved["ext"] = playback.extension; saved["title"] = title.take(150); saved["seriesId"] = parent
+                mutable.value = VodPlaybackState.Ready(playback.url,title.take(150),key,kind,id,playback.extension,resume?.positionMs ?: 0,
                     parent, if (episodeSeries == parent) episodes?.let { VodEpisodeOrder.next(it,id) } else null,
-                    episodes = if (episodeSeries == parent) episodes.orEmpty() else emptyList())
+                    episodes = if (episodeSeries == parent) episodes.orEmpty() else emptyList(), attempt = ticket)
                 if (parent != null && (episodeSeries != parent || episodes == null)) loadEpisodes(parent)
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { if (ticket == generation && !blocked) mutable.value = VodPlaybackState.Error }
@@ -152,6 +152,14 @@ class VodPlaybackViewModel @Inject constructor(
     }
 
     fun retryEpisodes() { (mutable.value as? VodPlaybackState.Ready)?.seriesId?.let(::loadEpisodes) }
+
+    /** A manual retry resolves metadata again instead of reusing an expired signed URL. */
+    fun retryPlayback(expected: VodPlaybackState.Ready) {
+        val current = mutable.value as? VodPlaybackState.Ready ?: return
+        if (blocked || current.sourceKey != expected.sourceKey || current.kind != expected.kind ||
+            current.id != expected.id || current.attempt != expected.attempt) return
+        select(current.kind,current.id,current.extension,current.title,current.seriesId)
+    }
 
     fun playNext(expected: VodPlaybackState.Ready? = null) {
         val current = mutable.value as? VodPlaybackState.Ready ?: return

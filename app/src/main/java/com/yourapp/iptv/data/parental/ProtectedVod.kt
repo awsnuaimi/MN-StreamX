@@ -59,6 +59,11 @@ internal class ProtectedVod(private val raw: VodRepository, private val parental
     override fun playbackUrl(settings: AppSettings, kind: VodKind, id: String, extension: String): String {
         requireAccess(kind); return raw.playbackUrl(settings,kind,id,extension)
     }
+    override suspend fun resolvePlayback(settings: AppSettings, kind: VodKind, id: String,
+        extension: String): VodPlaybackSource {
+        requireAccess(kind)
+        return raw.resolvePlayback(settings,kind,id,extension).also { requireAccess(kind) }
+    }
     private fun requireAccess(kind: VodKind) { if (!parental.state.value.allows(kind)) throw ParentalDenied() }
 }
 

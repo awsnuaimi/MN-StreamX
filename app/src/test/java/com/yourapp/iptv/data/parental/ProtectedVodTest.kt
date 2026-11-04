@@ -47,4 +47,20 @@ class ProtectedVodTest {
         assertEquals(rows.value,progress.observe(key).first());assertEquals(listOf("Protected movie"),history.observe(key).first())
         assertEquals(1,rawHistory.values.value[key]?.size)
     }
+
+    @Test fun playbackResolutionChecksAccessBeforeRequestingMetadata() = runBlocking {
+        try { vod.resolvePlayback(source,VodKind.MOVIE,"1","mp4");fail("Playback exposed") } catch (_: ParentalDenied) { }
+        assertEquals(0,raw.requests)
+    }
+
+    @Test fun relockingWhileResolvingADirectTargetPreventsItsReturn() = runBlocking {
+        access.state.value = access.state.value.copy(unlocked = true)
+        val delayed = object : VodRepository by raw {
+            override suspend fun resolvePlayback(settings: AppSettings,kind: VodKind,id: String,extension: String): VodPlaybackSource {
+                access.lock();return VodPlaybackSource("https://cdn.test/signed","mkv")
+            }
+        }
+        try { ProtectedVod(delayed,access).resolvePlayback(source,VodKind.MOVIE,"1","mp4");fail("Locked URL exposed") }
+        catch (_: ParentalDenied) { }
+    }
 }

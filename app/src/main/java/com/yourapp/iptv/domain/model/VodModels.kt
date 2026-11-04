@@ -29,7 +29,13 @@ data class VodEpisode(
 
 data class VodSeason(val number: Int, val name: String, val episodes: List<VodEpisode>)
 
-data class VodDetails(val item: VodItem, val seasons: List<VodSeason> = emptyList())
+/** Ephemeral playback data: never put this URL into navigation arguments or watch history. */
+data class VodPlaybackSource(val url: String, val extension: String) {
+    override fun toString() = "VodPlaybackSource(extension=$extension)"
+}
+
+data class VodDetails(val item: VodItem, val seasons: List<VodSeason> = emptyList(),
+    val playback: VodPlaybackSource? = null)
 
 data class VodCatalog(
     val categories: List<VodCategory>,

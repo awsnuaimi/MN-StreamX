@@ -24,12 +24,13 @@ class VodPlaybackViewModelTest {
     private var resumes = emptyList<VodProgressEntry>()
     private val requests = java.util.Collections.synchronizedList(mutableListOf<String>())
     private var loadDetails: suspend () -> VodDetails = { metadata() }
+    private var loadMovieDetails: suspend (VodItem) -> VodDetails = { VodDetails(it) }
     private val vod = object : VodRepository {
         override fun supports(settings: AppSettings) = true
         override suspend fun catalog(settings: AppSettings, kind: VodKind) = error("Unexpected catalog")
         override suspend fun category(settings: AppSettings, kind: VodKind, categoryId: String) = error("Unexpected category")
         override suspend fun details(settings: AppSettings, kind: VodKind, item: VodItem): VodDetails {
-            requests.add(item.id); return loadDetails()
+            requests.add(item.id); return if (kind == VodKind.MOVIE) loadMovieDetails(item) else loadDetails()
         }
         override fun playbackUrl(settings: AppSettings, kind: VodKind, id: String, extension: String): String {
             urls.add(id); return "https://synthetic.invalid/${settings.xtreamUsername}/$id.$extension"
@@ -61,7 +62,7 @@ class VodPlaybackViewModelTest {
     @Test fun legacyMovieRoutesKeepTheirResumePositionAndDoNotRequestEpisodes() {
         resumes = listOf(VodProgressEntry(VodKind.MOVIE,"10","Movie","mp4",60000,200000,100))
         val model = model(saved(null,"movie"));val value = ready(model)
-        assertEquals(60000L,value.resumeMs);assertNull(value.next);assertTrue(requests.isEmpty())
+        assertEquals(60000L,value.resumeMs);assertNull(value.next);assertEquals(listOf("10"),requests)
         assertFalse(model.autoNext.value)
     }
     @Test fun seriesMetadataUsesTheParentIdAndOrdersEpisodesAcrossSeasons() {
@@ -134,5 +135,38 @@ class VodPlaybackViewModelTest {
         loadDetails = { try { started.complete(Unit);awaitCancellation() } finally { cancelled.complete(Unit) } }
         model();withTimeout(5000) { started.await() };owner.clear()
         withTimeout(5000) { cancelled.await() }
+    }
+
+    @Test fun moviePlaybackUsesFreshDetailsAndOnlyPersistsTheVerifiedExtension() {
+        loadMovieDetails = { VodDetails(it.copy(extension = "mkv"),
+            playback = VodPlaybackSource("https://cdn.test/play?sig=first","mkv")) }
+        val handle = saved(null,"movie");val model = model(handle);val first = ready(model)
+        assertEquals("https://cdn.test/play?sig=first",first.url)
+        assertEquals("mkv",first.extension);assertEquals("mkv",handle.get<String>("ext"))
+        assertFalse(handle.keys().any { it.contains("url",true) || it.contains("token",true) })
+        loadMovieDetails = { VodDetails(it,playback = VodPlaybackSource("https://cdn.test/play?sig=second","mkv")) }
+        model.retryPlayback(first)
+        assertEquals("https://cdn.test/play?sig=second",ready(model).url)
+        assertEquals(listOf("10","10"),requests)
+    }
+
+    @Test fun sourceChangesInvalidateAnUncooperativeMovieMetadataRequest() = runBlocking {
+        val started = CompletableDeferred<Unit>();val release = CompletableDeferred<Unit>();val finished = CompletableDeferred<Unit>()
+        loadMovieDetails = { item ->
+            withContext(NonCancellable) { started.complete(Unit);release.await() }
+            finished.complete(Unit);VodDetails(item.copy(extension = "mkv"))
+        }
+        val model = model(saved(null,"movie"));withTimeout(5000) { started.await() }
+        settings.values.value = searchAccount("B")
+        release.complete(Unit);withTimeout(5000) { finished.await() }
+        assertEquals(VodPlaybackState.Error,model.state.value);assertTrue(urls.isEmpty())
+    }
+
+    @Test fun retryingTheSameUrlCreatesANewAttemptAndIgnoresAStaleRetryClick() {
+        val model = model(saved(null,"movie"));val first = ready(model)
+        model.retryPlayback(first);val second = ready(model)
+        assertEquals(first.url,second.url);assertTrue(second.attempt > first.attempt)
+        model.retryPlayback(first)
+        assertEquals(2,requests.size);assertEquals(second,model.state.value)
     }
 }

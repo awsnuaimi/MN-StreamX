@@ -29,7 +29,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.DefaultTrackNameProvider
@@ -72,7 +71,7 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
     var active by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
 
     // Creation in this effect lets disposal release the old decoder before creating the next one.
-    DisposableEffect(item.url,item.sourceKey) {
+    DisposableEffect(item.url,item.sourceKey,item.attempt) {
         var player: ExoPlayer? = null
         var owned: VodPlaybackSession? = null
         try {
@@ -80,7 +79,7 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
                 .setAudioAttributes(AudioAttributes.DEFAULT,true).setHandleAudioBecomingNoisy(true).build()
             player = created
             preferences.apply(created)
-            created.setMediaItem(MediaItem.fromUri(item.url))
+            created.setMediaItem(vodMediaItem(item.url,item.extension))
             if (item.resumeMs > 0) created.seekTo(item.resumeMs)
             owned = VodPlaybackSession(created,DefaultTrackNameProvider(context.resources),preferences,capture = { position,duration,done ->
                 model.capture(item,position,duration,done)
@@ -214,7 +213,7 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
         if (snapshot.failed) Surface(Modifier.align(Alignment.Center).widthIn(max = 620.dp),shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(24.dp),verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(labels.failed())
-                AppButton(labels.retry(),{ touch(); current?.retry() },Modifier.focusRequester(errorFocus).testTag("vod-retry"))
+                AppButton(labels.retry(),{ touch(); current?.save(); model.retryPlayback(item) },Modifier.focusRequester(errorFocus).testTag("vod-retry"))
                 AppButton(labels.back(),onBack)
             }
         }

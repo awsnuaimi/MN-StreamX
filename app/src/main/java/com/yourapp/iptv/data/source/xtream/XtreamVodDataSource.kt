@@ -56,7 +56,7 @@ internal class XtreamVodDataSource(
     suspend fun details(settings: AppSettings, kind: VodKind, item: VodItem): VodDetails {
         val urls = credentials(settings)
         return http.read(urls.vodApi(if (kind == VodKind.MOVIE) "get_vod_info" else "get_series_info", item.id),
-            8 * 1024 * 1024) { reader, _ -> XtreamVodParser.details(reader, kind, item) }
+            8 * 1024 * 1024) { reader, _ -> XtreamVodParser.details(reader, kind, item,urls::directVodSource) }
     }
 
     fun playbackUrl(settings: AppSettings, kind: VodKind, id: String, extension: String): String =

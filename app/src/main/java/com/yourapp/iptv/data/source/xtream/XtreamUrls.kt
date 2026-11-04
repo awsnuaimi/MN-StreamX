@@ -40,10 +40,30 @@ internal class XtreamUrls(
         val safe = XtreamVodFormat.safeExtension(extension)
         return base.newBuilder()
             .addPathSegment(if (kind == com.yourapp.iptv.domain.model.VodKind.MOVIE) "movie" else "series")
-            .addPathSegment(username)
-            .addPathSegment(password)
+            .addEncodedPathSegment(vodCredential(username))
+            .addEncodedPathSegment(vodCredential(password))
             .addPathSegment("$id.$safe")
             .build().toString()
+    }
+
+    /** Resolve only provider-supplied HTTP(S) targets; never append account credentials. */
+    fun directVodSource(value: String): String? {
+        val candidate = value.trim().takeIf { it.isNotEmpty() && it.length <= 16_384 &&
+            it.none { ch -> ch.code < 32 || ch.code == 127 } } ?: return null
+        if (!candidate.startsWith("/") && candidate.toHttpUrlOrNull() == null) return null
+        return base.resolve(candidate)?.takeIf { it.username.isEmpty() && it.password.isEmpty() }
+            ?.newBuilder()?.fragment(null)?.build()?.toString()
+    }
+
+    // Some Xtream gateways rewrite path captures into query parameters. Encode '+' and '&'
+    // as well as '/', so credentials keep their exact value through that rewrite.
+    private fun vodCredential(value: String): String = buildString {
+        val hex = "0123456789ABCDEF"
+        for (byte in value.toByteArray(Charsets.UTF_8)) {
+            val code = byte.toInt() and 255
+            if (code in 65..90 || code in 97..122 || code in 48..57 || code == 45 || code == 46 || code == 95 || code == 126) append(code.toChar())
+            else { append('%');append(hex[code ushr 4]);append(hex[code and 15]) }
+        }
     }
 
     fun stream(id: String, extension: String): String = base.newBuilder()
