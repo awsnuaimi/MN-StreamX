@@ -19,6 +19,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.yourapp.iptv.domain.diagnostics.*
 import com.yourapp.iptv.domain.model.*
+import com.yourapp.iptv.domain.image.*
 import com.yourapp.iptv.testing.diagnosticSnapshot
 import com.yourapp.iptv.ui.component.common.LocalizedResources
 import com.yourapp.iptv.ui.theme.IPTVAppTheme
@@ -39,13 +40,14 @@ class DiagnosticsContentTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val state = mutableStateOf(DiagnosticsState(snapshot = diagnosticSnapshot(),source = DiagnosticSource.XTREAM,
         sourceKey = "a".repeat(64),sourceReady = true,checks = listOf(DiagnosticCheck(DiagnosticArea.ACCOUNT,DiagnosticStatus.PASS,DiagnosticIssue.OK,200))))
-    private var runs = 0;private var shares = 0;private var clears = 0;private var cancelled = 0
+    private var runs = 0;private var shares = 0;private var clears = 0;private var cancelled = 0;private var refreshes = 0
     private fun show(language: HomeLanguage = HomeLanguage.GERMAN, events: List<DiagnosticEvent> = emptyList()) {
         compose.setContent { IPTVAppTheme(theme = HomeTheme.RED) { LocalizedResources(language) {
             val input = LocalInputModeManager.current
             SideEffect { input.requestInputMode(InputMode.Keyboard) }
             Surface(Modifier.fillMaxSize()) { DiagnosticsContent(state.value,events,DiagnosticText(language),{},
-                { runs++ },{ cancelled++;state.value = state.value.copy(busy = false) },{ shares++ },{ clears++ }) }
+                { runs++ },{ cancelled++;state.value = state.value.copy(busy = false) },{ shares++ },{ clears++ },
+                onRefresh = { refreshes++;state.value = state.value.copy(refreshing = true) }) }
         } } }
     }
     @Test fun networkChecksAndReportSharingAreSeparateExplicitActions() {
@@ -83,6 +85,41 @@ class DiagnosticsContentTest {
         show();compose.onNodeWithTag("diagnostics-share").assertIsNotEnabled()
         compose.onNodeWithText(DiagnosticText(HomeLanguage.GERMAN).shareFailed()).assertExists()
         compose.runOnIdle { assertEquals(0,shares) }
+    }
+    @Test fun localRefreshKeepsRemoteFocusWhileNetworkAndShareActionsWait() {
+        show()
+        compose.onNodeWithTag("diagnostics-refresh").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithTag("diagnostics-refresh").performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onNodeWithTag("diagnostics-refresh").assertIsFocused().assertIsEnabled()
+        compose.onNodeWithTag("diagnostics-start").assertIsNotEnabled()
+        compose.onNodeWithTag("diagnostics-share").assertIsNotEnabled()
+        compose.onNodeWithText(DiagnosticText(HomeLanguage.GERMAN).refreshing()).assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals(1,refreshes);assertEquals(0,runs);assertEquals(0,shares)
+            state.value = state.value.copy(refreshing = false)
+        }
+        compose.onNodeWithTag("diagnostics-refresh").assertIsFocused()
+        compose.onNodeWithTag("diagnostics-start").assertIsEnabled()
+    }
+    @Test fun localMeasurementsRemainAvailableWithoutAnAccountOrAnInitialSnapshot() {
+        state.value = DiagnosticsState()
+        show()
+        compose.onNodeWithTag("diagnostics-refresh").assertIsEnabled().performClick()
+        compose.onNodeWithTag("diagnostics-start").assertIsNotEnabled()
+        compose.onNodeWithTag("diagnostics-share").assertIsNotEnabled()
+        compose.runOnIdle { assertEquals(1,refreshes);assertEquals(0,runs) }
+    }
+    @Test fun imageMeasurementsAreReachableAndUseTheSameLabelsAsThePortableReport() {
+        val recorder = ImageLoadRecorder()
+        recorder.begin().finish(ImageLoadResult.NETWORK)
+        val images = ImageDiagnosticsSnapshot(ImageCacheUsage(0,8L * 1024 * 1024),null,recorder.snapshot())
+        state.value = state.value.copy(snapshot = diagnosticSnapshot().copy(images = images))
+        show()
+        compose.onNodeWithTag("diagnostics-list").performScrollToNode(hasTestTag("diagnostics-images"))
+        compose.onNodeWithText("Bilddiagnose").assertIsDisplayed()
+        val label = ImageDiagnosticReport.rows(images,DiagnosticText(HomeLanguage.GERMAN))[3].first
+        compose.onNodeWithTag("diagnostics-list").performScrollToNode(hasText(label))
+        compose.onNodeWithText("RAM=0 · DISK=0 · NETWORK=1 · LOCAL=0").assertExists()
     }
     private fun export(name: String) {
         val directory = System.getProperty("mnstreamx.uiPreviewDir")?.let(::File) ?: return

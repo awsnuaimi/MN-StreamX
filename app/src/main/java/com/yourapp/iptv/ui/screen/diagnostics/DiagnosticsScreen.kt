@@ -44,6 +44,7 @@ fun DiagnosticsScreen(onBack: () -> Unit, model: DiagnosticsViewModel = hiltView
         catch (_: RuntimeException) { model.shareFailed() }
     }
     LocalizedResources(language) {
-        DiagnosticsContent(state,events,text,onBack,model::runChecks,model::cancel,{ model.export(language) },model::clearEvents)
+        DiagnosticsContent(state,events,text,onBack,model::runChecks,model::cancel,{ model.export(language) },model::clearEvents,
+            onRefresh = model::refreshMeasurements)
     }
 }

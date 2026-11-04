@@ -27,6 +27,12 @@ class ImageLoaderFactoryTest {
             assertEquals(budget.memoryBytes, first.memoryCache!!.maxSize)
             assertEquals(budget.diskBytes, first.diskCache!!.maxSize)
             assertEquals(app.cacheDir.resolve("image_cache").absolutePath, first.diskCache!!.directory.toFile().absolutePath)
+            val metrics = ImageDiagnostics.read(destination)
+            assertEquals(first.memoryCache!!.size.toLong(), metrics.memory!!.usedBytes)
+            assertEquals(budget.memoryBytes.toLong(), metrics.memory!!.limitBytes)
+            assertEquals(first.diskCache!!.size, metrics.disk!!.usedBytes)
+            assertEquals(budget.diskBytes, metrics.disk!!.limitBytes)
+            assertEquals(0L, metrics.loads.started)
         } finally { first.shutdown() }
     }
 }

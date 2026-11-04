@@ -15,6 +15,11 @@ object DiagnosticReport {
             appendLine(text.device())
             DiagnosticSummary.rows(snapshot,text).forEach { (name,value) -> appendLine("$name: $value") }
             appendLine("${text.current()}: ${source.name}");appendLine()
+            snapshot.images?.let { images ->
+                appendLine(ImageDiagnosticReport.title(text));appendLine(ImageDiagnosticReport.note(text))
+                ImageDiagnosticReport.rows(images,text).forEach { (name,value) -> appendLine("$name: $value") }
+                appendLine()
+            }
             if (snapshot.performance.isNotEmpty()) {
                 appendLine(PerformanceReport.title(language));appendLine(PerformanceReport.note(language))
                 PerformanceReport.rows(snapshot.performance).forEach { appendLine(it) };appendLine()

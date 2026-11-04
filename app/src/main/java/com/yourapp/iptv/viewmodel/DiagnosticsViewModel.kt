@@ -14,8 +14,8 @@ import kotlinx.coroutines.flow.*
 
 data class DiagnosticsState(val snapshot: DiagnosticSnapshot? = null, val source: DiagnosticSource = DiagnosticSource.NONE,
     val sourceKey: String? = null, val sourceReady: Boolean = false, val checks: List<DiagnosticCheck> = emptyList(), val busy: Boolean = false,
-    val exporting: Boolean = false, val refreshing: Boolean = false, val failure: Boolean = false, val shareFailure: Boolean = false,
-    val shareFile: File? = null, val shareRequest: Long = 0)
+    val exporting: Boolean = false, val failure: Boolean = false, val shareFailure: Boolean = false,
+    val shareFile: File? = null, val shareRequest: Long = 0, val refreshing: Boolean = false)
 
 @HiltViewModel
 class DiagnosticsViewModel @Inject constructor(private val settings: SettingsRepository,
@@ -30,12 +30,7 @@ class DiagnosticsViewModel @Inject constructor(private val settings: SettingsRep
     private var snapshotJob: Job? = null
     private var snapshotGeneration = 0L
     init {
-        val initialSnapshot = ++snapshotGeneration
-        snapshotJob = viewModelScope.launch {
-            try { val value = diagnostics.snapshot();if (snapshotGeneration == initialSnapshot) mutable.update { it.copy(snapshot = value) } }
-            catch (error: CancellationException) { throw error }
-            catch (_: Exception) { if (snapshotGeneration == initialSnapshot) mutable.update { it.copy(failure = true) } }
-        }
+        refreshMeasurements()
         viewModelScope.launch {
             try {
                 settings.observeSettings().distinctUntilChangedBy(PlaylistCacheKey::of).collect { source ->
@@ -47,23 +42,23 @@ class DiagnosticsViewModel @Inject constructor(private val settings: SettingsRep
             catch (_: Exception) { mutable.update { it.copy(failure = true) } }
         }
     }
-    /** Refresh local device and performance measurements without probing the provider. */
     fun refreshMeasurements() {
         if (!visible || mutable.value.busy || mutable.value.exporting || mutable.value.refreshing) return
         val ticket = ++snapshotGeneration
-        snapshotJob?.cancel()
-        mutable.update { it.copy(refreshing = true, failure = false) }
-        snapshotJob = viewModelScope.launch {
+        mutable.update { it.copy(refreshing = true,failure = false) }
+        snapshotJob = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
-                val result = diagnostics.snapshot()
-                mutable.update { if (snapshotGeneration == ticket && visible) it.copy(snapshot = result) else it }
+                val value = withTimeout(10_000L) { diagnostics.snapshot() }
+                if (snapshotGeneration == ticket && visible) mutable.update { it.copy(snapshot = value) }
+            } catch (_: TimeoutCancellationException) {
+                if (snapshotGeneration == ticket && visible) mutable.update { it.copy(failure = true) }
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) {
-                mutable.update { if (snapshotGeneration == ticket && visible) it.copy(failure = true) else it }
+                if (snapshotGeneration == ticket && visible) mutable.update { it.copy(failure = true) }
             } finally {
-                mutable.update { if (snapshotGeneration == ticket) it.copy(refreshing = false) else it }
+                if (snapshotGeneration == ticket) mutable.update { it.copy(refreshing = false) }
             }
-        }
+        }.also { it.start() }
     }
     fun runChecks() {
         if (!visible || mutable.value.busy || mutable.value.exporting || mutable.value.refreshing) return
@@ -94,17 +89,13 @@ class DiagnosticsViewModel @Inject constructor(private val settings: SettingsRep
     }
     fun export(language: HomeLanguage) {
         val value = mutable.value
-        if (value.snapshot == null || !visible || value.busy || value.exporting || value.refreshing) return
+        val snapshot = value.snapshot ?: return
+        if (!visible || value.busy || value.exporting || value.refreshing) return
         val ticket = ++generation
         mutable.update { it.copy(exporting = true,shareFile = null,shareFailure = false,failure = false) }
         operation = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
-                // Capture recent navigation/search/cache measurements at export time.
-                // No provider probe is performed; the export remains local-only.
-                val freshSnapshot = diagnostics.snapshot()
-                if (generation != ticket || !visible) return@launch
-                mutable.update { it.copy(snapshot = freshSnapshot) }
-                val file = diagnostics.export(freshSnapshot,value.source,value.sourceKey,value.checks,events.value,language)
+                val file = diagnostics.export(snapshot,value.source,value.sourceKey,value.checks,events.value,language)
                 if (generation == ticket && visible) mutable.update { it.copy(shareFile = file,shareRequest = ticket) }
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { if (generation == ticket && visible) mutable.update { it.copy(failure = true) } }
@@ -114,10 +105,16 @@ class DiagnosticsViewModel @Inject constructor(private val settings: SettingsRep
     fun cancel() {
         val running = mutable.value.busy
         generation++;operation?.cancel()
-        mutable.update { it.copy(busy = false,exporting = false,shareFile = null,
+        snapshotGeneration++;snapshotJob?.cancel()
+        mutable.update { it.copy(busy = false,exporting = false,refreshing = false,shareFile = null,
             checks = if (running) (it.checks + DiagnosticCheck(DiagnosticArea.CONNECTION,DiagnosticStatus.NOTICE,DiagnosticIssue.CANCELLED)).take(12) else it.checks) }
     }
-    fun setVisible(value: Boolean) { visible = value;if (!value) { snapshotGeneration++;snapshotJob?.cancel();mutable.update { it.copy(refreshing = false) };cancel() } }
+    fun setVisible(value: Boolean) {
+        val resumed = value && !visible
+        visible = value
+        if (!value) cancel()
+        else if (resumed && mutable.value.snapshot == null) refreshMeasurements()
+    }
     fun consumeShare() { mutable.update { it.copy(shareFile = null) } }
     fun shareFailed() { mutable.update { it.copy(shareFailure = true,shareFile = null) } }
     fun clearEvents() { DiagnosticJournal.clear() }

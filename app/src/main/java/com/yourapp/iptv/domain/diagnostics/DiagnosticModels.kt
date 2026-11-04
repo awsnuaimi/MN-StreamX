@@ -25,5 +25,6 @@ data class DiagnosticSnapshot(
     val validated: Boolean?, val metered: Boolean?, val totalRam: Long?, val availableRam: Long?,
     val lowMemory: Boolean?, val heapUsed: Long, val heapLimit: Long,
     val diskAvailable: Long?, val diskTotal: Long?, val codecs: Set<DiagnosticCodec>?,
-    val performance: List<com.yourapp.iptv.domain.performance.PerformanceSummary> = emptyList()
+    val performance: List<com.yourapp.iptv.domain.performance.PerformanceSummary> = emptyList(),
+    val images: com.yourapp.iptv.domain.image.ImageDiagnosticsSnapshot? = null
 )

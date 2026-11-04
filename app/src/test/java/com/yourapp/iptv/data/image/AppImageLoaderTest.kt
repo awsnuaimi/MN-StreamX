@@ -9,6 +9,9 @@ import coil.decode.DataSource
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import coil.request.ErrorResult
+import coil.size.SizeResolver
+import com.yourapp.iptv.domain.image.ImageLoadRecorder
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.setMain
@@ -36,13 +39,14 @@ class AppImageLoaderTest {
     private val app get() = RuntimeEnvironment.getApplication()
     private val server = MockWebServer()
     private lateinit var loader: ImageLoader
+    private val recorder = ImageLoadRecorder()
     private val green = android.graphics.Color.rgb(0, 190, 60)
     private val red = android.graphics.Color.rgb(200, 20, 20)
 
     @Before fun setup() {
         // execute() switches to Main; plain JVM network tests must not block Android's looper.
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        server.start(); loader = AppImageLoader.create(app)
+        server.start(); loader = AppImageLoader.create(app, recorder)
     }
     @After fun cleanup() {
         try { loader.shutdown(); server.shutdown() } finally { Dispatchers.resetMain() }
@@ -73,6 +77,30 @@ class AppImageLoaderTest {
         loader.memoryCache!!.clear()
         assertEquals(DataSource.DISK, load("/poster.png").dataSource)
         assertEquals(1, server.requestCount)
+        val metrics = recorder.snapshot()
+        assertEquals(3L, metrics.started); assertEquals(0L, metrics.inFlight)
+        assertEquals(1L, metrics.network); assertEquals(1L, metrics.memory); assertEquals(1L, metrics.disk)
+    }
+    @Test fun nullDataAndInvalidImagesAreFailuresWithoutRetainingRequestDetails() = runBlocking {
+        assertTrue(loader.execute(ImageRequest.Builder(app).data(null).build()) is ErrorResult)
+        server.enqueue(MockResponse().setHeader("Content-Type", "image/png").setBody("synthetic invalid image"))
+        assertTrue(loader.execute(request("/synthetic-invalid.png")) is ErrorResult)
+        val metrics = recorder.snapshot()
+        assertEquals(2L, metrics.failed); assertEquals(0L, metrics.inFlight)
+        assertNull(metrics.p95Ms)
+        assertFalse(metrics.toString().contains("synthetic-invalid"))
+    }
+    @Test fun cancellationWhileWaitingForImageSizeReleasesThePendingMetricWithoutAnHttpCall() = runBlocking {
+        val resolving = CompletableDeferred<Unit>()
+        val image = request("/never-fetched.png").newBuilder().size(SizeResolver {
+            resolving.complete(Unit); awaitCancellation()
+        }).build()
+        val task = launch(start = CoroutineStart.UNDISPATCHED) { loader.execute(image) }
+        withTimeout(5000) { resolving.await() }
+        assertEquals(1L, recorder.snapshot().inFlight)
+        task.cancelAndJoin()
+        assertEquals(1L, recorder.snapshot().cancelled)
+        assertEquals(0L, recorder.snapshot().inFlight); assertEquals(0, server.requestCount)
     }
     @Test fun distinctQueryUrlsKeepTheirOwnArtwork() = runBlocking {
         server.enqueue(response(png(green))); server.enqueue(response(png(red)))

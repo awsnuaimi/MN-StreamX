@@ -5,6 +5,7 @@ import android.content.Context
 import coil.ImageLoader
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import com.yourapp.iptv.domain.image.ImageLoadRecorder
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
@@ -12,11 +13,12 @@ import java.util.concurrent.TimeUnit
 
 /** Coil owns this loader through the Application factory, across all Compose destinations. */
 internal object AppImageLoader {
-    fun create(context: Context): ImageLoader {
+    fun create(context: Context, recorder: ImageLoadRecorder = ImageDiagnostics.recorder): ImageLoader {
         val app = context.applicationContext
         val manager = app.getSystemService(ActivityManager::class.java)
         val budget = ImageCacheBudget.forDevice(manager?.memoryClass ?: 128, manager?.isLowRamDevice ?: true)
         return ImageLoader.Builder(app)
+            .eventListenerFactory { ImageMetricListener(recorder) }
             .memoryCache { MemoryCache.Builder(app).maxSizeBytes(budget.memoryBytes).build() }
             .diskCache {
                 // Keep Coil 2's existing cache directory/format so updates can reuse saved images.

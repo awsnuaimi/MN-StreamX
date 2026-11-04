@@ -13,6 +13,8 @@ class DiagnosticText(private val language: HomeLanguage) {
     fun cancel() = text("إلغاء الفحص","Cancel checks","Diagnose abbrechen")
     fun share() = text("مشاركة التقرير","Share report","Bericht teilen")
     fun clear() = text("مسح سجل الجلسة","Clear session log","Sitzungsprotokoll leeren")
+    fun refresh() = text("تحديث قياسات الجهاز والصور", "Refresh device and image measurements", "Geräte- und Bildmesswerte aktualisieren")
+    fun refreshing() = text("جارٍ تحديث القياسات المحلية…", "Refreshing local measurements…", "Lokale Messwerte werden aktualisiert…")
     fun back() = text("رجوع","Back","Zurück")
     fun privacy() = text("التقرير يستبعد بيانات الدخول ومفاتيح الخدمات وروابط البث وأسماء القنوات ومعرّفات الجهاز.",
         "Reports exclude credentials, service keys, stream URLs, channel names and device identifiers.",
