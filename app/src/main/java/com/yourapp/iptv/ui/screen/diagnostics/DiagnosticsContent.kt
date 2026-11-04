@@ -20,7 +20,7 @@ import java.time.Instant
 
 @Composable
 internal fun DiagnosticsContent(state: DiagnosticsState, events: List<DiagnosticEvent>, text: DiagnosticText,
-    onBack: () -> Unit, onRun: () -> Unit, onCancel: () -> Unit, onShare: () -> Unit, onClear: () -> Unit) {
+    onBack: () -> Unit, onRun: () -> Unit, onCancel: () -> Unit, onShare: () -> Unit, onClear: () -> Unit, onRefresh: () -> Unit = {}) {
     val initial = remember { FocusRequester() }
     val action = remember { FocusRequester() }
     var wasBusy by remember { mutableStateOf(false) }
@@ -32,11 +32,15 @@ internal fun DiagnosticsContent(state: DiagnosticsState, events: List<Diagnostic
         Row(Modifier.fillMaxWidth(),horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (state.busy) AppButton(text.cancel(),onCancel,Modifier.weight(1f).focusRequester(action).testTag("diagnostics-cancel"))
             else AppButton(text.start(),onRun,Modifier.weight(1f).focusRequester(action).testTag("diagnostics-start"),state.sourceReady && !state.exporting)
-            AppButton(text.share(),onShare,Modifier.weight(1f).testTag("diagnostics-share"),state.sourceReady && state.snapshot != null && !state.busy && !state.exporting)
+            AppButton(text.share(),onShare,Modifier.weight(1f).testTag("diagnostics-share"),state.sourceReady && state.snapshot != null && !state.busy && !state.exporting && !state.refreshing)
             AppButton(text.clear(),onClear,Modifier.weight(1.3f).testTag("diagnostics-clear"),!state.busy && !state.exporting)
         }
-        if (state.busy || state.exporting) {
-            Text(if (state.busy) text.busy() else text.exporting());LinearProgressIndicator(Modifier.fillMaxWidth())
+        AppButton(text.text("تحديث قياسات الجهاز والأداء", "Refresh device and performance measurements",
+            "Geräte- und Leistungsmessungen aktualisieren"), onRefresh,
+            Modifier.fillMaxWidth().testTag("diagnostics-refresh"),
+            !state.busy && !state.exporting && !state.refreshing)
+        if (state.busy || state.exporting || state.refreshing) {
+            Text(if (state.busy) text.busy() else if (state.refreshing) text.text("جارٍ تحديث القياسات", "Refreshing measurements", "Messungen werden aktualisiert") else text.exporting());LinearProgressIndicator(Modifier.fillMaxWidth())
         }
         if (state.failure) Text(text.failure(),color = MaterialTheme.colorScheme.error)
         if (state.shareFailure) Text(text.shareFailed(),color = MaterialTheme.colorScheme.error)

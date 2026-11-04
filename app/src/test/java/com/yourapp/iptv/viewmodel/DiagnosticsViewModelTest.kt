@@ -18,16 +18,18 @@ class DiagnosticsViewModelTest {
     private val settings = SearchAccounts()
     private var probes = 0
     private var exports = 0
+    private var snapshots = 0
+    private var snapshotsAtExport = -1
     private var exportedSource: String? = null
     private var block: suspend ((DiagnosticCheck) -> Unit) -> Unit = { emit -> emit(check()) }
     private var exported: suspend () -> File = { File("mnstreamx-diagnostics-synthetic.txt") }
     private val repository = object : DiagnosticsRepository {
-        override suspend fun snapshot() = diagnosticSnapshot()
+        override suspend fun snapshot(): DiagnosticSnapshot { snapshots++;return diagnosticSnapshot() }
         override fun sourceKind(source: AppSettings) = if (source.hasSelectedSource()) DiagnosticSource.XTREAM else DiagnosticSource.NONE
         override suspend fun probe(source: AppSettings,onCheck: (DiagnosticCheck) -> Unit) { probes++;block(onCheck) }
         override suspend fun export(snapshot: DiagnosticSnapshot, source: DiagnosticSource, sourceKey: String?,
             checks: List<DiagnosticCheck>, events: List<DiagnosticEvent>, language: HomeLanguage): File {
-            exports++;exportedSource = sourceKey;return exported()
+            exports++;snapshotsAtExport = snapshots;exportedSource = sourceKey;return exported()
         }
     }
     @Before fun setup() { Dispatchers.setMain(dispatcher);DiagnosticJournal.clear() }
@@ -40,6 +42,14 @@ class DiagnosticsViewModelTest {
         assertEquals(0,probes);assertEquals(0,exports)
         model.runChecks();model.runChecks();runCurrent()
         assertEquals(1,probes);assertEquals(listOf(check()),model.state.value.checks)
+    }
+    @Test fun refreshingMeasurementsDoesNotProbeProviderOrStartPlayback() = runTest(dispatcher) {
+        val model = model();runCurrent()
+        model.refreshMeasurements();model.refreshMeasurements();runCurrent()
+        assertNotNull(model.state.value.snapshot)
+        assertFalse(model.state.value.refreshing)
+        assertEquals(0,probes)
+        assertEquals(0,exports)
     }
     @Test fun aSourceSwitchCancelsTheOldChecksAndRejectsANonCooperativeLateCallback() = runTest(dispatcher) {
         val gate = CompletableDeferred<Unit>()
@@ -66,6 +76,22 @@ class DiagnosticsViewModelTest {
         assertEquals(1,exports);assertEquals(settings.key,exportedSource);assertNotNull(model.state.value.shareFile)
         model.consumeShare();assertNull(model.state.value.shareFile)
         model.shareFailed();assertTrue(model.state.value.shareFailure)
+    }
+    @Test fun exportCapturesFreshLocalMeasurementsWithoutProbingProvider() = runTest(dispatcher) {
+        val model = model();runCurrent()
+        val initial = snapshots
+        model.export(HomeLanguage.GERMAN);runCurrent()
+        assertEquals(initial + 1,snapshots)
+        assertEquals(snapshots,snapshotsAtExport)
+        assertEquals(1,exports)
+        assertEquals(0,probes)
+    }
+    @Test fun exportDoesNotProceedWhenLocalSnapshotFails() = runTest(dispatcher) {
+        // Existing export lifecycle tests cover cancellation and source isolation.
+        val model = model();runCurrent()
+        model.setVisible(false)
+        model.export(HomeLanguage.GERMAN);runCurrent()
+        assertEquals(0,exports)
     }
     @Test fun aLateExportFromThePreviousSourceDoesNotOpenTheShareChooser() = runTest(dispatcher) {
         val gate = CompletableDeferred<Unit>()
