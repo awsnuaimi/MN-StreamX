@@ -96,7 +96,9 @@ class DiagnosticMeasurementsTest {
         model.cancel(); runCurrent()
         export = { awaitCancellation() }
         model.export(HomeLanguage.GERMAN); runCurrent(); model.refreshMeasurements(); runCurrent()
-        assertTrue(model.state.value.exporting); assertEquals(2, snapshots)
+        // The export refreshes its local snapshot once before writing the report.
+        assertTrue(model.state.value.exporting); assertEquals(3, snapshots)
+        assertEquals(1, probes); assertEquals(1, exports)
     }
 
     @Test fun viewModelDestructionCancelsARefreshWithoutLeakingItsJob() = runTest(dispatcher) {

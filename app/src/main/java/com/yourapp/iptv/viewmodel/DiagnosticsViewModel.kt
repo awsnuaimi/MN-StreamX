@@ -89,14 +89,20 @@ class DiagnosticsViewModel @Inject constructor(private val settings: SettingsRep
     }
     fun export(language: HomeLanguage) {
         val value = mutable.value
-        val snapshot = value.snapshot ?: return
-        if (!visible || value.busy || value.exporting || value.refreshing) return
+        if (value.snapshot == null || !visible || value.busy || value.exporting || value.refreshing) return
         val ticket = ++generation
         mutable.update { it.copy(exporting = true,shareFile = null,shareFailure = false,failure = false) }
         operation = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
-                val file = diagnostics.export(snapshot,value.source,value.sourceKey,value.checks,events.value,language)
+                // Refresh resources and measurements locally before writing the report.
+                val freshSnapshot = withTimeout(10_000L) { diagnostics.snapshot() }
+                currentCoroutineContext().ensureActive()
+                if (generation != ticket || !visible) return@launch
+                mutable.update { it.copy(snapshot = freshSnapshot) }
+                val file = diagnostics.export(freshSnapshot,value.source,value.sourceKey,value.checks,events.value,language)
                 if (generation == ticket && visible) mutable.update { it.copy(shareFile = file,shareRequest = ticket) }
+            } catch (_: TimeoutCancellationException) {
+                if (generation == ticket && visible) mutable.update { it.copy(failure = true) }
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { if (generation == ticket && visible) mutable.update { it.copy(failure = true) } }
             finally { mutable.update { if (generation == ticket) it.copy(exporting = false) else it } }

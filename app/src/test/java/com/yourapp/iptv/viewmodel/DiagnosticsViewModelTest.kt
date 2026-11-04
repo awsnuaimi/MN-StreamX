@@ -20,16 +20,18 @@ class DiagnosticsViewModelTest {
     private var exports = 0
     private var snapshots = 0
     private var snapshotsAtExport = -1
+    private var snapshotReader: suspend () -> DiagnosticSnapshot = { diagnosticSnapshot() }
+    private var exportedSnapshot: DiagnosticSnapshot? = null
     private var exportedSource: String? = null
     private var block: suspend ((DiagnosticCheck) -> Unit) -> Unit = { emit -> emit(check()) }
     private var exported: suspend () -> File = { File("mnstreamx-diagnostics-synthetic.txt") }
     private val repository = object : DiagnosticsRepository {
-        override suspend fun snapshot(): DiagnosticSnapshot { snapshots++;return diagnosticSnapshot() }
+        override suspend fun snapshot(): DiagnosticSnapshot { snapshots++;return snapshotReader() }
         override fun sourceKind(source: AppSettings) = if (source.hasSelectedSource()) DiagnosticSource.XTREAM else DiagnosticSource.NONE
         override suspend fun probe(source: AppSettings,onCheck: (DiagnosticCheck) -> Unit) { probes++;block(onCheck) }
         override suspend fun export(snapshot: DiagnosticSnapshot, source: DiagnosticSource, sourceKey: String?,
             checks: List<DiagnosticCheck>, events: List<DiagnosticEvent>, language: HomeLanguage): File {
-            exports++;snapshotsAtExport = snapshots;exportedSource = sourceKey;return exported()
+            exports++;snapshotsAtExport = snapshots;exportedSnapshot = snapshot;exportedSource = sourceKey;return exported()
         }
     }
     @Before fun setup() { Dispatchers.setMain(dispatcher);DiagnosticJournal.clear() }
@@ -80,18 +82,67 @@ class DiagnosticsViewModelTest {
     @Test fun exportCapturesFreshLocalMeasurementsWithoutProbingProvider() = runTest(dispatcher) {
         val model = model();runCurrent()
         val initial = snapshots
+        val expected = diagnosticSnapshot().copy(heapUsed = 123456,availableRam = 789012)
+        snapshotReader = { expected }
         model.export(HomeLanguage.GERMAN);runCurrent()
         assertEquals(initial + 1,snapshots)
         assertEquals(snapshots,snapshotsAtExport)
+        assertEquals(expected,exportedSnapshot)
+        assertEquals(expected,model.state.value.snapshot)
         assertEquals(1,exports)
         assertEquals(0,probes)
     }
     @Test fun exportDoesNotProceedWhenLocalSnapshotFails() = runTest(dispatcher) {
-        // Existing export lifecycle tests cover cancellation and source isolation.
+        val model = model();runCurrent()
+        val previous = model.state.value.snapshot
+        snapshotReader = { error("Synthetic local snapshot failure") }
+        model.export(HomeLanguage.GERMAN);runCurrent()
+        assertEquals(0,exports);assertEquals(0,probes)
+        assertTrue(model.state.value.failure);assertFalse(model.state.value.exporting)
+        assertEquals(previous,model.state.value.snapshot);assertNull(model.state.value.shareFile)
+    }
+    @Test fun aHiddenPageCannotStartAnExport() = runTest(dispatcher) {
         val model = model();runCurrent()
         model.setVisible(false)
         model.export(HomeLanguage.GERMAN);runCurrent()
         assertEquals(0,exports)
+    }
+    @Test fun aSourceSwitchDuringSnapshotReadPreventsEvenStartingTheOldExport() = runTest(dispatcher) {
+        val model = model();runCurrent()
+        val previous = model.state.value.snapshot
+        val gate = CompletableDeferred<Unit>()
+        snapshotReader = {
+            withContext(NonCancellable) { gate.await() }
+            diagnosticSnapshot().copy(heapUsed = 999)
+        }
+        model.export(HomeLanguage.GERMAN);runCurrent()
+        settings.values.value = searchAccount("B");runCurrent()
+        gate.complete(Unit);runCurrent()
+        assertEquals(0,exports);assertEquals(settings.key,model.state.value.sourceKey)
+        assertEquals(previous,model.state.value.snapshot)
+        assertFalse(model.state.value.exporting);assertNull(model.state.value.shareFile)
+    }
+    @Test fun leavingDuringAnExportSnapshotCancelsTheReadWithoutSharing() = runTest(dispatcher) {
+        val model = model();runCurrent()
+        var cancelled = false
+        snapshotReader = { try { awaitCancellation() } finally { cancelled = true } }
+        model.export(HomeLanguage.GERMAN);runCurrent()
+        model.setVisible(false);runCurrent()
+        assertTrue(cancelled);assertEquals(0,exports);assertEquals(0,probes)
+        assertFalse(model.state.value.exporting);assertNull(model.state.value.shareFile)
+    }
+    @Test fun aStalledExportSnapshotTimesOutAndAFreshRetryCanSucceed() = runTest(dispatcher) {
+        val model = model();runCurrent()
+        val previous = model.state.value.snapshot
+        snapshotReader = { awaitCancellation() }
+        model.export(HomeLanguage.GERMAN);runCurrent();advanceTimeBy(10_000);runCurrent()
+        assertTrue(model.state.value.failure);assertFalse(model.state.value.exporting)
+        assertEquals(0,exports);assertEquals(previous,model.state.value.snapshot)
+        val expected = diagnosticSnapshot().copy(heapUsed = 345)
+        snapshotReader = { expected }
+        model.export(HomeLanguage.GERMAN);runCurrent()
+        assertFalse(model.state.value.failure);assertEquals(1,exports);assertEquals(0,probes)
+        assertEquals(expected,exportedSnapshot);assertNotNull(model.state.value.shareFile)
     }
     @Test fun aLateExportFromThePreviousSourceDoesNotOpenTheShareChooser() = runTest(dispatcher) {
         val gate = CompletableDeferred<Unit>()
