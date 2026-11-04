@@ -1,3 +1,14 @@
+
+**الحالة:** 🔄 **استبدال** — تحديث ملف موجود (من v35.0.46.7 السابق)
+
+**التغييرات الجوهرية:**
+- ✅ **رسالة فشل `code fence` أصبحت تشخيصية**: تدرج أرقام جميع الأسطر التي تحتوي ` ``` ` مع نصها
+- ✅ **عرض إجمالي عدد العلامات** في رسالة الفشل (`Total markers: N`)
+- ✅ السطر الأول من كل علامة مسبوق برقم السطر (1-indexed) لتسهيل تحديد موقع الخلل فورًا
+- ✅ استخدام `chr(96) * 3` بدل ` ``` ` الحرفي في رسالة الفشل (لتفادي كسر النص)
+- 📌 بقية الاختبارات لم تتغير
+
+```python
 """Prevent incomplete or mismatched Android TV benchmark documentation."""
 from pathlib import Path
 import re
@@ -15,7 +26,18 @@ class BenchmarkDocumentationTests(unittest.TestCase):
     def test_guide_has_matching_title_and_complete_commands(self):
         guide = (ROOT / f"BENCHMARKING-{VERSION}.md").read_text(encoding="utf-8")
         self.assertIn(f"({VERSION})", guide.splitlines()[0])
-        self.assertEqual(guide.count("```" ) % 2, 0, "Unclosed Markdown code fence")
+        fence_lines = [
+            f"{number}: {line}"
+            for number, line in enumerate(guide.splitlines(), start=1)
+            if "```" in line
+        ]
+        self.assertEqual(
+            guide.count("```") % 2,
+            0,
+            "Unclosed Markdown code fence. Found markers at:\n"
+            + "\n".join(fence_lines)
+            + f"\nTotal markers: {guide.count(chr(96) * 3)}",
+        )
         required = (
             "adb devices -l",
             "tools/run_device_benchmarks.py",
