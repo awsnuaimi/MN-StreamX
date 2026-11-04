@@ -1,18 +1,3 @@
-
-**الحالة:** 🔄 **استبدال** — تحديث ملف موجود (من v35.0.46.6)
-
-**التغييرات الجوهرية:**
-- ✅ `VERSION` محدّث إلى `v35.0.46.7`
-- ✅ `test_exactly_one_versioned_benchmark_guide`: المقارنة أصبحت بأسماء الملفات (`.name`) بدل كائنات `Path` — أوضح في رسائل الفشل
-- ✅ `test_guide_has_matching_title_and_complete_commands`: 
-  - يتحقق من `({VERSION})` **بين قوسين** (أدق من `VERSION` المجرد)
-  - قائمة الرموز المطلوبة تغيّرت: أُضيف `connectedBenchmarkAndroidTest`، `--serial`، `--threshold-percent`، `Troubleshooting` | حُذف `:app:compileBenchmarkAndroidTestKotlin`، `python3 -m unittest discover -s tools`
-  - المعيار تغيّر من `content.count("```") >= 12` إلى `len(guide.splitlines()) > 65` (تحقق من حجم الملف بدل عدد الكتل)
-  - `assertEqual(..., 0, "Unclosed Markdown code fence")` — أصبح له **رسالة فشل** توضيحية
-- 🆕 **اختبار جديد:** `test_no_old_guide_references_in_current_docs` — يتحقق من خلو `README.md` و`README-AR.md` من أي مرجع لإصدار قديم `v35.0.46.[0-6]`
-- 📊 المجموع: **3 اختبارات** (كانت 2)
-
-```python
 """Prevent incomplete or mismatched Android TV benchmark documentation."""
 from pathlib import Path
 import re
