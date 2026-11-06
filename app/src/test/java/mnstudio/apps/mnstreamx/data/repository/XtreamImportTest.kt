@@ -1,0 +1,86 @@
+package mnstudio.apps.mnstreamx.data.repository
+
+import mnstudio.apps.mnstreamx.data.local.dao.ChannelDao
+import mnstudio.apps.mnstreamx.data.local.dao.FavoriteDao
+import mnstudio.apps.mnstreamx.data.local.entity.ChannelEntity
+import mnstudio.apps.mnstreamx.data.local.entity.FavoriteEntity
+import mnstudio.apps.mnstreamx.data.source.m3u.M3uDataSource
+import mnstudio.apps.mnstreamx.data.source.xtream.XtreamDataSource
+import mnstudio.apps.mnstreamx.domain.model.PlaylistLoadException
+import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.RecordedRequest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+class XtreamImportTest {
+    private lateinit var server: MockWebServer
+    private lateinit var client: OkHttpClient
+    private val database = Channels()
+    private val favorites = Favorites()
+
+    @Before fun setUp() {
+        server = MockWebServer()
+        server.start()
+        client = OkHttpClient()
+    }
+
+    @After fun tearDown() {
+        client.dispatcher.cancelAll()
+        client.connectionPool.evictAll()
+        client.dispatcher.executorService.shutdown()
+        server.shutdown()
+    }
+
+    @Test fun failureKeepsStoredChannelsAndSuccessPreservesFavoriteAcrossRefresh() = runBlocking {
+        val previous = database.values.toList()
+        val repository = ChannelRepositoryImpl(M3uDataSource(client), XtreamDataSource(client), database, favorites)
+        server.enqueue(MockResponse().setBody("""{"user_info":{"auth":0}}"""))
+        assertTrue(runCatching { repository.loadFromXtream(server.url("/").toString(), "user", "password") }
+            .exceptionOrNull() is PlaylistLoadException)
+        assertEquals(previous, database.values)
+        enqueueSuccess()
+        val first = repository.loadFromXtream(server.url("/").toString(), "user", "password").single()
+        repository.addFavorite(first)
+        enqueueSuccess()
+        val refreshed = repository.loadFromXtream(server.url("/").toString(), "user", "new-password").single()
+        assertEquals(first.id, refreshed.id)
+        assertTrue(refreshed.isFavorite)
+        assertEquals("News", refreshed.group)
+        assertTrue(refreshed.streamUrl.contains("new-password"))
+    }
+
+    private fun enqueueSuccess() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) = MockResponse().setBody(
+                when (request.requestUrl!!.queryParameter("action")) {
+                    "get_live_categories" -> """[{"category_id":1,"category_name":"News"}]"""
+                    "get_live_streams" -> """[{"stream_id":12,"name":"Test","category_id":"1"}]"""
+                    else -> """{"user_info":{"auth":1,"status":"Active"}}"""
+                })
+        }
+    }
+
+    private class Channels : ChannelDao {
+        var values = listOf(ChannelEntity("previous", "Previous", null, "https://unit.test/old.ts"))
+        override suspend fun insertChannels(channels: List<ChannelEntity>) { values = channels }
+        override suspend fun getAllChannels() = values
+        override suspend fun getChannel(id: String) = values.firstOrNull { it.id == id }
+        override suspend fun clearAll() { values = emptyList() }
+    }
+
+    private class Favorites : FavoriteDao {
+        private val values = mutableMapOf<String, FavoriteEntity>()
+        override suspend fun addFavorite(favorite: FavoriteEntity) { values[favorite.channelId] = favorite }
+        override suspend fun removeFavorite(channelId: String) { values.remove(channelId) }
+        override suspend fun getAllFavorites() = values.values.toList()
+        override fun observeFavoriteIds() = kotlinx.coroutines.flow.flowOf(values.keys.toList())
+        override suspend fun isFavorite(channelId: String) = channelId in values
+    }
+}

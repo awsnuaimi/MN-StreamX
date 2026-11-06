@@ -44,7 +44,7 @@ if (stableSigningReady && !file(stableStore).isFile()) {
 }
 
 android {
-    namespace 'com.yourapp.iptv'
+    namespace 'mnstudio.apps.mnstreamx'
     compileSdk 35
     ndkVersion "27.2.12479018"
 

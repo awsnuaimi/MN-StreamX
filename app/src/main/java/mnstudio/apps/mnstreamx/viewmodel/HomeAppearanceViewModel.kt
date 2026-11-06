@@ -1,0 +1,114 @@
+package mnstudio.apps.mnstreamx.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import mnstudio.apps.mnstreamx.domain.model.HomeAppearance
+import mnstudio.apps.mnstreamx.domain.model.HomeTheme
+import mnstudio.apps.mnstreamx.domain.model.HomeChannelLayout
+import mnstudio.apps.mnstreamx.domain.repository.HomeAppearanceRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import javax.inject.Inject
+
+@HiltViewModel
+class HomeAppearanceViewModel @Inject constructor(private val repository: HomeAppearanceRepository) : ViewModel() {
+    private val state = MutableStateFlow<HomeAppearance?>(null)
+    val appearance = state.asStateFlow()
+    private val themeBusyState = MutableStateFlow(false)
+    val themeSaving = themeBusyState.asStateFlow()
+    private val themeErrorState = MutableStateFlow(false)
+    val themeError = themeErrorState.asStateFlow()
+    private val layoutErrorState = MutableStateFlow(false)
+    val channelLayoutError = layoutErrorState.asStateFlow()
+
+    val nightSaving = themeSaving
+    val nightError = themeError
+
+    fun toggleTheme() = saveAppearanceChange { current ->
+        current.copy(theme = when (current.theme) {
+            HomeTheme.DARK_BLUE -> HomeTheme.LIGHT
+            HomeTheme.LIGHT -> HomeTheme.RED
+            HomeTheme.RED -> HomeTheme.DARK_BLUE
+        })
+    }
+
+    fun toggleNightMode() = saveAppearanceChange { current ->
+        current.copy(isNightMode = !current.isNightMode)
+    }
+
+    fun setChannelLayout(layout: HomeChannelLayout) {
+        if (state.value?.channelLayout == layout) return
+        saveAppearanceChange(layoutErrorState) { it.copy(channelLayout = layout) }
+    }
+
+    private fun saveAppearanceChange(failure: MutableStateFlow<Boolean> = themeErrorState,
+        change: (HomeAppearance) -> HomeAppearance) {
+        if (themeBusyState.value) return
+        val current = state.value?.normalized() ?: return
+        themeBusyState.value = true
+        failure.value = false
+        viewModelScope.launch {
+            try {
+                repository.save(change(current))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                failure.value = true
+            } finally {
+                themeBusyState.value = false
+            }
+        }
+    }
+    init { viewModelScope.launch {
+        while (isActive) {
+            try { repository.observe().collect { state.value = it.normalized() }; break }
+            catch (error: CancellationException) { throw error }
+            catch (_: Exception) { if (state.value == null) state.value = HomeAppearance(); delay(5000) }
+        }
+    } }
+}
+
+data class HomeAppearanceEditorState(
+    val value: HomeAppearance = HomeAppearance(), val loading: Boolean = true,
+    val saving: Boolean = false, val failed: Boolean = false,
+    val saved: Boolean = false, val error: String? = null, val committed: HomeAppearance? = null
+) {
+    val dirty: Boolean get() = !loading && !failed && committed != null && value != committed
+}
+
+@HiltViewModel
+class HomeAppearanceSettingsViewModel @Inject constructor(private val repository: HomeAppearanceRepository) : ViewModel() {
+    private val state = MutableStateFlow(HomeAppearanceEditorState())
+    val uiState = state.asStateFlow()
+    private var loadJob: Job? = null
+    init { load() }
+    fun load() {
+        if (state.value.saving || loadJob?.isActive == true) return
+        state.value = state.value.copy(loading = true, failed = false, error = null)
+        loadJob = viewModelScope.launch {
+            try {
+                val loaded = repository.observe().first().normalized()
+                state.value = HomeAppearanceEditorState(loaded, loading = false, committed = loaded)
+            }
+            catch (error: CancellationException) { throw error }
+            catch (_: Exception) { state.value = state.value.copy(loading = false, failed = true, error = "تعذر قراءة مظهر الرئيسية.") }
+        }
+    }
+    fun update(value: HomeAppearance) {
+        if (state.value.loading || state.value.saving || state.value.failed) return
+        state.value = state.value.copy(value = value.normalized(), error = null, saved = false)
+    }
+    fun reset() = update(HomeAppearance(profileId = state.value.value.profileId))
+    fun discard() { state.value.committed?.let(::update) }
+    fun save() {
+        val current = state.value
+        if (current.loading || current.saving || current.failed) return
+        state.value = current.copy(saving = true, saved = false, error = null)
+        viewModelScope.launch {
+            try { repository.save(current.value.normalized()); state.value = state.value.copy(saving = false, saved = true, committed = current.value.normalized()) }
+            catch (error: CancellationException) { throw error }
+            catch (_: Exception) { state.value = state.value.copy(saving = false, error = "تعذر الحفظ. أعد المحاولة.") }
+        }
+    }
+}

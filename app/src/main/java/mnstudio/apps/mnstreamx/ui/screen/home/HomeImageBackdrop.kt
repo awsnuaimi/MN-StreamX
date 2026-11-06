@@ -1,0 +1,106 @@
+package mnstudio.apps.mnstreamx.ui.screen.home
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import java.io.File
+
+@Composable
+internal fun HomeImageBackdrop(
+    url: String?, colors: HomeTvPalette, modifier: Modifier = Modifier,
+    large: Boolean = false, frame: File? = null
+) {
+    val source = remember(url) {
+        HomeImageSource.remote(url)?.let(HomeArtworkSource::Logo) ?: HomeArtworkSource.Empty
+    }
+    HomeImageBackdrop(source, colors, modifier, large, frame)
+}
+
+@Composable
+internal fun HomeImageBackdrop(
+    source: HomeArtworkSource, colors: HomeTvPalette,
+    modifier: Modifier = Modifier, large: Boolean = false, frame: File? = null
+) {
+    val context = LocalContext.current
+    var logoFailed by remember(source) { mutableStateOf(false) }
+    var showingFrame by remember(frame?.absolutePath, frame?.lastModified()) { mutableStateOf(false) }
+    val direction = LocalLayoutDirection.current
+    val scrimColor = colors.background
+    val photoOverlay = listOf(scrimColor.copy(alpha = 0.02f),
+        scrimColor.copy(alpha = 0.35f), scrimColor.copy(alpha = 0.92f))
+    val baseOverlay = if (showingFrame) photoOverlay else listOf(Color.Transparent, Color.Transparent)
+    val overlay = if (showingFrame) {
+        if (direction == LayoutDirection.Rtl) baseOverlay else baseOverlay.reversed()
+    } else if (direction == LayoutDirection.Rtl) baseOverlay.reversed() else baseOverlay
+    val request = remember(context, source, large) {
+        (source as? HomeArtworkSource.Logo)?.let { logo ->
+            ImageRequest.Builder(context).data(logo.url)
+                .size(if (large) 720 else 360, if (large) 360 else 180)
+                .crossfade(false).build()
+        }
+    }
+    Box(modifier.testTag("hero-artwork").background(Brush.horizontalGradient(if (large) listOf(colors.background, colors.surface) else colors.heroGradient))) {
+        if (request != null && !logoFailed) {
+            AsyncImage(
+                model = request, contentDescription = null,
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.CenterEnd,
+                alpha = if (large) 0.95f else 0.85f,
+                modifier = Modifier.align(Alignment.CenterEnd)
+                    .fillMaxWidth(0.34f).aspectRatio(16f / 9f).padding(12.dp)
+                    .testTag("hero-logo"),
+                onError = { logoFailed = true }
+            )
+        }
+        if (source is HomeArtworkSource.Monogram || logoFailed) {
+            Box(Modifier.align(Alignment.CenterEnd).fillMaxWidth(0.34f), contentAlignment = Alignment.Center) {
+                Text((source as? HomeArtworkSource.Monogram)?.text ?: "TV", color = colors.accent,
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Bold)
+            }
+        }
+        SavedChannelFrame(frame, Modifier.align(Alignment.CenterEnd)
+            .fillMaxWidth(0.70f).fillMaxHeight()
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                val picture = minOf(1f, size.height * 16f / 9f / size.width)
+                val fade = minOf(0.28f, picture)
+                val stops = if (direction == LayoutDirection.Rtl)
+                    arrayOf(0f to Color.Black, (picture - fade) to Color.Black, picture to Color.Transparent, 1f to Color.Transparent)
+                else arrayOf(0f to Color.Transparent, (1f - picture) to Color.Transparent,
+                    (1f - picture + fade) to Color.Black, 1f to Color.Black)
+                drawRect(Brush.horizontalGradient(*stops), blendMode = BlendMode.DstIn)
+            },
+            contentScale = ContentScale.Fit, alignment = Alignment.CenterEnd) { showingFrame = it }
+        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(overlay)))
+    }
+}

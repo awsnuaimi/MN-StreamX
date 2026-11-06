@@ -32,7 +32,7 @@ static jstring stringValue(JNIEnv *env, const std::string &value) {
     return result;
 }
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_yourapp_iptv_data_caption_NativePieces_create(JNIEnv *env, jobject, jstring path) {
+Java_mnstudio_apps_mnstreamx_data_caption_NativePieces_create(JNIEnv *env, jobject, jstring path) {
     sentencepiece::SentencePieceProcessor *processor = nullptr;
     try {
         processor = new sentencepiece::SentencePieceProcessor();
@@ -42,7 +42,7 @@ Java_com_yourapp_iptv_data_caption_NativePieces_create(JNIEnv *env, jobject, jst
     return reinterpret_cast<jlong>(processor);
 }
 extern "C" JNIEXPORT jobjectArray JNICALL
-Java_com_yourapp_iptv_data_caption_NativePieces_encode(JNIEnv *env, jobject, jlong handle, jstring text) {
+Java_mnstudio_apps_mnstreamx_data_caption_NativePieces_encode(JNIEnv *env, jobject, jlong handle, jstring text) {
     auto *processor = reinterpret_cast<sentencepiece::SentencePieceProcessor *>(handle);
     if (!processor) { failure(env, "Tokenizer is closed"); return nullptr; }
     std::vector<std::string> pieces;
@@ -61,11 +61,11 @@ Java_com_yourapp_iptv_data_caption_NativePieces_encode(JNIEnv *env, jobject, jlo
     return output;
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_yourapp_iptv_data_caption_NativePieces_release(JNIEnv *, jobject, jlong handle) {
+Java_mnstudio_apps_mnstreamx_data_caption_NativePieces_release(JNIEnv *, jobject, jlong handle) {
     delete reinterpret_cast<sentencepiece::SentencePieceProcessor *>(handle);
 }
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_yourapp_iptv_data_caption_NativePieces_decode(JNIEnv *env, jobject, jlong handle, jobjectArray values) {
+Java_mnstudio_apps_mnstreamx_data_caption_NativePieces_decode(JNIEnv *env, jobject, jlong handle, jobjectArray values) {
     auto *processor = reinterpret_cast<sentencepiece::SentencePieceProcessor *>(handle);
     if (!processor) { failure(env, "Tokenizer is closed"); return nullptr; }
     try {

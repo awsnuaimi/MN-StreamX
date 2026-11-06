@@ -60,7 +60,7 @@ static jstring javaString(JNIEnv *env, const std::string &text) {
     return result;
 }
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_create(JNIEnv *env, jobject, jstring path, jint threads) {
+Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_create(JNIEnv *env, jobject, jstring path, jint threads) {
     const char *name = env->GetStringUTFChars(path, nullptr);
     if (!name) return 0;
     Session *s = nullptr;
@@ -76,7 +76,7 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_create(JNIEnv *env, jobject, js
     return reinterpret_cast<jlong>(s);
 }
 extern "C" JNIEXPORT jobjectArray JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jlong handle,
+Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jlong handle,
                                                       jfloatArray samples, jstring language, jboolean translateToEnglish,
                                                       jstring targetLanguage) {
     auto *s = reinterpret_cast<Session *>(handle);
@@ -164,11 +164,11 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_decode(JNIEnv *env, jobject, jl
     return output;
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_cancel(JNIEnv *, jobject, jlong handle) {
+Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_cancel(JNIEnv *, jobject, jlong handle) {
     if (handle) reinterpret_cast<Session *>(handle)->cancelled.store(true, std::memory_order_relaxed);
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_park(JNIEnv *, jobject, jlong handle) {
+Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_park(JNIEnv *, jobject, jlong handle) {
     auto *s = reinterpret_cast<Session *>(handle);
     if (s) {
         whisper_free_state(s->state); s->state = nullptr;
@@ -179,7 +179,7 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_park(JNIEnv *, jobject, jlong h
     }
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_resetState(JNIEnv *, jobject, jlong handle) {
+Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_resetState(JNIEnv *, jobject, jlong handle) {
     auto *s = reinterpret_cast<Session *>(handle);
     if (s) {
         // Called after decode has returned on the same serial inference worker.
@@ -189,11 +189,11 @@ Java_com_yourapp_iptv_data_caption_NativeWhisper_resetState(JNIEnv *, jobject, j
     }
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_trimMemory(JNIEnv *, jobject) {
+Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_trimMemory(JNIEnv *, jobject) {
     purgeUnusedMemory();
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_yourapp_iptv_data_caption_NativeWhisper_release(JNIEnv *, jobject, jlong handle) {
+Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_release(JNIEnv *, jobject, jlong handle) {
     auto *s = reinterpret_cast<Session *>(handle);
     if (s) { whisper_free_state(s->state); whisper_free(s->context); delete s; purgeUnusedMemory(); }
 }

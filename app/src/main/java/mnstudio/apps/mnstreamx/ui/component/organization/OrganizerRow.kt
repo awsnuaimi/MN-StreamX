@@ -1,0 +1,37 @@
+package mnstudio.apps.mnstreamx.ui.component.organization
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.semantics.*
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun OrganizerRow(title: String, modifier: Modifier = Modifier, subtitle: String = "",
+    selected: Boolean = false, enabled: Boolean = true, checked: Boolean? = null, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(onClick = onClick, enabled = enabled,
+        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }.semantics {
+            this.selected = selected
+            if (checked != null) { role = Role.Checkbox; toggleableState = if (checked) ToggleableState.On else ToggleableState.Off }
+        },
+        shape = MaterialTheme.shapes.small, color = if (focused || selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface, border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
+        Row(Modifier.padding(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (checked != null) Checkbox(checked, onCheckedChange = null, enabled = enabled)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content))
+                if (subtitle.isNotBlank()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Content))
+            }
+        }
+    }
+}

@@ -1,0 +1,57 @@
+package mnstudio.apps.mnstreamx.ui.screen.vod
+
+import mnstudio.apps.mnstreamx.domain.model.HomeLanguage
+import mnstudio.apps.mnstreamx.domain.model.VodKind
+
+internal class VodLabels(val language: HomeLanguage) {
+    fun text(ar: String, en: String, de: String): String = when (language) {
+        HomeLanguage.ARABIC -> ar
+        HomeLanguage.ENGLISH -> en
+        HomeLanguage.GERMAN -> de
+    }
+    fun title(kind: VodKind) = if (kind == VodKind.MOVIE)
+        text("الأفلام", "Movies", "Filme") else text("المسلسلات", "Series", "Serien")
+    fun featured() = text("اختيار مميز", "Featured", "Im Fokus")
+    fun titles() = text("عنوان", "titles", "Titel")
+    fun allShort() = text("الكل", "All", "Alle")
+    fun filter() = text("التصنيفات", "Filter", "Filtern")
+    fun sort() = text("ترتيب", "Sort", "Sortieren")
+    fun details() = text("التفاصيل", "Details", "Details")
+    fun newTitles() = text("تصفح العناوين", "Browse titles", "Titel entdecken")
+    fun all() = text("جميع التصنيفات", "All categories", "Alle Kategorien")
+    fun search() = text("ابحث عن عنوان", "Search titles", "Titel suchen")
+    fun refresh() = text("تحديث القائمة", "Refresh catalog", "Katalog aktualisieren")
+    fun cachedRefreshFailed() = text("القائمة المحفوظة متاحة، لكن تعذر تحديثها من الخادم.",
+        "Showing saved titles; could not refresh from the server.",
+        "Gespeicherte Titel werden angezeigt. Aktualisierung fehlgeschlagen.")
+    fun categoryMode() = text("لم يوفر الخادم قائمة كاملة؛ يُحمّل التصنيف المختار فقط. البحث داخل هذا التصنيف.",
+        "The server did not provide a complete list; only the selected category is loaded. Search is within that category.",
+        "Der Server liefert keine vollständige Liste; nur die gewählte Kategorie wird geladen. Die Suche gilt für diese Kategorie.")
+    fun categoriesUnavailable() = text("تعذر تحميل أسماء التصنيفات، لكن العناوين متاحة. يمكنك تحديث القائمة للمحاولة مجددًا.",
+        "Category names could not be loaded, but titles are available. Refresh to retry.",
+        "Kategorienamen fehlen, die Titel sind verfügbar. Zum Wiederholen den Katalog aktualisieren.")
+    fun emptyCatalog() = text("لم يُرجع الخادم عناوين في هذه القائمة. حدّث القائمة أو جرّب تصنيفًا آخر؛ وقد لا يشمل الاشتراك هذا المحتوى.",
+        "The server returned no titles in this list. Refresh or try another category; the subscription may not include this content.",
+        "Der Server meldet keine Titel in dieser Liste. Aktualisieren oder eine andere Kategorie wählen; eventuell ist der Inhalt nicht im Abo enthalten.")
+    fun tryAgain() = text("إعادة المحاولة", "Retry", "Erneut versuchen")
+    fun back() = text("رجوع", "Back", "Zurück")
+    fun play() = text("تشغيل", "Play", "Abspielen")
+    fun resume() = text("متابعة المشاهدة", "Continue watching", "Weitersehen")
+    fun position(ms: Long): String {
+        val minutes = (ms / 60_000L).coerceAtLeast(0L)
+        return "%02d:%02d".format(java.util.Locale.ROOT, minutes / 60, minutes % 60)
+    }
+    fun seriesResume() = text("متابعة الحلقة", "Resume episode", "Folge fortsetzen")
+    fun seriesStart() = text("ابدأ المشاهدة", "Start watching", "Jetzt ansehen")
+    fun seriesReplay() = text("إعادة مشاهدة المسلسل", "Watch again", "Erneut ansehen")
+    fun watched() = text("شوهدت", "Watched", "Gesehen")
+    fun notWatched() = text("لم تُشاهد", "Not watched", "Nicht angesehen")
+    fun seasonEpisode(season: Int, episode: Int) = text("الموسم $season · الحلقة $episode",
+        "Season $season · Episode $episode", "Staffel $season · Folge $episode")
+    fun episodes() = text("الحلقات", "Episodes", "Folgen")
+    fun empty() = text("لا توجد نتائج", "No results", "Keine Ergebnisse")
+    fun failed() = text("تعذر تحميل المحتوى من السيرفر.", "Could not load the catalog.", "Katalog konnte nicht geladen werden.")
+    fun requiresXtream() = text("تحتاج الأفلام والمسلسلات إلى حساب Xtream Codes أو رابط M3U من نوع get.php يحتوي بياناته. روابط M3U العامة غير مدعومة هنا.",
+        "Movies and series require an Xtream Codes account or its get.php M3U URL. Generic M3U playlists are not supported here.",
+        "Filme und Serien benötigen ein Xtream-Konto oder dessen get.php-M3U-Link. Allgemeine M3U-Listen werden hier nicht unterstützt.")
+}

@@ -1,0 +1,182 @@
+package mnstudio.apps.mnstreamx.viewmodel
+
+import androidx.lifecycle.ViewModelStore
+import mnstudio.apps.mnstreamx.domain.model.*
+import mnstudio.apps.mnstreamx.domain.repository.HomeAppearanceRepository
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.test.*
+import org.junit.*
+import org.junit.Assert.*
+import java.io.IOException
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class HomeAppearanceViewModelTest {
+    private val dispatcher = StandardTestDispatcher()
+    private val store = ViewModelStore()
+    @Before fun setup() { Dispatchers.setMain(dispatcher) }
+    @After fun cleanup() { store.clear(); Dispatchers.resetMain() }
+    private class Repository : HomeAppearanceRepository {
+        val values = MutableStateFlow(HomeAppearance())
+        var failRead = false; var failWrite = false; var writes = 0
+        override fun observe() = flow { if (failRead) throw IOException(); emitAll(values) }
+        override suspend fun save(value: HomeAppearance) {
+            writes++; delay(20); if (failWrite) throw IOException(); values.value = value
+        }
+    }
+    @Test fun draftDoesNotChangeActiveHomeUntilOneSuccessfulSave() = runTest(dispatcher) {
+        val repository = Repository()
+        val reader = HomeAppearanceViewModel(repository).also { store.put("reader", it) }
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("editor", it) }
+        assertNull(reader.appearance.value)
+        runCurrent()
+        val choice = HomeAppearance(HomeLanguage.ENGLISH, SidebarSide.LEFT, true, 4)
+        editor.update(choice); runCurrent()
+        assertEquals(HomeAppearance(), reader.appearance.value)
+        editor.save(); editor.save(); advanceTimeBy(21); runCurrent()
+        assertEquals(1, repository.writes)
+        assertEquals(choice, reader.appearance.value)
+        assertTrue(editor.uiState.value.saved)
+    }
+    @Test fun sidebarThemeTogglePreservesOtherSettingsAndRejectsDoubleTap() = runTest(dispatcher) {
+        val repository = Repository()
+        val saved = HomeAppearance(HomeLanguage.GERMAN, SidebarSide.LEFT,
+            true, 4, restoreBrowseSession = false)
+        repository.values.value = saved
+        val viewModel = HomeAppearanceViewModel(repository).also { store.put("themeReader", it) }
+        runCurrent()
+        viewModel.toggleTheme()
+        viewModel.toggleTheme()
+        assertTrue(viewModel.themeSaving.value)
+        advanceTimeBy(21); runCurrent()
+        assertEquals(1, repository.writes)
+        assertEquals(saved.copy(theme = HomeTheme.LIGHT), repository.values.value)
+        assertFalse(viewModel.themeSaving.value)
+        assertFalse(viewModel.themeError.value)
+    }
+    @Test fun sidebarThemeFailureKeepsPreviousPreferenceAndShowsError() = runTest(dispatcher) {
+        val repository = Repository().apply { failWrite = true }
+        val viewModel = HomeAppearanceViewModel(repository).also { store.put("themeFailure", it) }
+        runCurrent()
+        viewModel.toggleTheme()
+        advanceTimeBy(21); runCurrent()
+        assertTrue(repository.values.value.isDarkTheme)
+        assertTrue(viewModel.themeError.value)
+        assertFalse(viewModel.themeSaving.value)
+    }
+    @Test fun nightButtonTogglesTrueBlackWithoutChangingSavedThemeOrPreferences() = runTest(dispatcher) {
+        val repository = Repository()
+        val saved = HomeAppearance(HomeLanguage.GERMAN, SidebarSide.LEFT,
+            true, 4, restoreBrowseSession = false, theme = HomeTheme.LIGHT)
+        repository.values.value = saved
+        val viewModel = HomeAppearanceViewModel(repository).also { store.put("nightReader", it) }
+        runCurrent()
+        viewModel.toggleNightMode()
+        viewModel.toggleNightMode() // ignored while saving
+        advanceTimeBy(21); runCurrent()
+        assertEquals(1, repository.writes)
+        assertEquals(saved.copy(isNightMode = true), repository.values.value)
+        viewModel.toggleNightMode()
+        advanceTimeBy(21); runCurrent()
+        assertEquals(saved, repository.values.value)
+    }
+    @Test fun nightModeErrorKeepsPreviousValueAndTheme() = runTest(dispatcher) {
+        val repository = Repository().apply {
+            values.value = HomeAppearance(theme = HomeTheme.LIGHT)
+            failWrite = true
+        }
+        val viewModel = HomeAppearanceViewModel(repository).also { store.put("nightError", it) }
+        runCurrent()
+        viewModel.toggleNightMode()
+        advanceTimeBy(21); runCurrent()
+        assertFalse(repository.values.value.isNightMode)
+        assertFalse(repository.values.value.isDarkTheme)
+        assertTrue(viewModel.nightError.value)
+        assertFalse(viewModel.nightSaving.value)
+    }
+    @Test fun failedReadBlocksOverwriteUntilExplicitReloadSucceeds() = runTest(dispatcher) {
+        val repository = Repository().apply { failRead = true }
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("editor", it) }
+        runCurrent(); editor.update(HomeAppearance(columns = 4)); editor.save(); runCurrent()
+        assertTrue(editor.uiState.value.failed); assertEquals(0, repository.writes)
+        repository.failRead = false; editor.load(); runCurrent()
+        assertFalse(editor.uiState.value.failed); assertFalse(editor.uiState.value.loading)
+    }
+    @Test fun failedWritePreservesDraftAndRetrySavesIt() = runTest(dispatcher) {
+        val repository = Repository().apply { failWrite = true }
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("editor", it) }
+        val expectedAppearance = HomeAppearance(columns = 2)
+        runCurrent()
+        editor.update(expectedAppearance)
+        editor.save()
+        advanceTimeBy(21)
+        runCurrent()
+        val failedDraft: HomeAppearanceEditorState = editor.uiState.value
+        assertNotNull(failedDraft.error)
+        assertEquals(expectedAppearance, failedDraft.value)
+        assertFalse(failedDraft.saved)
+        repository.failWrite = false
+        editor.save()
+        advanceTimeBy(21)
+        runCurrent()
+        assertTrue(editor.uiState.value.saved)
+        assertEquals(expectedAppearance, repository.values.value)
+    }
+    @Test fun quickThemeCycleIncludesRedAndNeverChangesTheIndependentNightOverride() = runTest(dispatcher) {
+        val repository = Repository().apply { values.value = HomeAppearance(theme = HomeTheme.RED, isNightMode = true) }
+        val model = HomeAppearanceViewModel(repository).also { store.put("redCycle", it) }
+        runCurrent()
+        for (theme in listOf(HomeTheme.DARK_BLUE, HomeTheme.LIGHT, HomeTheme.RED)) {
+            model.toggleTheme(); advanceTimeBy(21); runCurrent()
+            assertEquals(theme, repository.values.value.theme)
+            assertTrue(repository.values.value.isNightMode)
+        }
+    }
+
+    @Test fun committedDraftSurvivesCollectorRecreationAndDiscardDoesNotWriteOrLoseProfile() = runTest(dispatcher) {
+        val profile = "12345678-1234-1234-1234-123456789abc"
+        val repository = Repository().apply { values.value = HomeAppearance(profileId = profile) }
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("draft", it) }
+        runCurrent();assertFalse(editor.uiState.value.dirty)
+        val original = editor.uiState.value.value
+        editor.update(original.copy(theme = HomeTheme.RED));runCurrent()
+        val subscription = backgroundScope.launch { editor.uiState.collect() };runCurrent();subscription.cancel()
+        assertTrue(editor.uiState.value.dirty);assertEquals(original, editor.uiState.value.committed)
+        editor.discard();assertFalse(editor.uiState.value.dirty)
+        assertEquals(original, editor.uiState.value.value);assertEquals(0, repository.writes)
+        editor.reset();assertEquals(profile, editor.uiState.value.value.profileId)
+    }
+    @Test fun failureKeepsTheCommittedBaselineUntilARetryActuallyFinishes() = runTest(dispatcher) {
+        val repository = Repository().apply { failWrite = true }
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("retry-draft", it) }
+        runCurrent();val original = editor.uiState.value.committed
+        editor.update(editor.uiState.value.value.copy(columns = 5));editor.save();advanceTimeBy(21);runCurrent()
+        assertTrue(editor.uiState.value.dirty);assertEquals(original, editor.uiState.value.committed)
+        assertNotNull(editor.uiState.value.error)
+        repository.failWrite = false;editor.save();runCurrent()
+        assertTrue(editor.uiState.value.saving);assertTrue(editor.uiState.value.dirty)
+        advanceTimeBy(21);runCurrent()
+        assertFalse(editor.uiState.value.dirty);assertTrue(editor.uiState.value.saved)
+        assertEquals(5, editor.uiState.value.committed?.columns)
+    }
+    @Test fun editsAndDiscardAreIgnoredWhileAnAcceptedSaveIsRunning() = runTest(dispatcher) {
+        val repository = Repository()
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("busy-draft", it) }
+        runCurrent();val selected = editor.uiState.value.value.copy(theme = HomeTheme.RED)
+        editor.update(selected);editor.save();editor.discard();editor.update(selected.copy(columns = 5))
+        advanceTimeBy(21);runCurrent()
+        assertEquals(selected, repository.values.value);assertEquals(selected, editor.uiState.value.committed)
+        assertFalse(editor.uiState.value.dirty);assertEquals(1, repository.writes)
+    }
+
+    @Test fun reloadingAfterAnExternalRestorePublishesItsNewBaselineWithoutWriting() = runTest(dispatcher) {
+        val repository = Repository()
+        val editor = HomeAppearanceSettingsViewModel(repository).also { store.put("restore-refresh", it) }
+        runCurrent();assertFalse(editor.uiState.value.dirty)
+        val restored = HomeAppearance(language = HomeLanguage.GERMAN, theme = HomeTheme.RED, columns = 5)
+        repository.values.value = restored
+        editor.load();runCurrent()
+        assertEquals(restored, editor.uiState.value.value);assertEquals(restored, editor.uiState.value.committed)
+        assertFalse(editor.uiState.value.dirty);assertEquals(0, repository.writes)
+    }
+}

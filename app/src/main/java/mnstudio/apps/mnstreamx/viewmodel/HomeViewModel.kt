@@ -1,0 +1,333 @@
+package mnstudio.apps.mnstreamx.viewmodel
+
+import mnstudio.apps.mnstreamx.domain.profile.ProfileScope
+import mnstudio.apps.mnstreamx.domain.performance.*
+
+import mnstudio.apps.mnstreamx.domain.organization.*
+import mnstudio.apps.mnstreamx.domain.repository.OrganizationRepository
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import mnstudio.apps.mnstreamx.domain.model.PlaylistLoadException
+import mnstudio.apps.mnstreamx.domain.model.Channel
+import mnstudio.apps.mnstreamx.domain.model.HomeStartupSnapshot
+import mnstudio.apps.mnstreamx.domain.model.AppSettings
+import mnstudio.apps.mnstreamx.domain.model.HomeBrowseSession
+import mnstudio.apps.mnstreamx.domain.model.HomeBrowseMemory
+import mnstudio.apps.mnstreamx.domain.model.HomeGridPosition
+import mnstudio.apps.mnstreamx.domain.model.HomeGridRestore
+import mnstudio.apps.mnstreamx.domain.model.HomeSessionResolver
+import mnstudio.apps.mnstreamx.domain.repository.HomeSessionRepository
+import mnstudio.apps.mnstreamx.domain.repository.HomeStartupRepository
+import mnstudio.apps.mnstreamx.domain.model.ChannelFavorites
+import mnstudio.apps.mnstreamx.domain.model.PlaybackQueue
+import mnstudio.apps.mnstreamx.domain.repository.FavoriteRepository
+import mnstudio.apps.mnstreamx.domain.repository.PlaylistRepository
+import mnstudio.apps.mnstreamx.domain.repository.SettingsRepository
+import mnstudio.apps.mnstreamx.ui.state.HomeUiState
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import mnstudio.apps.mnstreamx.di.DefaultDispatcher
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+import mnstudio.apps.mnstreamx.util.LoadTimings
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import mnstudio.apps.mnstreamx.domain.parental.ParentalControl
+import mnstudio.apps.mnstreamx.domain.parental.ParentalProjection
+
+@HiltViewModel
+class HomeViewModel @Inject constructor(
+    private val settings: SettingsRepository,
+    playlists: PlaylistRepository,
+    @DefaultDispatcher private val background: CoroutineDispatcher,
+    favorites: FavoriteRepository,
+    organization: OrganizationRepository = OrganizationRepository.Disabled,
+    startup: HomeStartupRepository = HomeStartupRepository.Disabled,
+    browseSessions: HomeSessionRepository = HomeSessionRepository.Disabled,
+    private val parental: ParentalControl = ParentalControl.Disabled
+) : ViewModel() {
+    private val state = MutableStateFlow(HomeUiState())
+    val uiState = state.asStateFlow()
+    private var settingsJob: Job? = null
+    private var filterJob: Job? = null
+    private var preparationActive = true
+    private var catalogTree = OrganizationTree()
+    private val openedAtNanos = System.nanoTime()
+    private var reportedReady = false
+    private var favoriteIds: Set<String>? = null
+    private var pendingBrowse: HomeBrowseSession? = null
+    private var contextRestore = false
+    private var browseDraft: HomeBrowseSession? = null
+    private val browseMemory = HomeBrowseMemory()
+    private var restoreSequence = 0L
+    private val session = HomeSessionController(viewModelScope, browseSessions, ::onSessionLoaded)
+    private val favoriteController = FavoriteController(viewModelScope, favorites, onReset = { favoriteIds = null }) {
+        favoriteIds = it
+        filterChannels()
+    }
+    val favoriteState = favoriteController.uiState
+    private val organizer: OrganizationController = OrganizationController(viewModelScope, organization, background, ::onCatalogChanged)
+
+    private val catalogLoader: HomeCatalogController = HomeCatalogController(viewModelScope,playlists,startup,background,
+        object : HomeCatalogController.Target {
+            override val hasChannels get() = state.value.channels.isNotEmpty()
+            override fun loading() { state.update { it.copy(isLoading = it.channels.isEmpty(),
+                isRefreshing = true,errorMessage = null) } }
+            override fun restore(snapshot: HomeStartupSnapshot) = organizer.restore(snapshot.config,snapshot.catalog)
+            override fun channels(value: List<Channel>, refreshing: Boolean) {
+                state.update { it.copy(isRefreshing = refreshing) }
+                organizer.setChannels(value)
+            }
+            override fun failed(error: Exception) { state.update { it.copy(isLoading = false,isRefreshing = false,
+                errorMessage = (error as? PlaylistLoadException)?.message
+                    ?: "تعذر تحميل القنوات. تحقق من الشبكة والإعدادات ثم أعد المحاولة.") } }
+        })
+
+    private fun onCatalogChanged(value: OrganizedChannels) {
+        val result = ParentalProjection.prune(value,parental.state.value)
+        catalogTree = result.tree
+        state.update { it.copy(channels = result.channels,
+            groups = if (result.tree.enabled) result.tree.folders.map { f -> FolderFilter.of(f.id) }
+                else result.channels.mapNotNull { c -> c.group }.distinct().sorted(),
+            selectedGroup = result.resolveFilter(it.selectedGroup), organization = result.tree,
+            needsSource = false, isRefreshing = catalogLoader.isRefreshing,
+            isLoading = if (result.channels.isEmpty()) false else it.isLoading) }
+        filterChannels()
+        val config = organizer.currentConfig() ?: return
+        catalogLoader.save(config,result)
+    }
+
+    fun retryFavorites() = favoriteController.retry()
+
+    fun toggleFavorite(channelId: String, expectedScope: String) {
+        val current = state.value
+        if (current.browseScope != expectedScope) return
+        val channel = current.visibleChannels.firstOrNull { it.id == channelId } ?: return
+        val source = ProfileScope.source(current.browseScope) ?: return
+        val access = parental.state.value
+        if (access.profileId != ProfileScope.profile(current.browseScope) || !access.allows(source, channel)) return
+        favoriteController.toggle(channel.id)
+    }
+
+    fun configureHomeSession(enabled: Boolean) = session.configure(enabled)
+    fun flushBrowseSession() = session.flush()
+    fun onBrowseInteraction() = touchSession(preserveContext = true)
+
+    fun onGridRestoreHandled(token: Long) {
+        state.update { if (it.gridRestore?.token == token) it.copy(gridRestore = null) else it }
+    }
+
+    fun onBrowsePosition(scope: String, group: String?, favoritesOnly: Boolean,
+        focusedId: String, position: HomeGridPosition) {
+        val current = state.value
+        if (scope != current.browseScope || group != current.selectedGroup ||
+            favoritesOnly != current.favoritesOnly || current.query.isNotBlank() || current.isFiltering || current.channels.isEmpty()) return
+        val channel = current.visibleChannels.firstOrNull { it.id == focusedId } ?: return
+        if (PlaybackQueue.filterChannels(listOf(channel), group, favoritesOnly = favoritesOnly).isEmpty()) return
+        touchSession()
+        browseDraft = browseMemory.remember(browseContext().copy(focusedChannelId = focusedId, position = position))
+        session.remember(browseDraft!!)
+    }
+
+    private fun onSessionLoaded(value: HomeBrowseSession?) {
+        if (value != null) browseMemory.load(value)
+        contextRestore = false
+        val discarded = pendingBrowse != null && value == null
+        pendingBrowse = value
+        state.update { it.copy(sessionReady = value == null) }
+        if ((value != null || discarded) && state.value.channels.isNotEmpty()) filterChannels()
+    }
+
+    private fun touchSession(preserveContext: Boolean = false) {
+        session.interact()
+        if (preserveContext && ((contextRestore && state.value.isFiltering) || state.value.gridRestore?.takeFocus == false)) return
+        val wasPending = pendingBrowse != null
+        pendingBrowse = null
+        contextRestore = false
+        if (!state.value.sessionReady || state.value.gridRestore != null)
+            state.update { it.copy(sessionReady = true, gridRestore = null,
+                selectedChannelId = if (it.gridRestore != null) null else it.selectedChannelId) }
+        if (wasPending) { filterJob?.cancel(); filterChannels() }
+    }
+
+    private fun browseContext(): HomeBrowseSession {
+        val current = state.value
+        val root = FolderFilter.id(current.selectedGroup)?.let { catalogTree.path(it).firstOrNull()?.id }
+        return HomeBrowseSession(current.selectedGroup, root, current.favoritesOnly)
+    }
+
+    private fun rememberContext() {
+        val context = browseContext()
+        val saved = browseMemory.find(context.group, context.favoritesOnly)
+        pendingBrowse = saved.takeIf { state.value.query.isBlank() }
+        contextRestore = pendingBrowse != null
+        browseDraft = saved ?: browseMemory.decorate(context)
+        if (state.value.query.isBlank()) session.remember(browseDraft!!)
+    }
+
+    init {
+        observeSource()
+        viewModelScope.launch {
+            favoriteState.collect {
+                if (it.errorMessage != null && favoriteIds == null && pendingBrowse?.favoritesOnly == true)
+                    filterChannels()
+            }
+        }
+    }
+
+    fun refresh() {
+        if (!catalogLoader.refresh()) observeSource()
+    }
+
+    /** Called after the catalog has actually been drawn, never after an arbitrary timeout. */
+    fun onHomeReady() {
+        if (!reportedReady) {
+            reportedReady = true
+            LoadTimings.recordSince(LoadTimings.Stage.HOME_READY, openedAtNanos)
+        }
+        catalogLoader.onHomeReady()
+    }
+
+    private fun resetSource(source: AppSettings?, error: String? = null) {
+        filterJob?.cancel();filterJob = null
+        organizer.clearChannels()
+        catalogTree = OrganizationTree();pendingBrowse = null;browseDraft = null;browseMemory.clear();contextRestore = false
+        val selected = source?.hasSelectedSource() == true
+        state.value = HomeUiState(isLoading = selected,needsSource = source != null && !selected,
+            browseScope = source?.let(ProfileScope::of).orEmpty(),errorMessage = error)
+        val key = state.value.browseScope.takeIf { selected }
+        favoriteController.bind(key);session.open(key)
+        catalogLoader.bind(source)
+    }
+
+    private fun observeSource() {
+        settingsJob?.cancel()
+        settingsJob = viewModelScope.launch {
+            try {
+                settings.observeSettings().distinctUntilChangedBy(ProfileScope::of).collect { resetSource(it) }
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { resetSource(null,"تعذر قراءة إعدادات مصدر القنوات. أعد المحاولة.") }
+        }
+    }
+
+    fun updateQuery(query: String) {
+        val leavingSearch = state.value.query.isNotBlank() && query.isBlank()
+        touchSession()
+        state.update { it.copy(query = query.take(200), selectedChannelId = null) }
+        if (leavingSearch) rememberContext()
+        filterChannels()
+    }
+
+    fun selectGroup(group: String?) {
+        touchSession()
+        state.update { it.copy(selectedGroup = group, selectedChannelId = null,
+            favoritesOnly = if (group == null) false else it.favoritesOnly) }
+        rememberContext()
+        filterChannels()
+    }
+
+    fun toggleFavoritesFilter() {
+        touchSession()
+        state.update { it.copy(favoritesOnly = !it.favoritesOnly, selectedChannelId = null) }
+        rememberContext()
+        filterChannels()
+    }
+
+    fun selectAllGroups() {
+        touchSession()
+        state.update { it.copy(selectedGroup = null, selectedChannelId = null) }
+        rememberContext()
+        filterChannels()
+    }
+
+    fun selectSection(favoritesOnly: Boolean) {
+        touchSession()
+        state.update { it.copy(favoritesOnly = favoritesOnly, selectedGroup = null, query = "", selectedChannelId = null) }
+        rememberContext()
+        filterChannels()
+    }
+
+    fun clearFilters() {
+        touchSession()
+        state.update { it.copy(query = "", selectedGroup = null, favoritesOnly = false, selectedChannelId = null) }
+        rememberContext()
+        filterChannels()
+    }
+
+    fun selectChannel(id: String) {
+        touchSession()
+        state.update { current ->
+            val selected = current.visibleChannels.firstOrNull { it.id == id }?.id
+                ?: current.visibleChannels.firstOrNull()?.id
+            current.copy(selectedChannelId = selected)
+        }
+        if (state.value.query.isBlank()) {
+            val current = state.value
+            browseDraft = browseMemory.remember((browseDraft?.takeIf { it.group == current.selectedGroup &&
+                it.favoritesOnly == current.favoritesOnly } ?: browseContext()).copy(focusedChannelId = current.selectedChannelId))
+            session.remember(browseDraft!!)
+        }
+        session.flush()
+    }
+
+    fun setPreparationActive(value: Boolean) {
+        if (preparationActive == value) return
+        preparationActive = value
+        if (!value) filterJob?.cancel()
+        organizer.setActive(value)
+    }
+
+    private fun filterChannels() {
+        filterJob?.cancel()
+        state.update { it.copy(isFiltering = true) }
+        if (!preparationActive) return
+        val snapshot = state.value
+        val ids = favoriteIds
+        val topology = catalogTree
+        val saved = pendingBrowse?.takeIf { snapshot.channels.isNotEmpty() &&
+            (!it.favoritesOnly || ids != null || favoriteState.value.errorMessage != null) }
+        val restoreContext = contextRestore
+        filterJob = viewModelScope.launch {
+            val result = PerformanceJournal.measure(PerformanceStage.HOME_FILTER) { PresentationWork.Shared.run(background) {
+                val marked = ChannelFavorites.apply(snapshot.channels, ids)
+                val restored = saved?.let { if (restoreContext) HomeSessionResolver.restoreContext(it, marked, topology)
+                    else HomeSessionResolver.resolve(it, marked, topology) }
+                val favorites = restored?.session?.favoritesOnly ?: snapshot.favoritesOnly
+                val group = if (restored != null) restored.session.group else snapshot.selectedGroup
+                val all = snapshot.query.isBlank() && !favorites
+                val matching = if (all) marked else PlaybackQueue.filterChannels(marked,
+                    query = snapshot.query, favoritesOnly = favorites)
+                FilteredHome(marked, restored?.visible ?: if (group == null) matching else
+                    PlaybackQueue.filterChannels(matching, group),
+                    if (all) topology else topology.withCounts(matching), restored?.session)
+            } }
+            currentCoroutineContext().ensureActive()
+            if (state.value.browseScope != snapshot.browseScope) return@launch
+            val (marked, visible, tree, restored) = result
+            if (restored != null) { pendingBrowse = null; contextRestore = false; browseDraft = browseMemory.remember(restored) }
+            state.update { current ->
+                current.copy(channels = marked, visibleChannels = visible, organization = tree, isFiltering = false,
+                    isLoading = if (marked.isNotEmpty()) false else current.isLoading,
+                    selectedGroup = if (restored != null) restored.group else current.selectedGroup,
+                    favoritesOnly = restored?.favoritesOnly ?: current.favoritesOnly,
+                    sessionReady = current.sessionReady || restored != null,
+                    gridRestore = if (restored != null) HomeGridRestore(++restoreSequence, restored.position, !restoreContext) else current.gridRestore,
+                    selectedChannelId = restored?.focusedChannelId ?: current.selectedChannelId?.let { id ->
+                        visible.firstOrNull { it.id == id }?.id ?: visible.firstOrNull()?.id
+                    })
+            }
+        }
+    }
+}
+
+private data class FilteredHome(val channels: List<mnstudio.apps.mnstreamx.domain.model.Channel>,
+    val visible: List<mnstudio.apps.mnstreamx.domain.model.Channel>, val tree: OrganizationTree,
+    val restored: HomeBrowseSession?)

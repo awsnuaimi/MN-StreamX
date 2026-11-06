@@ -73,7 +73,7 @@ class RunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             file = Path(tmp) / "complete.json"
             file.write_text(json.dumps({"benchmarks": [
-                {"name": "com.yourapp.iptv.performance.VodPerformanceBenchmark." + name,
+                {"name": "mnstudio.apps.mnstreamx.performance.VodPerformanceBenchmark." + name,
                  "metrics": {"timeNs": {"median": 100}}}
                 for name in sorted(runner.EXPECTED_BENCHMARKS)
             ]}), encoding="utf-8")

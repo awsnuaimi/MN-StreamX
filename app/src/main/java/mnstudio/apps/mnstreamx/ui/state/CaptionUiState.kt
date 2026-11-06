@@ -1,0 +1,8 @@
+package mnstudio.apps.mnstreamx.ui.state
+
+import mnstudio.apps.mnstreamx.domain.model.CaptionSettings
+
+data class CaptionUiState(val settings: CaptionSettings = CaptionSettings(), val loaded: Boolean = false,
+    val saving: Boolean = false, val readFailed: Boolean = false, val saveFailed: Boolean = false,
+    val cloudConfigured: Boolean = false, val cloudRegion: String = "",
+    val cloudSaving: Boolean = false, val cloudSaveFailed: Boolean = false)
