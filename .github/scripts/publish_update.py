@@ -96,7 +96,13 @@ def publish(repository, commit, directory="dist", source_repository=None):
     if existing is None:
         existing = gh("api", "--method", "POST", f"repos/{repository}/releases", payload={
             "tag_name": tag, "target_commitish": commit, "name": "MN StreamX " + version,
-            "body": "Signed update APKs for Android TV and Android. The app selects the compatible ABI.",
+            "body": (
+                "Application ID: mnstudio.apps.mnstreamx. Signed APKs for Android TV and Android. "
+                "The app selects the compatible ABI for future in-app updates. "
+                "First install when moving from com.yourapp.iptv: export an encrypted backup in the old app, "
+                "install this APK manually as the new app, then restore that backup. "
+                "Keep the old app until you have checked the restored data."
+            ),
             "draft": True, "prerelease": False,
         })
     gh("release", "upload", tag, *[str(item[0]) for item in expected], "--repo", repository, "--clobber")

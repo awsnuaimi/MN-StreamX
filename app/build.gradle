@@ -49,7 +49,7 @@ android {
     ndkVersion "27.2.12479018"
 
     defaultConfig {
-        applicationId 'com.yourapp.iptv'
+        applicationId 'mnstudio.apps.mnstreamx'
         minSdk 29
         targetSdk 35
         // AndroidX Microbenchmark needs its dedicated instrumentation runner.

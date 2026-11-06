@@ -130,7 +130,7 @@ jobs:
             fi
             badging="$("$aapt_path" dump badging "$apk_path")"
             package_line="${badging%%$'\n'*}"
-            if [[ "$package_line" != *"name='com.yourapp.iptv'"* || "$package_line" != *"versionCode='$version_code'"* ]]; then
+            if [[ "$package_line" != *"name='mnstudio.apps.mnstreamx'"* || "$package_line" != *"versionCode='$version_code'"* ]]; then
               echo "::error::Package ID or version code mismatch for $abi"
               exit 1
             fi
