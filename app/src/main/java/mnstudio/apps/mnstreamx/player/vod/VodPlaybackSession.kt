@@ -9,6 +9,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.TrackNameProvider
 import mnstudio.apps.mnstreamx.domain.model.VodSeek
+import mnstudio.apps.mnstreamx.domain.performance.PerformanceJournal
+import mnstudio.apps.mnstreamx.domain.performance.PerformanceOutcome
+import mnstudio.apps.mnstreamx.domain.performance.PerformanceStage
 
 internal data class VodPlayerSnapshot(
     val position: Long = 0, val duration: Long = -1, val playing: Boolean = false,
@@ -34,12 +37,23 @@ internal class VodPlaybackSession(
     private var completed = false
     private var lastSaved = clock()
     private var lastCapture: Triple<Long,Long,Boolean>? = null
+    private val firstFrameAt = PerformanceJournal.recorder.now()
+    private var measuredFirstFrame = false
+    private fun recordFirstFrame(outcome: PerformanceOutcome) {
+        if (measuredFirstFrame) return
+        measuredFirstFrame = true
+        PerformanceJournal.recorder.recordSince(PerformanceStage.VOD_FIRST_FRAME,firstFrameAt,outcome)
+    }
     private val listener = object : Player.Listener {
+        override fun onRenderedFirstFrame() { if (!closed) recordFirstFrame(PerformanceOutcome.COMPLETE) }
         override fun onEvents(player: Player, events: Player.Events) {
             val wasPlaying = snapshot.playing
             val wasFailed = snapshot.failed
             refresh()
-            if (!wasFailed) player.playerError?.let { mnstudio.apps.mnstreamx.player.PlaybackDiagnostics.record(it,diagnosticSource) }
+            if (!wasFailed) player.playerError?.let {
+                recordFirstFrame(PerformanceOutcome.FAILED)
+                mnstudio.apps.mnstreamx.player.PlaybackDiagnostics.record(it,diagnosticSource)
+            }
             if (player.playbackState == Player.STATE_ENDED && !completed) { completed = true; save() }
             else if (wasPlaying && !snapshot.playing) save()
         }
@@ -103,6 +117,7 @@ internal class VodPlaybackSession(
         if (closed) return
         try { save() } finally {
             closed = true
+            recordFirstFrame(PerformanceOutcome.CANCELLED)
             try { player.removeListener(listener) } finally { player.release() }
         }
     }

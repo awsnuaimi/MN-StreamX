@@ -63,4 +63,19 @@ class ProtectedVodTest {
         try { ProtectedVod(delayed,access).resolvePlayback(source,VodKind.MOVIE,"1","mp4");fail("Locked URL exposed") }
         catch (_: ParentalDenied) { }
     }
+
+    @Test fun categoryFirstBrowsingAndFreshRetriesCannotBypassProtection() = runBlocking {
+        assertTrue(vod.browseCatalogUpdates(source,VodKind.MOVIE).first().value.categories.isEmpty())
+        try { vod.refreshDetails(source,VodKind.MOVIE,raw.item);fail("Details exposed") } catch (_: ParentalDenied) { }
+        try { vod.refreshPlayback(source,VodKind.MOVIE,"1","mp4");fail("Playback exposed") } catch (_: ParentalDenied) { }
+        assertEquals(0,raw.requests)
+        access.state.value = access.state.value.copy(unlocked = true)
+        val delayed = object : VodRepository by raw {
+            override suspend fun refreshPlayback(settings: AppSettings,kind: VodKind,id: String,extension: String): VodPlaybackSource {
+                access.lock();return VodPlaybackSource("https://cdn.invalid/fresh","mp4")
+            }
+        }
+        try { ProtectedVod(delayed,access).refreshPlayback(source,VodKind.MOVIE,"1","mp4");fail("Locked playback exposed") }
+        catch (_: ParentalDenied) { }
+    }
 }

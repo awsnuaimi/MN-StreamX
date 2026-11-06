@@ -24,7 +24,7 @@ fun VodScreen(kind: VodKind, onBack: () -> Unit, onPlay: (VodKind, String, Strin
     val completed = if (history.sourceKey == source) history.completed else emptyList()
     VodContent(state, progress, labels, VodActions(onBack, { model.load(kind, refresh = true) },
         model::search, { model.filter(it) }, { model.filter(state.categoryId, retry = true) },
-        model::open, model::close, { state.selected?.let(model::open) }) { chosenKind, id, ext, title, series ->
+        { model.open(it) }, model::close, { state.selected?.let { model.open(it, refresh = true) } }) { chosenKind, id, ext, title, series ->
         if (source != null && model.uiState.value.sourceKey == source) {
             model.close()
             onPlay(chosenKind, id, ext, title, source, series)

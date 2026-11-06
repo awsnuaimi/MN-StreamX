@@ -14,7 +14,13 @@ internal object VodCatalogCachePolicy {
             digest.update("${bytes.size}:".toByteArray(Charsets.UTF_8))
             digest.update(bytes)
         }
-        return digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
+        val hex = "0123456789abcdef"
+        return buildString(64) {
+            digest.digest().forEach { byte ->
+                val value = byte.toInt() and 255
+                append(hex[value ushr 4]);append(hex[value and 15])
+            }
+        }
     }
 
     fun fresh(savedAt: Long, now: Long): Boolean = age(savedAt, now)?.let { it < FRESH_MS } ?: false

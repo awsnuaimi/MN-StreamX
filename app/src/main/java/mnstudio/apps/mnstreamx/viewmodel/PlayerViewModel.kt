@@ -28,6 +28,8 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import mnstudio.apps.mnstreamx.domain.parental.ParentalControl
 import mnstudio.apps.mnstreamx.domain.parental.ParentalProjection
+import mnstudio.apps.mnstreamx.domain.playback.ChannelPlaybackHandoff
+import mnstudio.apps.mnstreamx.domain.profile.ProfileScope
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -38,7 +40,8 @@ class PlayerViewModel @Inject constructor(
     organization: OrganizationRepository = OrganizationRepository.Disabled,
     history: WatchHistoryRepository = WatchHistoryRepository.Disabled,
     private val settings: SettingsRepository? = null,
-    private val parental: ParentalControl = ParentalControl.Disabled
+    private val parental: ParentalControl = ParentalControl.Disabled,
+    private val playbackHandoff: ChannelPlaybackHandoff = ChannelPlaybackHandoff()
 ) : ViewModel() {
     private val state = MutableStateFlow(PlayerUiState(
         selectedGroup = savedStateHandle["group"],
@@ -87,8 +90,13 @@ class PlayerViewModel @Inject constructor(
                 val id = savedStateHandle.get<String>("channelId")
                 val selected = try {
                     if (id == null) null else LoadTimings.measure(LoadTimings.Stage.CHANNEL_LOOKUP) {
-                        if (source == null) channels.getPlaybackChannel(id)
-                        else channels.getPlaybackChannel(source, id)
+                        val access = parental.state.value
+                        val handed = playbackHandoff.take(historyRecorder.sourceKey,id,access.epoch)?.takeIf {
+                            source != null && access.profileId == source.profileId &&
+                                access.allows(ProfileScope.source(historyRecorder.sourceKey.orEmpty()).orEmpty(),it)
+                        }
+                        handed ?: if (source == null) channels.getPlaybackChannel(id)
+                            else channels.getPlaybackChannel(source, id)
                     }
                 } catch (error: CancellationException) { throw error }
                 catch (_: Exception) { null } // Full-list recovery remains available.

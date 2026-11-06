@@ -76,6 +76,7 @@ internal fun VodPlayerHost(item: VodPlaybackState.Ready, model: VodPlaybackViewM
         var owned: VodPlaybackSession? = null
         try {
             val created = ExoPlayer.Builder(context.applicationContext)
+                .setLoadControl(VodPlaybackTuning.createLoadControl())
                 .setAudioAttributes(AudioAttributes.DEFAULT,true).setHandleAudioBecomingNoisy(true).build()
             player = created
             preferences.apply(created)

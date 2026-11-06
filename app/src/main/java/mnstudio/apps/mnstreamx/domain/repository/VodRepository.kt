@@ -33,8 +33,17 @@ interface VodRepository {
             else category(settings, kind, categoryId)))
     }
 
+    /** Browsing may load categories first; global search keeps the full catalog contract. */
+    fun browseCatalogUpdates(settings: AppSettings, kind: VodKind, force: Boolean = false): Flow<VodLoad<VodCatalog>> =
+        catalogUpdates(settings, kind, force)
+
     suspend fun details(settings: AppSettings, kind: VodKind, item: VodItem): VodDetails
+    suspend fun refreshDetails(settings: AppSettings, kind: VodKind, item: VodItem): VodDetails =
+        details(settings, kind, item)
     fun playbackUrl(settings: AppSettings, kind: VodKind, id: String, extension: String): String
+
+    suspend fun refreshPlayback(settings: AppSettings, kind: VodKind, id: String,
+        extension: String): VodPlaybackSource = resolvePlayback(settings, kind, id, extension)
 
     suspend fun resolvePlayback(settings: AppSettings, kind: VodKind, id: String,
         extension: String): VodPlaybackSource {

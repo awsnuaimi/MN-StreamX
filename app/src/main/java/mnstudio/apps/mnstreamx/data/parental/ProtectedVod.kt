@@ -41,6 +41,16 @@ internal class ProtectedVod(private val raw: VodRepository, private val parental
         }.collect { emit(it) }
     }
 
+    override fun browseCatalogUpdates(settings: AppSettings, kind: VodKind, force: Boolean): Flow<VodLoad<VodCatalog>> = flow {
+        if (!parental.state.value.allows(kind)) {
+            emit(VodLoad(VodCatalog(emptyList(), emptyList())))
+            return@flow
+        }
+        combine(raw.browseCatalogUpdates(settings, kind, force), parental.state) { event, access ->
+            event.copy(value = if (access.allows(kind)) event.value else VodCatalog(emptyList(), emptyList()))
+        }.collect { emit(it) }
+    }
+
     override fun categoryUpdates(settings: AppSettings, kind: VodKind, categoryId: String,
         force: Boolean): Flow<VodLoad<List<VodItem>>> = flow {
         if (!parental.state.value.allows(kind)) {
@@ -55,6 +65,15 @@ internal class ProtectedVod(private val raw: VodRepository, private val parental
     override suspend fun details(settings: AppSettings, kind: VodKind, item: VodItem): VodDetails {
         requireAccess(kind)
         return raw.details(settings,kind,item).also { requireAccess(kind) }
+    }
+    override suspend fun refreshDetails(settings: AppSettings, kind: VodKind, item: VodItem): VodDetails {
+        requireAccess(kind)
+        return raw.refreshDetails(settings,kind,item).also { requireAccess(kind) }
+    }
+    override suspend fun refreshPlayback(settings: AppSettings, kind: VodKind, id: String,
+        extension: String): VodPlaybackSource {
+        requireAccess(kind)
+        return raw.refreshPlayback(settings,kind,id,extension).also { requireAccess(kind) }
     }
     override fun playbackUrl(settings: AppSettings, kind: VodKind, id: String, extension: String): String {
         requireAccess(kind); return raw.playbackUrl(settings,kind,id,extension)

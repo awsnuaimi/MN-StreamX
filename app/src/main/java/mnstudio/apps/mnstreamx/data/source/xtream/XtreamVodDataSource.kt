@@ -15,6 +15,23 @@ internal class XtreamVodDataSource(
 
     fun supports(settings: AppSettings) = XtreamVodAccount.resolve(settings) != null
 
+    /** The browse screen needs category names and one category, not the entire subscription. */
+    suspend fun browseCatalog(settings: AppSettings, kind: VodKind): VodCatalog {
+        val urls = credentials(settings)
+        val categories = attempt {
+            http.read(urls.api(if (kind == VodKind.MOVIE) "get_vod_categories" else "get_series_categories"),
+                3 * 1024 * 1024) { reader, active -> XtreamVodParser.categories(reader, active) }
+        }
+        categories.getOrNull()?.takeIf { it.isNotEmpty() }?.let {
+            return VodCatalog(it, emptyList(), categoryScoped = true)
+        }
+        // Providers without category metadata retain their existing bulk-list fallback.
+        val items = http.read(urls.api(if (kind == VodKind.MOVIE) "get_vod_streams" else "get_series"),
+            catalogByteLimit) { reader, active -> XtreamVodParser.items(reader, kind, active) }
+        if (items.isEmpty() && categories.isFailure) throw categories.exceptionOrNull()!!
+        return VodCatalog(VodCategoryFallback.fromItems(items), items, categoriesUnavailable = categories.isFailure)
+    }
+
     suspend fun catalog(settings: AppSettings, kind: VodKind): VodCatalog = supervisorScope {
         val urls = credentials(settings)
         val categories = async { attempt {

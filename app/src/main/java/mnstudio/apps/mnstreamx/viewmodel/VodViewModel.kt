@@ -103,7 +103,7 @@ class VodViewModel @Inject constructor(
                     val catalogStart = PerformanceJournal.recorder.now()
                     var measuredCatalog = false
                     try {
-                        repository.catalogUpdates(source, kind, force = refresh).collect { event ->
+                        repository.browseCatalogUpdates(source, kind, force = refresh).collect { event ->
                             currentCoroutineContext().ensureActive()
                             if (current != generation) return@collect
                             if (!measuredCatalog) {
@@ -253,7 +253,7 @@ class VodViewModel @Inject constructor(
         if (mutable.value.query != clipped) updateVisible(mutable.value.copy(query = clipped))
     }
 
-    fun open(item: VodItem) {
+    fun open(item: VodItem, refresh: Boolean = false) {
         val source = account ?: return
         detailsJob?.cancel()
         val request = ++detailRequest
@@ -262,7 +262,7 @@ class VodViewModel @Inject constructor(
         mutable.value = mutable.value.copy(selected = item, details = null, detailLoading = true, detailError = false)
         detailsJob = viewModelScope.launch {
             try {
-                val details = repository.details(source, kind, item)
+                val details = if (refresh) repository.refreshDetails(source, kind, item) else repository.details(source, kind, item)
                 currentCoroutineContext().ensureActive()
                 if (current == generation && request == detailRequest) {
                     // The catalog may have refreshed while the details request was in flight.

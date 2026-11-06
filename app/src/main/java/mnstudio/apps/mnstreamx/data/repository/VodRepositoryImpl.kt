@@ -4,6 +4,8 @@ import android.content.Context
 import mnstudio.apps.mnstreamx.data.cache.VodCatalogCachePolicy
 import mnstudio.apps.mnstreamx.data.cache.VodCatalogSnapshot
 import mnstudio.apps.mnstreamx.data.cache.VodSnapshotWriteQueue
+import mnstudio.apps.mnstreamx.data.cache.VodDetailsCache
+import mnstudio.apps.mnstreamx.domain.profile.ProfileScope
 import mnstudio.apps.mnstreamx.data.source.xtream.XtreamVodDataSource
 import mnstudio.apps.mnstreamx.domain.model.*
 import mnstudio.apps.mnstreamx.domain.performance.PerformanceJournal
@@ -40,10 +42,19 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
         if (category == null) source.catalog(account, kind)
         else VodCatalog(emptyList(), source.category(account, kind, category))
     }
+    private var browseNetwork: suspend (AppSettings, VodKind) -> VodCatalog = source::browseCatalog
+    private var detailNetwork: suspend (AppSettings, VodKind, VodItem) -> VodDetails = source::details
+    private var detailsCache = VodDetailsCache()
 
     /** Test seam that exercises the real disk/cache/coalescing code without provider access. */
     internal constructor(context: Context, fetch: suspend (AppSettings, VodKind, String?) -> VodCatalog) : this(context) {
         network = fetch
+        browseNetwork = { account, kind -> fetch(account, kind, null) }
+    }
+
+    internal constructor(context: Context, detailFetch: suspend (AppSettings, VodKind, VodItem) -> VodDetails,
+        detailClock: () -> Long) : this(context) {
+        detailNetwork = detailFetch;detailsCache = VodDetailsCache(detailClock)
     }
 
     /** Allows a blocking synthetic cache writer to verify publication ordering. */
@@ -75,9 +86,12 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
             VodLoad(event.value.items, event.refreshing, event.refreshFailed)
         }
 
+    override fun browseCatalogUpdates(settings: AppSettings, kind: VodKind, force: Boolean): Flow<VodLoad<VodCatalog>> =
+        changes(settings, kind, null, force, browse = true)
+
     private fun changes(settings: AppSettings, kind: VodKind, category: String?,
-        force: Boolean): Flow<VodLoad<VodCatalog>> = flow {
-        val key = VodCatalogCachePolicy.key(PlaylistCacheKey.of(settings), kind.name, category)
+        force: Boolean, browse: Boolean = false): Flow<VodLoad<VodCatalog>> = flow {
+        val key = VodCatalogCachePolicy.key(PlaylistCacheKey.of(settings), kind.name + if (browse) ":browse-v1" else "", category)
         val cached = if (force) null else read(key)
         val now = System.currentTimeMillis()
         val usable = cached?.takeIf { VodCatalogCachePolicy.usableOffline(it.writtenAtMs, now) }
@@ -87,7 +101,7 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
             if (fresh) return@flow
         }
         try {
-            val latest = fetch(settings, kind, category, key, force)
+            val latest = fetch(settings, kind, category, key, force, browse)
             emit(VodLoad(latest))
         } catch (error: CancellationException) { throw error }
         catch (error: Exception) {
@@ -98,13 +112,13 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
     }
 
     private suspend fun fetch(settings: AppSettings, kind: VodKind, category: String?,
-        key: String, force: Boolean): VodCatalog = gated(key) {
+        key: String, force: Boolean, browse: Boolean): VodCatalog = gated(key) {
         // Waiting callers reuse the fresh result rather than making identical provider requests.
         if (!force) read(key)?.takeIf {
             VodCatalogCachePolicy.fresh(it.writtenAtMs, System.currentTimeMillis())
         }?.let { return@gated it.catalog }
         val latest = PerformanceJournal.measure(PerformanceStage.VOD_PROVIDER_FETCH) {
-            network(settings, kind, category)
+            if (browse) browseNetwork(settings, kind) else network(settings, kind, category)
         }
         val saved = VodCatalogSnapshot.Saved(latest, System.currentTimeMillis())
         remember(key, saved)
@@ -146,14 +160,40 @@ class VodRepositoryImpl @Inject constructor(@ApplicationContext context: Context
 
     private fun remember(key: String, saved: VodCatalogSnapshot.Saved) = synchronized(lock) {
         memory[key] = saved
-        while (memory.size > 4 ||
-            (memory.size > 1 && memory.values.sumOf { it.catalog.items.size } > 80_000)) {
+        while (memory.size > 12 ||
+            (memory.size > 1 && memory.values.sumOf { it.catalog.items.size } > 20_000)) {
             memory.remove(memory.keys.first())
         }
     }
 
     override suspend fun details(settings: AppSettings, kind: VodKind, item: VodItem) =
-        source.details(settings, kind, item)
+        loadDetails(settings, kind, item, false)
+
+    override suspend fun refreshDetails(settings: AppSettings, kind: VodKind, item: VodItem) =
+        loadDetails(settings, kind, item, true)
+
+    private suspend fun loadDetails(settings: AppSettings, kind: VodKind, item: VodItem, refresh: Boolean): VodDetails {
+        val key = VodCatalogCachePolicy.key(ProfileScope.of(settings), kind.name + ":details", item.id)
+        return PerformanceJournal.measure(PerformanceStage.VOD_DETAILS) {
+            detailsCache.get(key, if (kind == VodKind.MOVIE) 15_000 else 60_000, refresh) {
+                detailNetwork(settings, kind, item).also { require(it.item.id == item.id) }
+            }
+        }
+    }
+
+    override suspend fun refreshPlayback(settings: AppSettings, kind: VodKind, id: String,
+        extension: String): VodPlaybackSource {
+        if (kind == VodKind.MOVIE) {
+            try { kotlinx.coroutines.withTimeoutOrNull(10_000L) {
+                refreshDetails(settings, kind, VodItem(id,id,null,extension = extension))
+            }?.let { details ->
+                return details.playback ?: VodPlaybackSource(playbackUrl(settings,kind,id,details.item.extension),details.item.extension)
+            } } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { /* Keep the known catalog fallback available on provider failure. */ }
+            return VodPlaybackSource(playbackUrl(settings,kind,id,extension),extension)
+        }
+        return resolvePlayback(settings,kind,id,extension)
+    }
 
     override fun playbackUrl(settings: AppSettings, kind: VodKind, id: String, extension: String) =
         source.playbackUrl(settings, kind, id, extension)

@@ -236,6 +236,7 @@ fun HomeScreen(
                             HomeDashboardScene(labels, appearance, profileName, dashboardData, state.channels,
                                 state.browseScope, dashboardFocus, onProfiles, onSearch,
                                 onPlay = { channel ->
+                                    if (!viewModel.preparePlayback(channel.id,state.browseScope)) return@HomeDashboardScene
                                     initialFocusDone = true
                                     launchedFromDashboard = true
                                     onPlayChannel(channel.id, null, "", false)
@@ -249,6 +250,7 @@ fun HomeScreen(
                                     initialFocusDone = true
                                     if (group == null) viewModel.selectAllGroups() else viewModel.selectGroup(group)
                                 }, onPlay = { channel ->
+                                    if (!viewModel.preparePlayback(channel.id,state.browseScope)) return@LiveTvBrowserScene
                                     initialFocusDone = true
                                     launchedFromDashboard = false
                                     viewModel.selectChannel(channel.id)

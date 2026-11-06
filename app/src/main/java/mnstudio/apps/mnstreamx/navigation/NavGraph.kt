@@ -5,6 +5,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import mnstudio.apps.mnstreamx.viewmodel.StartupPlaybackViewModel
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.LaunchedEffect
 import mnstudio.apps.mnstreamx.domain.parental.ParentalSection
 import mnstudio.apps.mnstreamx.ui.screen.parental.ParentalRouteGate
@@ -46,7 +48,9 @@ fun AppNavGraph(startup: StartupPlaybackViewModel, initialRoute: String? = null,
     }
     StartupPlaybackGuard(nav, startup)
     NavigationPerformanceEffect(nav)
-    NavHost(navController = nav, startDestination = Destinations.HOME) {
+    NavHost(navController = nav, startDestination = Destinations.HOME,
+        enterTransition = { EnterTransition.None }, exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None }, popExitTransition = { ExitTransition.None }) {
         composable(Destinations.HOME) { entry ->
             val profiles: mnstudio.apps.mnstreamx.viewmodel.ProfilesViewModel = androidx.hilt.navigation.compose.hiltViewModel()
             val people by profiles.people.collectAsStateWithLifecycle()

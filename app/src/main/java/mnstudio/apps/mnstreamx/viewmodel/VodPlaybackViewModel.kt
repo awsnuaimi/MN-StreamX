@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 import mnstudio.apps.mnstreamx.data.diagnostics.DiagnosticFailures
 import mnstudio.apps.mnstreamx.domain.diagnostics.*
+import mnstudio.apps.mnstreamx.domain.performance.PerformanceJournal
+import mnstudio.apps.mnstreamx.domain.performance.PerformanceStage
 
 @HiltViewModel
 class VodPlaybackViewModel @Inject constructor(
@@ -80,7 +82,7 @@ class VodPlaybackViewModel @Inject constructor(
         mutable.value = VodPlaybackState.Error
     }
 
-    private fun select(kind: VodKind, id: String, ext: String, title: String, series: String?) {
+    private fun select(kind: VodKind, id: String, ext: String, title: String, series: String?, refresh: Boolean = false) {
         val credentials = account ?: return
         val key = source ?: return
         if (blocked) return
@@ -89,8 +91,12 @@ class VodPlaybackViewModel @Inject constructor(
         mutable.value = VodPlaybackState.Loading
         selection = viewModelScope.launch {
             try {
-                val playback = repository.resolvePlayback(credentials, kind, id, ext)
-                val previous = progress.observe(key).first()
+                val (playback, previous) = PerformanceJournal.measure(PerformanceStage.VOD_PLAYBACK_RESOLVE) { coroutineScope {
+                    val target = async { if (refresh) repository.refreshPlayback(credentials,kind,id,ext)
+                        else repository.resolvePlayback(credentials,kind,id,ext) }
+                    val history = async { progress.observe(key).first() }
+                    target.await() to history.await()
+                } }
                 val resume = VodProgress.find(previous, kind, id)
                 val parent = if (kind == VodKind.SERIES) (series ?: resume?.seriesId)
                     ?.takeIf(VodEpisodeOrder::validId) else null
@@ -158,7 +164,7 @@ class VodPlaybackViewModel @Inject constructor(
         val current = mutable.value as? VodPlaybackState.Ready ?: return
         if (blocked || current.sourceKey != expected.sourceKey || current.kind != expected.kind ||
             current.id != expected.id || current.attempt != expected.attempt) return
-        select(current.kind,current.id,current.extension,current.title,current.seriesId)
+        select(current.kind,current.id,current.extension,current.title,current.seriesId, refresh = true)
     }
 
     fun playNext(expected: VodPlaybackState.Ready? = null) {

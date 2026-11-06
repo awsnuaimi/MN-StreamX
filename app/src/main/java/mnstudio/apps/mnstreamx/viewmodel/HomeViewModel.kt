@@ -42,6 +42,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import mnstudio.apps.mnstreamx.domain.parental.ParentalControl
 import mnstudio.apps.mnstreamx.domain.parental.ParentalProjection
+import mnstudio.apps.mnstreamx.domain.playback.ChannelPlaybackHandoff
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -52,7 +53,8 @@ class HomeViewModel @Inject constructor(
     organization: OrganizationRepository = OrganizationRepository.Disabled,
     startup: HomeStartupRepository = HomeStartupRepository.Disabled,
     browseSessions: HomeSessionRepository = HomeSessionRepository.Disabled,
-    private val parental: ParentalControl = ParentalControl.Disabled
+    private val parental: ParentalControl = ParentalControl.Disabled,
+    private val playbackHandoff: ChannelPlaybackHandoff = ChannelPlaybackHandoff()
 ) : ViewModel() {
     private val state = MutableStateFlow(HomeUiState())
     val uiState = state.asStateFlow()
@@ -109,6 +111,18 @@ class HomeViewModel @Inject constructor(
     }
 
     fun retryFavorites() = favoriteController.retry()
+
+    /** The click already has verified catalog data; Room/list preparation must not delay playback. */
+    fun preparePlayback(id: String, expectedScope: String): Boolean {
+        val current = state.value
+        if (current.browseScope != expectedScope) return false
+        val channel = current.channels.firstOrNull { it.id == id } ?: return false
+        val source = ProfileScope.source(expectedScope) ?: return false
+        val access = parental.state.value
+        if (access.profileId != ProfileScope.profile(expectedScope) || !access.allows(source,channel)) return false
+        playbackHandoff.offer(expectedScope,channel,access.epoch)
+        return true
+    }
 
     fun toggleFavorite(channelId: String, expectedScope: String) {
         val current = state.value
