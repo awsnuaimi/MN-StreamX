@@ -12,7 +12,7 @@ internal object ChannelLanguageDetector {
     private val german = Regex("(?:^| )(?:zdf[0-9]*|ard|rtl[0-9]*|prosieben|pro sieben|sat 1|sat1|3sat|das erste)(?: |$)")
     private val arabic = Regex("(?:^| )(?:mbc[0-9]*|rotana|jazeera|aljazeera|al jazeera)(?: |$)")
 
-    fun detect(names: List<String>): String? {
+    fun detect(names: List<String>, vote: (String) -> String? = ::vote): String? {
         if (names.isEmpty()) return null
         val counts = mutableMapOf<String, Int>()
         names.forEach { name -> vote(name)?.let { counts[it] = (counts[it] ?: 0) + 1 } }
@@ -21,7 +21,7 @@ internal object ChannelLanguageDetector {
         return best.key.takeIf { best.value.toLong() * 100 >= names.size.toLong() * 60 }
     }
 
-    private fun vote(name: String): String? {
+    internal fun vote(name: String): String? {
         val raw = name.lowercase(Locale.ROOT)
         val text = OrganizationNames.normalizeMatch(raw)
         when (text.substringBefore(' ')) {

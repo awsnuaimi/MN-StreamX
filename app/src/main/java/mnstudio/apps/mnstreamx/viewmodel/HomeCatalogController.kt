@@ -29,6 +29,10 @@ internal class HomeCatalogController(private val scope: CoroutineScope,
     private var pendingRefresh = false
     private var refreshedAt = 0L
     private var restoring = false
+    private var active = true
+    private var drawn = false
+    private data class Save(val config: OrganizationConfig, val catalog: OrganizedChannels, val verifiedAt: Long)
+    private var pendingSave: Save? = null
     var isRefreshing = false
         private set
 
@@ -38,7 +42,7 @@ internal class HomeCatalogController(private val scope: CoroutineScope,
         loadJob?.cancel();writeJob?.cancel();readyJob?.cancel()
         loadJob = null;writeJob = null;readyJob = null
         source = value;pendingRefresh = false;refreshedAt = 0L
-        restoring = false;isRefreshing = false
+        restoring = false;isRefreshing = false;drawn = false;pendingSave = null
         if (value?.hasSelectedSource() == true) load(value,true)
     }
 
@@ -52,13 +56,25 @@ internal class HomeCatalogController(private val scope: CoroutineScope,
     }
 
     fun onHomeReady() {
-        if (!pendingRefresh || readyJob?.isActive == true) return
+        drawn = true
+        scheduleSave()
+        scheduleRefresh()
+    }
+
+    fun setActive(value: Boolean) {
+        active = value
+        if (!value) { readyJob?.cancel();readyJob = null }
+        else if (drawn) { scheduleSave();scheduleRefresh() }
+    }
+
+    private fun scheduleRefresh() {
+        if (!active || !drawn || !pendingRefresh || readyJob?.isActive == true) return
         val current = source ?: return
         val ticket = generation
         val opening = loadJob
         readyJob = scope.launch {
             opening?.join()
-            if (isCurrent(ticket) && source == current && pendingRefresh) {
+            if (isCurrent(ticket) && active && source == current && pendingRefresh) {
                 pendingRefresh = false
                 load(current,false)
             }
@@ -68,8 +84,16 @@ internal class HomeCatalogController(private val scope: CoroutineScope,
     fun save(config: OrganizationConfig, catalog: OrganizedChannels) {
         val current = source ?: return
         if (restoring || !current.hasSelectedSource()) return
+        pendingSave = Save(config,catalog,refreshedAt)
+        scheduleSave()
+    }
+
+    private fun scheduleSave() {
+        if (!active || !drawn) return
+        val current = source ?: return
+        val (config, catalog, verifiedAt) = pendingSave ?: return
+        pendingSave = null
         val owner = ownerEpoch
-        val verifiedAt = refreshedAt
         writeJob?.cancel()
         writeJob = scope.launch(background) {
             currentCoroutineContext().ensureActive()
@@ -104,6 +128,7 @@ internal class HomeCatalogController(private val scope: CoroutineScope,
                             if (!isCurrent(ticket)) return@launch
                             if (adopted) {
                                 pendingRefresh = HomeStartupPolicy.needsRefresh(refreshedAt,clock())
+                                scheduleRefresh()
                                 return@launch
                             }
                             refreshedAt = 0L;isRefreshing = true
@@ -113,7 +138,17 @@ internal class HomeCatalogController(private val scope: CoroutineScope,
                         catch (error: CancellationException) { throw error }
                         catch (_: Exception) { null }
                     if (!isCurrent(ticket)) return@launch
-                    cached?.channels?.takeIf { it.isNotEmpty() }?.let { target.channels(it,isRefreshing) }
+                    val rows = cached?.channels?.takeIf { it.isNotEmpty() }
+                    if (rows != null) {
+                        // First paint uses disk data. Network refresh begins after the real draw signal.
+                        if (useStartup) {
+                            isRefreshing = false;pendingRefresh = true
+                            target.channels(rows,false)
+                            scheduleRefresh()
+                            return@launch
+                        }
+                        target.channels(rows,true)
+                    }
                 }
                 val rows = LoadTimings.measure(LoadTimings.Stage.REFRESH) {
                     withContext(background) {

@@ -10,6 +10,13 @@ object ChannelOrganizer {
         input: List<Channel>,
         config: OrganizationConfig,
         checkpoint: () -> Unit
+    ): OrganizedChannels = project(input, config, checkpoint, OrganizationMetadata())
+
+    internal fun project(
+        input: List<Channel>,
+        config: OrganizationConfig,
+        checkpoint: () -> Unit,
+        metadata: OrganizationMetadata
     ): OrganizedChannels {
         checkpoint()
         val channels = input.distinctBy { it.id }
@@ -49,7 +56,7 @@ object ChannelOrganizer {
                 checkpoint()
                 detected[key] = ChannelLanguageDetector.detect(
                     sourceGroups.getValue(key).map { it.name }
-                )
+                ) { name -> checkpoint(); metadata.vote(name) }
             }
             detected[key]
         }
@@ -58,11 +65,6 @@ object ChannelOrganizer {
         val rootDepths = listOf(
             "arabic", "bein", "german", "polish", "unclassified"
         ).associateWith { rootTree.path(it).size }
-
-        val names = channels.mapIndexed { i, channel ->
-            if ((i and 127) == 0) checkpoint()
-            channel.id to OrganizationNames.normalize(channel.name)
-        }.toMap()
 
         val destinations = mutableMapOf<Pair<String, String>, String>()
 
@@ -138,7 +140,8 @@ object ChannelOrganizer {
             )
         }
 
-        val sorted = OrganizationChannelOrder.sort(projected, names, siblingOrder)
+        // The metadata worker owns name normalization; avoid a redundant catalog-wide name map.
+        val sorted = OrganizationChannelOrder.sort(projected, emptyMap(), siblingOrder, metadata, checkpoint)
         checkpoint()
 
         val groupsWithNames = sourceGroups.map { (key, members) ->

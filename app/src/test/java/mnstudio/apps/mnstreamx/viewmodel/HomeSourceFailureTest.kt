@@ -39,7 +39,8 @@ class HomeSourceFailureTest {
     @Test fun sourceReadFailureCancelsAnOptionalSaveAlreadyWaitingInTheStartupRepository() = runTest(dispatcher) {
         var entered = false;var cancelled = false
         startup.beforeWrite = { entered = true;try { awaitCancellation() } finally { cancelled = true } }
-        val model = model();runCurrent();assertTrue(entered)
+        val model = model();runCurrent();assertFalse(entered)
+        model.onHomeReady();runCurrent();assertTrue(entered)
         settings.changes.value = Result.failure(IOException("Synthetic settings failure"));runCurrent()
         assertTrue(cancelled);assertTrue(startup.writes.isEmpty())
         assertTrue(model.uiState.value.channels.isEmpty());assertFalse(model.uiState.value.isLoading)

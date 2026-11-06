@@ -18,7 +18,7 @@ import mnstudio.apps.mnstreamx.domain.model.HomeGridRestore
 import mnstudio.apps.mnstreamx.domain.model.HomeSessionResolver
 import mnstudio.apps.mnstreamx.domain.repository.HomeSessionRepository
 import mnstudio.apps.mnstreamx.domain.repository.HomeStartupRepository
-import mnstudio.apps.mnstreamx.domain.model.ChannelFavorites
+import mnstudio.apps.mnstreamx.domain.catalog.ChannelBrowseIndex
 import mnstudio.apps.mnstreamx.domain.model.PlaybackQueue
 import mnstudio.apps.mnstreamx.domain.repository.FavoriteRepository
 import mnstudio.apps.mnstreamx.domain.repository.PlaylistRepository
@@ -60,6 +60,8 @@ class HomeViewModel @Inject constructor(
     private var filterJob: Job? = null
     private var preparationActive = true
     private var catalogTree = OrganizationTree()
+    private var catalogChannels: List<Channel> = emptyList()
+    private var channelIndex = ChannelBrowseIndex()
     private val openedAtNanos = System.nanoTime()
     private var reportedReady = false
     private var favoriteIds: Set<String>? = null
@@ -94,6 +96,7 @@ class HomeViewModel @Inject constructor(
     private fun onCatalogChanged(value: OrganizedChannels) {
         val result = ParentalProjection.prune(value,parental.state.value)
         catalogTree = result.tree
+        catalogChannels = result.channels
         state.update { it.copy(channels = result.channels,
             groups = if (result.tree.enabled) result.tree.folders.map { f -> FolderFilter.of(f.id) }
                 else result.channels.mapNotNull { c -> c.group }.distinct().sorted(),
@@ -199,7 +202,7 @@ class HomeViewModel @Inject constructor(
     private fun resetSource(source: AppSettings?, error: String? = null) {
         filterJob?.cancel();filterJob = null
         organizer.clearChannels()
-        catalogTree = OrganizationTree();pendingBrowse = null;browseDraft = null;browseMemory.clear();contextRestore = false
+        catalogTree = OrganizationTree();catalogChannels = emptyList();channelIndex = ChannelBrowseIndex();pendingBrowse = null;browseDraft = null;browseMemory.clear();contextRestore = false
         val selected = source?.hasSelectedSource() == true
         state.value = HomeUiState(isLoading = selected,needsSource = source != null && !selected,
             browseScope = source?.let(ProfileScope::of).orEmpty(),errorMessage = error)
@@ -282,6 +285,7 @@ class HomeViewModel @Inject constructor(
         if (preparationActive == value) return
         preparationActive = value
         if (!value) filterJob?.cancel()
+        catalogLoader.setActive(value)
         organizer.setActive(value)
     }
 
@@ -292,22 +296,22 @@ class HomeViewModel @Inject constructor(
         val snapshot = state.value
         val ids = favoriteIds
         val topology = catalogTree
+        val source = catalogChannels
+        val index = channelIndex
         val saved = pendingBrowse?.takeIf { snapshot.channels.isNotEmpty() &&
             (!it.favoritesOnly || ids != null || favoriteState.value.errorMessage != null) }
         val restoreContext = contextRestore
         filterJob = viewModelScope.launch {
             val result = PerformanceJournal.measure(PerformanceStage.HOME_FILTER) { PresentationWork.Shared.run(background) {
-                val marked = ChannelFavorites.apply(snapshot.channels, ids)
+                val worker = currentCoroutineContext()
+                val indexed = index.prepare(snapshot.browseScope, source, topology, ids) { worker.ensureActive() }
+                val marked = indexed.channels
                 val restored = saved?.let { if (restoreContext) HomeSessionResolver.restoreContext(it, marked, topology)
                     else HomeSessionResolver.resolve(it, marked, topology) }
                 val favorites = restored?.session?.favoritesOnly ?: snapshot.favoritesOnly
                 val group = if (restored != null) restored.session.group else snapshot.selectedGroup
-                val all = snapshot.query.isBlank() && !favorites
-                val matching = if (all) marked else PlaybackQueue.filterChannels(marked,
-                    query = snapshot.query, favoritesOnly = favorites)
-                FilteredHome(marked, restored?.visible ?: if (group == null) matching else
-                    PlaybackQueue.filterChannels(matching, group),
-                    if (all) topology else topology.withCounts(matching), restored?.session)
+                val selected = indexed.select(group, snapshot.query, favorites) { worker.ensureActive() }
+                FilteredHome(marked, restored?.visible ?: selected.visible, selected.tree, restored?.session)
             } }
             currentCoroutineContext().ensureActive()
             if (state.value.browseScope != snapshot.browseScope) return@launch

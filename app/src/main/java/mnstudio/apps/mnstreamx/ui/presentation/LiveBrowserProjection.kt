@@ -23,6 +23,8 @@ internal class LiveBrowserProjection {
     private var personalContext: LiveProjectionContext? = null
     private var personal: HomeUiState? = null
     private val reusableRows = LinkedHashMap<String, LiveChannelRow>(16,.75f,true)
+    private data class Prepared(val result: LiveBrowserResult, val sort: LiveChannelSort, val locale: Locale)
+    private val prepared = ArrayList<Prepared>()
 
     fun project(input: Any, context: LiveProjectionContext, sort: LiveChannelSort, locale: Locale,
         checkpoint: () -> Unit): LiveBrowserResult {
@@ -30,6 +32,17 @@ internal class LiveBrowserProjection {
         val state = context.state
         val preferences = context.preferences
         val previous = personalContext
+        if (previous != null && (previous.access != context.access ||
+                previous.state.browseScope != state.browseScope || previous.state.channels !== state.channels)) prepared.clear()
+        val hit = prepared.indexOfFirst { it.sort == sort && it.locale == locale && it.result.context.matches(context) }
+        if (hit >= 0) {
+            val cached = prepared.removeAt(hit)
+            prepared.add(cached)
+            val result = cached.result
+            return result.copy(input = input, context = context, personal = state.copy(
+                channels = result.personal.channels, visibleChannels = result.personal.visibleChannels,
+                groups = result.personal.groups, organization = result.personal.organization))
+        }
         val sameBase = previous != null && previous.access == context.access &&
             previous.state.browseScope == state.browseScope && previous.state.channels === state.channels &&
             previous.state.groups === state.groups && previous.state.organization === state.organization &&
@@ -52,6 +65,9 @@ internal class LiveBrowserProjection {
             }
         checkpoint()
         personal = visible;personalContext = context
-        return LiveBrowserResult(input,context,visible,LiveChannelIndex(rows))
+        return LiveBrowserResult(input,context,visible,LiveChannelIndex(rows)).also {
+            prepared.add(Prepared(it,sort,locale))
+            while (prepared.size > 4 || prepared.sumOf { value -> value.result.index.rows.size } > 12_000) prepared.removeAt(0)
+        }
     }
 }

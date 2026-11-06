@@ -47,4 +47,20 @@ class LiveBrowserProjectionTest {
         assertFalse(original.matches(context(state.copy(isFiltering = true))))
         assertFalse(original.matches(context(preferences = LiveTvPreferences(hiddenChannels = setOf("1")))))
     }
+
+    @Test fun returningToAPreparedCategoryReusesItsIndexAndRefreshesTransientUiState() {
+        val worker = LiveBrowserProjection()
+        val aState = state.copy(selectedGroup = "A", visibleChannels = channels.take(1))
+        val a = worker.project(Any(),context(aState),LiveChannelSort.NAME,Locale.GERMAN) {}
+        worker.project(Any(),context(state.copy(selectedGroup = "B",visibleChannels = channels.takeLast(1))),LiveChannelSort.NAME,Locale.GERMAN) {}
+        var checkpoints = 0
+        val input = Any()
+        val returned = worker.project(input,context(aState.copy(selectedChannelId = "1")),LiveChannelSort.NAME,Locale.GERMAN) { checkpoints++ }
+        assertSame(a.index,returned.index)
+        assertSame(input,returned.input)
+        assertEquals("1",returned.personal.selectedChannelId)
+        assertEquals(1,checkpoints)
+        val changedAccess = worker.project(Any(),context(aState,access = 2),LiveChannelSort.NAME,Locale.GERMAN) {}
+        assertNotSame(a.index,changedAccess.index)
+    }
 }

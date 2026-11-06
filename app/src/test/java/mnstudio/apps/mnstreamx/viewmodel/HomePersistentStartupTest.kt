@@ -74,6 +74,8 @@ class HomePersistentStartupTest {
         val model = model(lists, Snapshot(null).apply { failRead = true })
         runCurrent()
         assertEquals(1, lists.rawCacheReads)
+        assertEquals(0, lists.networkCalls)
+        model.onHomeReady(); runCurrent()
         assertEquals(1, lists.networkCalls)
         assertEquals(2, model.uiState.value.visibleChannels.size)
     }
@@ -92,14 +94,17 @@ class HomePersistentStartupTest {
 
     @Test fun organizationChangesRebuildAndPersistWithoutRefreshingTheNetwork() = runTest(dispatcher) {
         val lists = Lists()
-        val startup = Snapshot(HomeStartupSnapshot(config, catalog, 12345))
+        val verifiedAt = System.currentTimeMillis()
+        val startup = Snapshot(HomeStartupSnapshot(config, catalog, verifiedAt))
         val model = model(lists, startup)
         runCurrent()
         organization.value.value = config.copy(channelOverrides = mapOf("a" to "german"), revision = 1)
         runCurrent()
         assertEquals(0, lists.networkCalls)
+        assertEquals(0, startup.saves)
+        model.onHomeReady(); runCurrent()
         assertTrue(startup.saves > 0)
-        assertEquals(12345L, startup.lastRefreshedAt)
+        assertEquals(verifiedAt, startup.lastRefreshedAt)
         assertTrue("german" in model.uiState.value.channels.first { it.id == "a" }.folderIds)
     }
 
