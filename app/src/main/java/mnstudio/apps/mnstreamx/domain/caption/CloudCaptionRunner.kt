@@ -47,7 +47,7 @@ internal class CloudCaptionRunner(private val vault: CloudCredentialVault,
                     while (active()) {
                         val window = withTimeoutOrNull(15000L) { feed.windows.receiveCatching() }?.getOrNull()
                         if (window == null) break
-                        currentCoroutineScope.ensureActive()
+                        currentCoroutineContext().ensureActive()
                         if (window.samples.isEmpty() || CaptionPresentation.tooOld(window, input.positionUs)) continue
                         opened.write(window.samples)
                     }
