@@ -10,7 +10,7 @@ interface SpeechEngine : AutoCloseable {
     suspend fun transcribe(samples: FloatArray, language: String): SpeechText
     suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText = transcribe(samples, language)
     suspend fun transcribe(samples: FloatArray, language: String, target: String): SpeechText =
-        transcribe(samples, language, language == "auto" || language != target)
+        transcribe(samples, language, false)
     val memoryStage: String get() = CaptionResourcePolicy.SPEECH
     fun releaseWorkingMemory() = Unit
     fun recoverAfterDeadline() = releaseWorkingMemory()
@@ -20,10 +20,13 @@ interface SpeechEngine : AutoCloseable {
 fun interface SpeechEngineFactory { suspend fun open(model: File): SpeechEngine }
 interface CaptionModels {
     suspend fun prepare(progress: (Int) -> Unit): File
+    suspend fun prepare(source: String, progress: (Int) -> Unit): File = prepare(progress)
+    fun memoryStage(source: String): String = CaptionResourcePolicy.SPEECH
 }
 interface CaptionTranslator : AutoCloseable {
     suspend fun download(target: String, progress: (Int) -> Unit) = Unit
     suspend fun prepare(target: String, progress: (Int) -> Unit)
+    suspend fun prepareRoute(source: String, target: String, progress: (Int) -> Unit) = prepare(target, progress)
     suspend fun translate(text: String): String
     fun releaseWorkingMemory() = Unit
     fun cancel()

@@ -46,7 +46,7 @@ class CaptionPipelineRecoveryTest {
                 override fun close() { textClosed++ }
             } }, CaptionDevice { true }, now = { time })
         fun start() {
-            pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED))
+            pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = "en"))
             scope.runCurrent()
         }
         suspend fun audio(millis: Int, startUs: Long = 0) {

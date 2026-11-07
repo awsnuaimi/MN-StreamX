@@ -16,19 +16,25 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
     private val native = NativeWhisper()
     private val lock = Any()
     private var stateResident = false
+    private var weightsResident = true
     private var handle = native.create(model.absolutePath, (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 2))
     init { if (handle == 0L) throw IOException("Speech model could not be loaded") }
-    override val memoryStage get() = if (stateResident) CaptionResourcePolicy.SPEECH_WARM else CaptionResourcePolicy.SPEECH
-    override suspend fun transcribe(samples: FloatArray, language: String): SpeechText = transcribe(samples, language, true)
+    override val memoryStage get() = when {
+        stateResident -> CaptionResourcePolicy.LOCAL_WARM
+        weightsResident -> CaptionResourcePolicy.BASE_STATE
+        else -> CaptionResourcePolicy.BASE_COLD
+    }
+    override suspend fun transcribe(samples: FloatArray, language: String): SpeechText = transcribe(samples, language, false)
     override suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText {
-        return decode(samples, language, translateToEnglish, "")
+        return decode(samples, language, false, "")
     }
     override suspend fun transcribe(samples: FloatArray, language: String, target: String): SpeechText =
-        decode(samples, language, language == "auto" || language != target, target)
+        decode(samples, language, false, target)
     private suspend fun decode(samples: FloatArray, language: String, translateToEnglish: Boolean, target: String): SpeechText {
         currentCoroutineContext().ensureActive()
         val pointer = synchronized(lock) { handle }
         check(pointer != 0L)
+        weightsResident = true
         val started = System.nanoTime()
         val rows = try { native.decode(pointer, samples, language, translateToEnglish, target) }
         catch (_: TimeoutException) {
@@ -38,6 +44,8 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
         currentCoroutineContext().ensureActive()
         if (rows.size != 4) throw IOException("Invalid local speech result")
         stateResident = true
+        val elapsed = (System.nanoTime() - started) / 1000000
+        if (elapsed > 10000) throw CaptionDeadlineException(CaptionStage.SPEECH, elapsed, 10000)
         return SpeechText(rows[0], rows[3].trim().take(2000), rows[1].toLongOrNull() ?: 0,
             rows[2].toLongOrNull() ?: samples.size * 1000L / 16000)
     }
@@ -50,11 +58,12 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
     override fun releaseWorkingMemory() {
         val pointer = synchronized(lock) { handle }
         try { if (pointer != 0L) native.park(pointer) }
-        finally { stateResident = false }
+        finally { stateResident = false; weightsResident = false }
     }
     override fun close() {
         val pointer = synchronized(lock) { handle.also { handle = 0L } }
         stateResident = false
+        weightsResident = false
         if (pointer != 0L) native.release(pointer)
     }
 }

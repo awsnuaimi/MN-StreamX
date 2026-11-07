@@ -11,36 +11,43 @@ import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CaptionAutomaticLanguageTest {
-    @Test fun automaticSameLanguageTranscriptionBypassesTextTranslation() = runTest {
+    @Test fun autoSwitchClosesTheInitialRecognizerAndDiscardsItsDetectionWindow() = runTest {
         val windows = Channel<AudioWindow>(1)
         val input = object : CaptionAudioInput {
-            override val positionUs = 0L
+            override val positionUs = Long.MIN_VALUE
             override fun open() = CaptionFeed(windows) { }
         }
-        var receivedTarget = ""
-        val speech = SpeechEngineFactory { object : SpeechEngine {
-            override suspend fun transcribe(samples: FloatArray, language: String) = error("Target-aware method expected")
-            override suspend fun transcribe(samples: FloatArray, language: String, target: String): SpeechText {
-                assertEquals("auto", language); receivedTarget = target
-                return SpeechText("de", "Der Zug kommt um acht Uhr an.")
+        val events = mutableListOf<String>(); var resident = 0
+        val speech = SpeechEngineFactory { model ->
+            assertEquals(0, resident); resident++; val expected = model.name; events += "open-$expected"
+            object : SpeechEngine {
+                override suspend fun transcribe(samples: FloatArray, language: String) = error("Boolean API required")
+                override suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText {
+                    assertFalse(translateToEnglish); assertEquals(expected, language); events += "decode-$language"
+                    return SpeechText("de", if (language == "auto") "Old detection text" else "Der Zug kommt an.")
+                }
+                override fun cancel() = Unit
+                override fun close() { resident--; events += "close-$expected" }
             }
-            override fun cancel() = Unit
-            override fun close() = Unit
-            override fun releaseWorkingMemory() = error("Direct transcription must retain its warm speech state")
-        } }
+        }
         val translators = CaptionTranslatorFactory { object : CaptionTranslator {
             override suspend fun prepare(target: String, progress: (Int) -> Unit) = Unit
-            override suspend fun translate(text: String) = error("Same-language text must stay unchanged")
+            override suspend fun translate(text: String) = error("Identity route must stay unchanged")
             override fun cancel() = Unit
             override fun close() = Unit
         } }
-        val models = object : CaptionModels { override suspend fun prepare(progress: (Int) -> Unit) = File("model") }
+        val models = object : CaptionModels {
+            override suspend fun prepare(progress: (Int) -> Unit) = error("Source required")
+            override suspend fun prepare(source: String, progress: (Int) -> Unit) = File(source)
+        }
         val pipeline = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler), models, speech, translators, CaptionDevice { true })
         pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, target = CaptionLanguage.GERMAN))
         runCurrent(); windows.send(AudioWindow(FloatArray(80000), 0)); runCurrent()
-        assertEquals("de", receivedTarget)
-        assertEquals("Der Zug kommt um acht Uhr an.", pipeline.uiState.value.cue?.text)
-        pipeline.stop(); runCurrent()
+        assertNull(pipeline.uiState.value.cue)
+        assertEquals(listOf("open-auto", "decode-auto", "close-auto", "open-de"), events)
+        windows.send(AudioWindow(FloatArray(80000), 5000000)); runCurrent()
+        assertEquals("Der Zug kommt an.", pipeline.uiState.value.cue?.text)
+        pipeline.stop(); runCurrent(); assertEquals(0, resident)
     }
 
     @Test fun changingChannelsWaitsForOldNativeCleanupBeforeAllocatingTheNextEngine() = runTest {

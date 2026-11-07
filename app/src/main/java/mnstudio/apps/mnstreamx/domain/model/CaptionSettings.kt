@@ -5,7 +5,16 @@ enum class TranslationBackend { OFFLINE, CLOUD }
 enum class CaptionLanguage(val tag: String, val nativeName: String) {
     ARABIC("ar", "العربية"), ENGLISH("en", "English"), GERMAN("de", "Deutsch"),
     POLISH("pl", "Polski"), HINDI("hi", "हिन्दी");
-    companion object { fun fromTag(tag: String?) = entries.firstOrNull { it.tag == tag?.substringBefore('-') } }
+    companion object {
+        fun fromTag(tag: String?): CaptionLanguage? {
+            val base = tag?.trim()?.lowercase(java.util.Locale.ROOT)?.replace('_', '-')?.substringBefore('-')
+            val normalized = when (base) {
+                "ara" -> "ar"; "eng" -> "en"; "deu", "ger" -> "de"; "pol" -> "pl"; "hin" -> "hi"
+                else -> base
+            }
+            return entries.firstOrNull { it.tag == normalized }
+        }
+    }
 }
 enum class CaptionTextSize(val sp: Int) { SMALL(22), MEDIUM(28), LARGE(34) }
 data class CaptionSettings(val mode: CaptionMode = CaptionMode.OFF,

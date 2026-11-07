@@ -5,6 +5,8 @@ plugins {
     id 'dagger.hilt.android.plugin'
     id 'androidx.room'
 }
+apply from: rootProject.file('gradle/moonshine-runtime.gradle')
+
 
 def positiveNumber = { String raw, String label ->
     if (raw == null || !(raw ==~ /[1-9][0-9]*/) || raw.length() > 10) {
@@ -60,6 +62,8 @@ android {
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                def localNative = providers.gradleProperty('captionNativeSources').orNull
+                if (localNative) arguments "-DMNX_NATIVE_SOURCES=${localNative}"
                 targets 'mnx-whisper'
                 def localWhisper = providers.gradleProperty('captionWhisperSource').orNull
                 if (localWhisper) arguments "-DWHISPER_SOURCE_DIR=${localWhisper}"
@@ -117,7 +121,6 @@ android {
         }
     }
 
-    sourceSets.main.assets.srcDir(layout.buildDirectory.dir("generated/captionNotices"))
 
     // Azure Speech's Netty dependencies publish duplicate packaging metadata.
     // Keep service registrations and executable resources intact. The Netty
@@ -173,7 +176,9 @@ tasks.configureEach { task ->
 }
 
 dependencies {
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.23.2'
+    implementation 'ai.moonshine:moonshine-voice:0.1.6'
+    implementation 'com.alphacephei:vosk-android:0.3.47'
     implementation 'com.microsoft.cognitiveservices.speech:client-sdk:1.51.0'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
     implementation "androidx.media3:media3-exoplayer-hls:$media3_version"
@@ -224,38 +229,16 @@ dependencies {
     testImplementation 'androidx.compose.ui:ui-test-junit4'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
-// Preserve upstream native-runtime notices in every distributed APK.
-// This public text is fetched at build time, bounded and pinned, not at player startup.
+// Package pinned notices from source; building does not fetch licenses over the network.
 def captionNotices = tasks.register('prepareCaptionNotices') {
-    def target = layout.buildDirectory.file('generated/captionNotices/onnxruntime-ThirdPartyNotices.txt')
-    def expected = 'cf7342f7ba482ef715ae58f5f497a8d3564fa255164175aea324cd293c5701a0'
+    def source = layout.projectDirectory.file('src/main/assets/onnxruntime-ThirdPartyNotices.txt')
+    def expected = 'e9e90971a8e75a9a8ac0c6412e29c1202d079998389915aa485f46c816c3b4cc'
+    inputs.file(source)
     inputs.property('noticeSha256', expected)
-    outputs.file(target)
     doLast {
-        def destination = target.get().asFile
-        destination.parentFile.mkdirs()
-        def temporary = new File(destination.parentFile, 'notice.part')
-        try {
-            def connection = new URL('https://raw.githubusercontent.com/microsoft/onnxruntime/v1.20.0/ThirdPartyNotices.txt').openConnection()
-            connection.connectTimeout = 30000
-            connection.readTimeout = 30000
-            def digest = java.security.MessageDigest.getInstance('SHA-256')
-            connection.inputStream.withCloseable { input ->
-                temporary.withOutputStream { output ->
-                    byte[] buffer = new byte[16384]
-                    long total = 0
-                    int count
-                    while ((count = input.read(buffer)) != -1) {
-                        total += count
-                        if (total > 600000) throw new GradleException('Caption notice exceeds its pinned size limit.')
-                        output.write(buffer, 0, count)
-                        digest.update(buffer, 0, count)
-                    }
-                }
-            }
-            if (digest.digest().encodeHex().toString() != expected) throw new GradleException('Caption notice checksum mismatch.')
-            java.nio.file.Files.move(temporary.toPath(), destination.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-        } finally { temporary.delete() }
+        def notice = source.asFile
+        if (!notice.isFile() || java.security.MessageDigest.getInstance('SHA-256').digest(notice.bytes).encodeHex().toString() != expected)
+            throw new GradleException('The pinned ONNX Runtime notice is missing or changed.')
     }
 }
 tasks.named('preBuild').configure { dependsOn(captionNotices) }

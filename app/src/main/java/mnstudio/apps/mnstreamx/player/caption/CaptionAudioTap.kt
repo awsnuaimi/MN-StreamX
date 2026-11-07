@@ -18,6 +18,14 @@ class CaptionAudioTap : CaptionAudioInput {
     @Volatile private var windowMillis = 5000
     @Volatile override var positionUs: Long = Long.MIN_VALUE
         private set
+    @Volatile override var languageHint: String? = null
+        private set
+    fun sourceLanguage(tag: String?) {
+        val normalized = mnstudio.apps.mnstreamx.domain.model.CaptionLanguage.fromTag(tag)?.tag
+        if (languageHint == normalized) return
+        languageHint = normalized
+        changes.value++
+    }
     private val changes = MutableStateFlow(0L)
     val epoch = changes.asStateFlow()
     override fun limitWindow(millis: Int) { windowMillis = millis.coerceIn(2000, 5000) }

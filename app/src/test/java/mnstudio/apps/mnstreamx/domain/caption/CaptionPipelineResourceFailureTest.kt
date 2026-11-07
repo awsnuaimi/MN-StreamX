@@ -33,7 +33,7 @@ class CaptionPipelineResourceFailureTest {
             override suspend fun prepare(progress: (Int) -> Unit) = File("cached-speech")
         }
         val text = CaptionTranslatorFactory { object : CaptionTranslator {
-            override suspend fun download(target: String, progress: (Int) -> Unit): Unit =
+            override suspend fun prepareRoute(source: String, target: String, progress: (Int) -> Unit): Unit =
                 throw CaptionStorageException(20 * 1048576L, 120 * 1048576L)
             override suspend fun prepare(target: String, progress: (Int) -> Unit) = error("No native sessions")
             override suspend fun translate(text: String) = error("No inference")

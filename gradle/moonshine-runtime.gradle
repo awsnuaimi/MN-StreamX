@@ -1,0 +1,53 @@
+import org.gradle.api.artifacts.transform.TransformAction
+import org.gradle.api.artifacts.transform.TransformOutputs
+import org.gradle.api.artifacts.transform.TransformParameters
+import org.gradle.api.artifacts.transform.InputArtifact
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+import org.gradle.api.attributes.Attribute
+import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import java.nio.file.Files
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+import java.util.zip.ZipEntry
+
+// Replace only Moonshine's reduced ORT with the matching full 1.23.2 dependency.
+abstract class MnxMoonshineRuntime implements TransformAction<TransformParameters.None> {
+    @InputArtifact @PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract Provider<FileSystemLocation> getInputArtifact()
+    @Override void transform(TransformOutputs outputs) {
+        File input = inputArtifact.get().asFile
+        File output = outputs.file(input.name)
+        if (!input.name.contains('moonshine-voice-')) { Files.copy(input.toPath(), output.toPath()); return }
+        int removed = 0
+        new ZipInputStream(new BufferedInputStream(new FileInputStream(input))).withCloseable { source ->
+            new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(output))).withCloseable { target ->
+                byte[] buffer = new byte[65536]
+                ZipEntry entry
+                while ((entry = source.nextEntry) != null) {
+                    if (entry.name ==~ /jni\/(arm64-v8a|armeabi-v7a|x86_64)\/libonnxruntime\.so/) {
+                        removed++
+                    } else {
+                        ZipEntry copy = new ZipEntry(entry.name); copy.time = 0L; target.putNextEntry(copy)
+                        int count
+                        while ((count = source.read(buffer)) != -1) target.write(buffer, 0, count)
+                        target.closeEntry()
+                    }
+                    source.closeEntry()
+                }
+            }
+        }
+        if (removed != 3) throw new GradleException('Pinned Moonshine AAR runtime layout changed.')
+    }
+}
+def nativeRuntime = Attribute.of('mnstudio.caption.fullOrtRuntime', Boolean)
+dependencies {
+    artifactTypes.maybeCreate('aar').attributes.attribute(nativeRuntime, false)
+    registerTransform(MnxMoonshineRuntime) {
+        from.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, 'aar').attribute(nativeRuntime, false)
+        to.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, 'aar').attribute(nativeRuntime, true)
+    }
+}
+configurations.configureEach { attributes.attribute(nativeRuntime, true) }

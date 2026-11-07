@@ -44,7 +44,7 @@ class CaptionPipelineTest {
         val text = CaptionTranslatorFactory {
             object : CaptionTranslator {
                 override suspend fun download(target: String, progress: (Int) -> Unit) { downloads++; stages += "translation-files" }
-                override suspend fun prepare(target: String, progress: (Int) -> Unit) { prepares++; if (failPrepare) error("load failed") }
+                override suspend fun prepare(target: String, progress: (Int) -> Unit) { prepares++; downloads++; stages += "translation-files"; if (failPrepare) error("load failed") }
                 override suspend fun translate(text: String) = "translated:$text"
                 override fun cancel() = Unit
                 override fun close() { translationsClosed++ }
@@ -53,7 +53,7 @@ class CaptionPipelineTest {
         fun TestScope.pipeline(device: CaptionDevice = CaptionDevice { available }) = CaptionPipeline(backgroundScope,
             StandardTestDispatcher(testScheduler), models, factory, text, device, now = { time })
     }
-    private val enabled = CaptionSettings(mode = CaptionMode.GENERATED)
+    private val enabled = CaptionSettings(mode = CaptionMode.GENERATED, source = "en")
     @Test fun optionalPipelineDoesNothingBeforeExplicitActivation() = runTest {
         val e = Engines(); with(e) { pipeline() }; runCurrent()
         assertEquals(0, e.modelReads); assertEquals(0, e.opened)
@@ -89,7 +89,7 @@ class CaptionPipelineTest {
         p.start(Input(), enabled); runCurrent()
         assertEquals(CaptionStatus.LOW_MEMORY, p.uiState.value.progress.status)
         assertEquals(1, e.modelReads); assertEquals(1, e.downloads)
-        assertEquals(0, e.prepares); assertEquals(0, e.opened); assertEquals(1, e.translationsClosed)
+        assertEquals(1, e.prepares); assertEquals(0, e.opened); assertEquals(1, e.translationsClosed)
     }
     @Test fun losingAvailableMemoryStopsInferenceAndReleasesResources() = runTest {
         val e = Engines(); val p = with(e) { pipeline() }; val input = Input()
@@ -139,7 +139,7 @@ class CaptionPipelineTest {
         val p = with(e) { pipeline(device) }; p.start(Input(), enabled); runCurrent()
         assertEquals(CaptionStatus.LOW_MEMORY, p.uiState.value.progress.status)
         assertEquals(200L, p.uiState.value.progress.availableMb); assertEquals(224L, p.uiState.value.progress.requiredMb)
-        assertEquals(0, e.opened); assertEquals(0, e.prepares)
+        assertEquals(0, e.opened); assertEquals(1, e.prepares)
     }
     @Test fun unsupportedArchitectureDoesNotMasqueradeAsLowRamOrDownloadModels() = runTest {
         val e = Engines(); val device = object : CaptionDevice {

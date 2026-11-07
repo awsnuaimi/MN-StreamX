@@ -37,7 +37,7 @@ class CaptionStagedMemoryTest {
         } }
         val models = object : CaptionModels { override suspend fun prepare(progress: (Int) -> Unit) = File("cached") }
         val pipeline = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler), models, voice, text, CaptionDevice { true })
-        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED)); runCurrent()
+        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = "en")); runCurrent()
         repeat(2) { windows.send(AudioWindow(FloatArray(80000), it * 5000000L)); runCurrent() }
         assertEquals(listOf("speech", "park", "translate", "speech", "park", "translate"), events)
         assertEquals("مرحبا", pipeline.uiState.value.cue?.text)
@@ -69,7 +69,7 @@ class CaptionStagedMemoryTest {
         } }
         val models = object : CaptionModels { override suspend fun prepare(progress: (Int) -> Unit) = File("cached") }
         val pipeline = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler), models, voice, text, CaptionDevice { true })
-        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED)); runCurrent()
+        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = "en")); runCurrent()
         windows.send(AudioWindow(FloatArray(80000), 0)); runCurrent()
         assertEquals(CaptionStatus.LOW_MEMORY, pipeline.uiState.value.progress.status)
         assertEquals(250L, pipeline.uiState.value.progress.availableMb)

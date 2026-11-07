@@ -29,6 +29,7 @@ internal class CaptionAudioSink(sink: AudioSink, private val tap: CaptionAudioTa
     override fun getFormatOffloadSupport(format: Format): AudioOffloadSupport = AudioOffloadSupport.DEFAULT_UNSUPPORTED
     override fun configure(inputFormat: Format, specifiedBufferSize: Int, outputChannels: IntArray?) {
         super.configure(inputFormat, specifiedBufferSize, outputChannels)
+        inputFormat.language?.let(tap::sourceLanguage)
         val encoding = inputFormat.pcmEncoding
         val bytes = when (encoding) {
             C.ENCODING_PCM_16BIT -> 2

@@ -43,8 +43,9 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                 stage = check.stage, systemThresholdMb = check.systemThresholdMb))
             return check.allowed
         }
-        val direct = settings.source != "auto" && settings.source == settings.target.tag
-        val textTarget = if (direct) "en" else settings.target.tag
+        var source = if (settings.source == "auto") CaptionLanguage.fromTag(input.languageHint)?.tag ?: "auto"
+            else CaptionLanguage.fromTag(settings.source)?.tag ?: "auto"
+        val textTarget = settings.target.tag
         status(CaptionStatus.PREPARING)
         job = scope.launch {
             val admitted = storageCoordinator?.beginSession() ?: true
@@ -67,19 +68,18 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                 withContext(worker) { inferenceLock.withLock {
                     if (!device.supported()) { status(CaptionStatus.UNAVAILABLE); return@withLock }
                     status(CaptionStatus.DOWNLOADING, 0)
-                    val model = models.prepare { status(CaptionStatus.DOWNLOADING, it) }
+                    val model = models.prepare(source) { status(CaptionStatus.DOWNLOADING, it) }
                     currentCoroutineContext().ensureActive()
                     val text = translators.create()
                     translator = text
                     try {
-                        text.download(textTarget) { status(CaptionStatus.TRANSLATING, it) }
+                        text.prepareRoute(source, textTarget) { status(CaptionStatus.DOWNLOADING, it) }
+                        var preparedSource = source
                         currentCoroutineContext().ensureActive()
-                        if (!ramAllowed(CaptionResourcePolicy.SPEECH)) return@withLock
+                        if (!ramAllowed(models.memoryStage(source))) return@withLock
                         status(CaptionStatus.LOADING)
-                        text.prepare(textTarget) { status(CaptionStatus.TRANSLATING, it) }
-                        currentCoroutineContext().ensureActive()
-                        if (!ramAllowed(CaptionResourcePolicy.SPEECH, text::releaseWorkingMemory)) return@withLock
-                        val voice = speech.open(model)
+                        var voice = speech.open(model)
+                        var voiceClosed = false
                         engine = voice
                         try {
                             currentCoroutineContext().ensureActive()
@@ -98,11 +98,11 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     // A parked speech engine needs a fresh compute state. Do not let a
                                     // retained Marian decoder overlap that allocation on low-memory TVs.
                                     val retain = CaptionWorkingSetPolicy.retain(device.snapshot())
-                                    if (textTarget != "en" && !retain) text.releaseWorkingMemory()
+                                    if (!retain) text.releaseWorkingMemory()
                                     if (!ramAllowed(voice.memoryStage, text::releaseWorkingMemory)) break
                                     val started = now()
                                     val result = try {
-                                        voice.transcribe(window.samples, settings.source, settings.target.tag)
+                                        voice.transcribe(window.samples, source, false)
                                     } catch (error: CaptionDeadlineException) {
                                         currentCoroutineContext().ensureActive()
                                         if (token != generation) break
@@ -118,24 +118,42 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     currentCoroutineContext().ensureActive()
                                     val speechEnded = now()
                                     if (!CaptionTextQuality.usable(result.text)) continue
-                                    val needsText = textTarget != "en" && !direct &&
-                                        result.language != settings.target.tag && result.text.isNotBlank()
+                                    val detected = CaptionLanguage.fromTag(result.language)?.tag
+                                    if (detected == null) { status(CaptionStatus.UNSUPPORTED_LANGUAGE); continue }
+                                    if (source == "auto") {
+                                        source = detected
+                                        if (source != "pl") {
+                                            if (engine === voice) engine = null
+                                            voice.close(); voiceClosed = true
+                                            status(CaptionStatus.DOWNLOADING, 0)
+                                            val selected = models.prepare(source) { status(CaptionStatus.DOWNLOADING, it) }
+                                            text.prepareRoute(source, textTarget) { status(CaptionStatus.DOWNLOADING, it) }
+                                            preparedSource = source
+                                            currentCoroutineContext().ensureActive()
+                                            if (!ramAllowed(models.memoryStage(source))) break
+                                            voice = speech.open(selected); voiceClosed = false; engine = voice
+                                            currentCoroutineContext().ensureActive()
+                                            throughput = CaptionThroughput()
+                                            status(CaptionStatus.LISTENING)
+                                            continue
+                                        }
+                                    }
+                                    val needsText = detected != textTarget && result.text.isNotBlank()
                                     if (needsText && !retain) voice.releaseWorkingMemory()
                                     val translationStarted = now()
                                     var delayed = false
                                     val translated = when {
                                         result.text.isBlank() -> ""
-                                        direct || result.language == settings.target.tag -> result.text
-                                        result.language != "en" -> {
-                                            status(CaptionStatus.UNSUPPORTED_LANGUAGE)
-                                            continue
-                                        }
+                                        detected == textTarget -> result.text
                                         !translationContinuity.shouldTranslate() -> {
                                             delayed = true
                                             ""
                                         }
                                         else -> try {
-                                            if (!ramAllowed(CaptionResourcePolicy.MAPPED_DECODER, voice::releaseWorkingMemory)) break
+                                            if (preparedSource != detected) {
+                                                text.prepareRoute(detected, textTarget) { status(CaptionStatus.DOWNLOADING, it) }
+                                                preparedSource = detected
+                                            }
                                             text.translate(result.text)
                                         } catch (error: CaptionDeadlineException) {
                                             currentCoroutineContext().ensureActive()
@@ -193,7 +211,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                             }
                         } finally {
                             if (engine === voice) engine = null
-                            voice.cancel(); voice.close()
+                            if (!voiceClosed) { voice.cancel(); voice.close() }
                         }
                     } finally {
                         if (translator === text) translator = null

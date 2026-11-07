@@ -52,7 +52,7 @@ class CaptionHighThresholdPipelineTest {
         val device = Device(); val e = Engines(); val input = Input()
         val p = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler),
             e.models, e.speech, e.text, device)
-        p.start(input, CaptionSettings(mode = CaptionMode.GENERATED)); runCurrent()
+        p.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = "en")); runCurrent()
         assertTrue(e.opened)
         input.windows.send(AudioWindow(FloatArray(80000), 0)); runCurrent()
         assertEquals("مرحبا", p.uiState.value.cue?.text)
@@ -73,7 +73,7 @@ class CaptionHighThresholdPipelineTest {
     @Test fun pressureAtStartupStillPreventsTheFirstNativeAllocation() = runTest {
         val e = Engines(); val p = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler),
             e.models, e.speech, e.text, Device(true))
-        p.start(Input(), CaptionSettings(mode = CaptionMode.GENERATED)); runCurrent()
+        p.start(Input(), CaptionSettings(mode = CaptionMode.GENERATED, source = "en")); runCurrent()
         assertFalse(e.opened); assertTrue(e.textClosed)
         assertEquals(CaptionStatus.MEMORY_PRESSURE, p.uiState.value.progress.status)
         assertEquals(900L, p.uiState.value.progress.systemThresholdMb)

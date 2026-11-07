@@ -30,17 +30,20 @@ class CaptionLanguageMatrixTest(private val source: CaptionLanguage, private val
             "pl" to "Dzień dobry", "hi" to "सुप्रभात").getValue(destination.tag)
         var translated = 0
         val voice = SpeechEngineFactory { object : SpeechEngine {
-            override suspend fun transcribe(samples: FloatArray, language: String) = error("Target-aware call required")
-            override suspend fun transcribe(samples: FloatArray, language: String, target: String): SpeechText {
-                assertEquals(source.tag, language); assertEquals(destination.tag, target)
-                return SpeechText("en", "Good morning", 0, 1000)
+            override suspend fun transcribe(samples: FloatArray, language: String) = error("Explicit transcription-only call required")
+            override suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText {
+                assertEquals(source.tag, language); assertFalse(translateToEnglish)
+                return SpeechText(source.tag, "Original sentence", 0, 1000)
             }
             override fun cancel() = Unit
             override fun close() = Unit
         } }
         val text = CaptionTranslatorFactory { object : CaptionTranslator {
-            override suspend fun prepare(target: String, progress: (Int) -> Unit) { assertEquals(destination.tag, target) }
-            override suspend fun translate(text: String): String { translated++; assertEquals("Good morning", text); return output }
+            override suspend fun prepare(target: String, progress: (Int) -> Unit) = error("Source route required")
+            override suspend fun prepareRoute(source: String, target: String, progress: (Int) -> Unit) {
+                assertEquals(this@CaptionLanguageMatrixTest.source.tag, source); assertEquals(destination.tag, target)
+            }
+            override suspend fun translate(text: String): String { translated++; assertEquals("Original sentence", text); return output }
             override fun cancel() = Unit
             override fun close() = Unit
         } }
@@ -50,7 +53,7 @@ class CaptionLanguageMatrixTest(private val source: CaptionLanguage, private val
         pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = source.tag, target = destination))
         runCurrent(); audio.send(AudioWindow(FloatArray(80000), 0)); runCurrent()
         assertEquals(output, pipeline.uiState.value.cue?.text)
-        assertEquals(if (destination == CaptionLanguage.ENGLISH) 0 else 1, translated)
+        assertEquals(1, translated)
         pipeline.stop(); runCurrent()
     }
 }

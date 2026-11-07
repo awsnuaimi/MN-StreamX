@@ -22,11 +22,27 @@ object CaptionResourcePolicy {
     const val SPEECH_WARM = "speech-warm"
     const val MAPPED_DECODER = "mapped-decoder"
     const val DECODER_WARM = "decoder-warm"
+    const val MOONSHINE_COLD = "moonshine-cold"
+    const val MOONSHINE_STATE = "moonshine-state"
+    const val BASE_COLD = "base-cold"
+    const val BASE_STATE = "base-state"
+    const val VOSK_COLD = "vosk-cold"
+    const val VOSK_STATE = "vosk-state"
+    const val LOCAL_WARM = "local-warm"
+    const val NATIVE_TEXT_COLD = "native-text-cold"
+    private val localStages = setOf(MOONSHINE_COLD, MOONSHINE_STATE, BASE_COLD, BASE_STATE,
+        VOSK_COLD, VOSK_STATE, LOCAL_WARM, NATIVE_TEXT_COLD)
     fun memory(target: String, availableBytes: Long, systemThresholdBytes: Long,
         systemLowMemory: Boolean): CaptionResourceCheck {
         // Incremental estimates for serial inference. Keep these separate from Android's
         // background-process reclaim threshold: that value is not an allocation by us.
         val allocationMb = when (target) {
+            MOONSHINE_COLD, BASE_COLD, NATIVE_TEXT_COLD -> 160L
+            VOSK_COLD -> 176L
+            BASE_STATE -> 96L
+            MOONSHINE_STATE -> 32L
+            VOSK_STATE -> 16L
+            LOCAL_WARM -> 8L
             RUNNING -> 32L
             SPEECH_WARM -> 64L
             // External weights avoid the extra protobuf-to-tensor copy of the original model.
@@ -37,10 +53,12 @@ object CaptionResourcePolicy {
             else -> 256L
         }
         val allocation = allocationMb * MIB
-        val required = PLAYBACK_HEADROOM + allocation
+        // Available RAM already excludes resident playback and loaded model weights.
+        val required = (if (target in localStages) 32 * MIB else PLAYBACK_HEADROOM) + allocation
         val available = availableBytes.coerceAtLeast(0)
         val stage = when (target) {
-            SPEECH, SPEECH_WARM, "en" -> CaptionStage.SPEECH
+            SPEECH, SPEECH_WARM, "en", MOONSHINE_COLD, MOONSHINE_STATE, BASE_COLD, BASE_STATE,
+                VOSK_COLD, VOSK_STATE, LOCAL_WARM -> CaptionStage.SPEECH
             else -> CaptionStage.TRANSLATION
         }
         // Android's live pressure signal remains an independent veto. A large threshold

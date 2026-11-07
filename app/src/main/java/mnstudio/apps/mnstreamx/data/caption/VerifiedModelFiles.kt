@@ -69,7 +69,7 @@ internal class VerifiedModelFiles(private val directory: File, private val clien
     }
     private suspend fun fetch(url: String, target: File, asset: ModelAsset, progress: (Long) -> Unit) = coroutineScope {
         val temporary = File.createTempFile("caption-", ".part", target.parentFile)
-        val call = client.newCall(Request.Builder().url(url).build())
+        val call = client.newCall(Request.Builder().header("User-Agent", "Mozilla/5.0 (Android) MN-StreamX").url(url).build())
         // Cancels the socket promptly even while execute/read is blocking on an IO worker.
         val guard = launch(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
             try { awaitCancellation() } finally { call.cancel() }

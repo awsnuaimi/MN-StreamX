@@ -68,4 +68,14 @@ class CaptionResourcePolicyTest {
         val result = CaptionResourcePolicy.memory(CaptionResourcePolicy.SPEECH, Long.MIN_VALUE, -1, false)
         assertFalse(result.allowed); assertEquals(0L, result.availableMb); assertEquals(0L, result.systemThresholdMb)
     }
+    @Test fun loadedWeightsAreNotChargedTwice() {
+        val mb = CaptionResourcePolicy.MIB
+        for (stage in listOf(CaptionResourcePolicy.MOONSHINE_COLD, CaptionResourcePolicy.BASE_COLD,
+            CaptionResourcePolicy.VOSK_COLD, CaptionResourcePolicy.NATIVE_TEXT_COLD)) {
+            assertTrue(CaptionResourcePolicy.memory(stage, 216 * mb, 900 * mb, false).allowed)
+            assertFalse(CaptionResourcePolicy.memory(stage, 216 * mb, 64 * mb, true).allowed)
+        }
+        val loaded = CaptionResourcePolicy.memory(CaptionResourcePolicy.MOONSHINE_STATE, 100 * mb, 64 * mb, false)
+        assertTrue(loaded.allowed); assertEquals(64L, loaded.requiredMb)
+    }
 }

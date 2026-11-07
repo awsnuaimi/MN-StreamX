@@ -51,6 +51,7 @@ class ExoPlayerManager(context: Context) {
     fun play(url: String, mediaId: String = "", title: String? = null) {
         initialize()
         cancelStartup()
+        captionAudio?.sourceLanguage(null)
         val current = LiveStartupTrace().also { trace = it }
         val uri = Uri.parse(url)
         val output = if (uri.isHierarchical) uri.getQueryParameter("output")?.lowercase(Locale.ROOT) else null
@@ -66,7 +67,15 @@ class ExoPlayerManager(context: Context) {
                     return event.timeline.getWindow(event.windowIndex,Timeline.Window()).mediaItem.mediaId == mediaId
                 }
                 override fun onTracksChanged(eventTime: AnalyticsListener.EventTime, tracks: Tracks) {
-                    if (owns(eventTime) && !tracks.isEmpty) current.reached(PerformanceStage.LIVE_TRACKS_READY)
+                    if (owns(eventTime) && !tracks.isEmpty) {
+                        current.reached(PerformanceStage.LIVE_TRACKS_READY)
+                        val audio = tracks.groups.firstOrNull { group ->
+                            group.type == androidx.media3.common.C.TRACK_TYPE_AUDIO && group.isSelected
+                        }
+                        val selected = audio?.let { group -> (0 until group.length).firstOrNull(group::isTrackSelected)
+                            ?.let { group.getTrackFormat(it).language } }
+                        captionAudio?.sourceLanguage(selected)
+                    }
                 }
                 override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
                     if (owns(eventTime) && state == Player.STATE_READY) current.reached(PerformanceStage.LIVE_PLAYER_READY)

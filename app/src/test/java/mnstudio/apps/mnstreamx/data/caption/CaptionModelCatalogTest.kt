@@ -1,18 +1,19 @@
 package mnstudio.apps.mnstreamx.data.caption
-
+import mnstudio.apps.mnstreamx.domain.caption.CaptionLanguageRoute
 import org.junit.Assert.*
 import org.junit.Test
-
 class CaptionModelCatalogTest {
-    @Test fun identicalLanguagesDoNotAdvertiseAnUnnecessaryTextModelDownload() {
-        for (tag in listOf("ar", "en", "de", "pl", "hi")) {
-            assertEquals(CaptionModelCatalog.speech.bytes + CaptionModelCatalog.vad.bytes, CaptionModelCatalog.totalBytes(tag, tag))
+    @Test fun sameLanguagesNeedOnlyTheirSourceRecognizer() {
+        for (tag in listOf("ar", "en", "de", "pl", "hi")) assertEquals(CaptionSpeechPlan.speechBytes(tag), CaptionModelCatalog.totalBytes(tag, tag))
+    }
+    @Test fun eachDirectionIncludesItsExactTextPacks() {
+        for (from in listOf("ar", "en", "de", "pl", "hi")) for (to in listOf("ar", "en", "de", "pl", "hi")) {
+            val packs = CaptionLanguageRoute.steps(from, to).sumOf { (source, target) -> BergamotCatalog.pack(source, target).bundle.bytes }
+            assertEquals(CaptionSpeechPlan.speechBytes(from) + packs, CaptionModelCatalog.totalBytes(to, from))
         }
     }
-    @Test fun crossLanguageAndAutomaticModesKeepTheirRequiredTextModels() {
-        val speech = CaptionModelCatalog.speech.bytes + CaptionModelCatalog.vad.bytes
-        assertEquals(speech + CaptionTranslationCatalog.forTarget("de").bytes, CaptionModelCatalog.totalBytes("de", "ar"))
-        assertEquals(speech + CaptionTranslationCatalog.forTarget("ar").bytes, CaptionModelCatalog.totalBytes("ar", "auto"))
-        assertEquals(speech, CaptionModelCatalog.totalBytes("en", "ar"))
+    @Test fun automaticBudgetCoversEveryDetectedSource() {
+        val total = CaptionModelCatalog.totalBytes("ar", "auto")
+        for (tag in listOf("ar", "en", "de", "pl", "hi")) assertTrue(total >= CaptionModelCatalog.totalBytes("ar", tag))
     }
 }

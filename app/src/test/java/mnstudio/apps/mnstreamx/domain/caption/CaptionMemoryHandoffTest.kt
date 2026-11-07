@@ -42,7 +42,7 @@ class CaptionMemoryHandoffTest {
         } }
         val models = object : CaptionModels { override suspend fun prepare(progress: (Int) -> Unit) = File("synthetic") }
         val pipeline = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler), models, voice, text, device)
-        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED)); runCurrent()
+        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = "en")); runCurrent()
         windows.send(AudioWindow(FloatArray(56000), 0)); runCurrent()
         assertTrue(speechResident && textResident)
         freeMb = 500
@@ -89,7 +89,7 @@ class CaptionMemoryHandoffTest {
         }
         val models = object : CaptionModels { override suspend fun prepare(progress: (Int) -> Unit) = File("cached") }
         val pipeline = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler), models, speech, text, device)
-        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED)); runCurrent()
+        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = "en")); runCurrent()
         repeat(6) { windows.send(AudioWindow(FloatArray(80000), it * 5000000L)); runCurrent() }
         assertEquals(6, translated)
         assertEquals(List(6) { listOf("release-text", "speech", "release-speech", "translate") }.flatten(), events)
@@ -118,7 +118,7 @@ class CaptionMemoryHandoffTest {
             override fun close() { textClosed = true }
         } }
         val pipeline = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler), models, speech, text, CaptionDevice { true })
-        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED)); runCurrent()
+        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = "en")); runCurrent()
         windows.send(AudioWindow(FloatArray(80000), 0)); runCurrent()
         assertTrue(voiceClosed); assertTrue(textClosed)
         assertEquals(CaptionStatus.FAILED, pipeline.uiState.value.progress.status)

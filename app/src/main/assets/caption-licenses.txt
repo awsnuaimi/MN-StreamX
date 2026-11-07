@@ -1,31 +1,13 @@
-MN StreamX local caption components
+MN StreamX offline caption engine changes
 
-MN StreamX v29.8 modifications: The Marian decoder is optimized once on the
-device before listening. A checked, runtime- and architecture-specific local
-cache stores the optimized graph with read-only external weights. Live windows
-reload it without repeating graph optimization. The original float vocabulary
-projection, model weights and vocabulary are retained. The v29.7 CSE alignment
-workaround remains enabled during preparation.
-
-MN StreamX v29.5 modifications: Marian's uint8 vocabulary projection is transposed
-into read-only external-data blocks once during local cache preparation. The
-original float projection and vocabulary are retained; greedy token selection
-runs inside ONNX. CPU graph optimizations are enabled for the prepared decoder.
-No downloaded model weights are changed.
-
-MN StreamX v29.4 modifications: A checked private whisper.cpp derivative bounds
-live-state audio and prompt allocations, reuses the first language-detection
-encoder, and installs cancellation/deadline callbacks in the CPU backend.
-The model weights and vocabulary are unchanged.
-
-MN StreamX v29.3 modifications: Whisper retains its model weights while releasing
-its inference state, and uses an audio context sized to each live window.
-Local ONNX external-data caches retain the existing blocked vocabulary projection
-and map read-only initializers without changing the downloaded model weights.
-
-MN StreamX v29.2 modifications: Whisper language detection uses the live audio context.
-The on-device Marian derivative evaluates the existing float vocabulary projection
-in blocks of 4096 columns. Original weights, vocabulary and upstream notices are retained.
+Whisper uses the original trained full encoder context, original-language
+transcription, native cancellation and a per-call deadline. Moonshine and Vosk
+are source-specific recognizers; Bergamot performs text translation only.
+The Bergamot/Marian source derivative adds Android ABI compatibility, bounded
+model metadata reads, and decoder cancellation. The complete modifying source
+and reproducible pinned upstream URLs are in app/src/main/cpp. MPL-covered
+changes must remain available under MPL-2.0 when distributing the application.
+No downloaded model weights are modified by these changes.
 
 Whisper.cpp / GGML v1.9.5: MIT.
 https://github.com/ggml-org/whisper.cpp/tree/v1.9.5
@@ -53,8 +35,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-ONNX Runtime 1.20.0: MIT.
-https://github.com/microsoft/onnxruntime/tree/v1.20.0
+ONNX Runtime 1.23.2: MIT.
+https://github.com/microsoft/onnxruntime/tree/v1.23.2
 
 MIT License
 

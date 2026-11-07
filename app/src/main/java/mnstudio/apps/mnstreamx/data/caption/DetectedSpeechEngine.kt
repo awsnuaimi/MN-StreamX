@@ -10,7 +10,7 @@ import mnstudio.apps.mnstreamx.domain.repository.SpeechEngine
 internal class DetectedSpeechEngine(private val voice: SpeechEngine,
     private val detector: CaptionSpeechDetector) : SpeechEngine {
     override val memoryStage get() = voice.memoryStage
-    override suspend fun transcribe(samples: FloatArray, language: String) = transcribe(samples, language, true)
+    override suspend fun transcribe(samples: FloatArray, language: String) = transcribe(samples, language, false)
     override suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText =
         filtered(samples, language) { voice.transcribe(it, language, translateToEnglish) }
     override suspend fun transcribe(samples: FloatArray, language: String, target: String): SpeechText =

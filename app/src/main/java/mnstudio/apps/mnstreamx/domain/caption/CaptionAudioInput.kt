@@ -9,6 +9,7 @@ class CaptionFeed(val windows: ReceiveChannel<AudioWindow>, private val finish: 
     override fun close() = finish()
 }
 interface CaptionAudioInput {
+    val languageHint: String? get() = null
     val positionUs: Long
     fun open(): CaptionFeed
     /** Future audio windows only; the renderer owns its sample buffer. */

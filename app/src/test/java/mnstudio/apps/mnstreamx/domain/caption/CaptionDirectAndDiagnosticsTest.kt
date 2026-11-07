@@ -28,7 +28,11 @@ class CaptionDirectAndDiagnosticsTest {
         } }
         val text = CaptionTranslatorFactory { object : CaptionTranslator {
             override suspend fun download(target: String, progress: (Int) -> Unit) { textTarget = target }
-            override suspend fun prepare(target: String, progress: (Int) -> Unit) { assertEquals("en", target) }
+            override suspend fun prepare(target: String, progress: (Int) -> Unit) = error("Direction required")
+            override suspend fun prepareRoute(source: String, target: String, progress: (Int) -> Unit) {
+                assertEquals("ar", source); assertEquals("ar", target)
+                assertTrue(CaptionLanguageRoute.steps(source, target).isEmpty())
+            }
             override suspend fun translate(text: String) = error("No translation expected")
             override fun cancel() = Unit
             override fun close() = Unit
@@ -38,7 +42,7 @@ class CaptionDirectAndDiagnosticsTest {
             CaptionDevice { true }, now = { testScheduler.currentTime })
         pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = "ar", target = CaptionLanguage.ARABIC))
         runCurrent(); audio.send(AudioWindow(FloatArray(80000), 0)); runCurrent()
-        assertEquals("en", textTarget); assertEquals(false, nativeTranslate)
+        assertEquals("", textTarget); assertEquals(false, nativeTranslate)
         assertEquals("صباح الخير", pipeline.uiState.value.cue?.text)
         assertEquals(0L, pipeline.uiState.value.timing?.translationMillis)
         pipeline.stop(); runCurrent()
