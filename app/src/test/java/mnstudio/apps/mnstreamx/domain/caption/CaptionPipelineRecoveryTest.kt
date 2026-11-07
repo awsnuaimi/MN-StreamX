@@ -57,8 +57,8 @@ class CaptionPipelineRecoveryTest {
     }
     @Test fun isolatedTranslatorTimeoutDoesNotTerminateTheLiveFeed() = runTest {
         val session = Session(this); session.failures += true; session.start(); session.audio(5000)
-        assertEquals(CaptionStatus.ADAPTING, session.pipeline.uiState.value.progress.status)
-        assertTrue(session.pipeline.uiState.value.cue?.text?.contains("untranslated") == true)
+        assertEquals(CaptionStatus.TRANSLATION_DELAYED, session.pipeline.uiState.value.progress.status)
+        assertNull(session.pipeline.uiState.value.cue)
         assertEquals(1, session.textCalls)
         assertFalse(session.feedClosed)
         session.audio(5000, 5000000)
@@ -76,18 +76,18 @@ class CaptionPipelineRecoveryTest {
         session.start()
         repeat(9) { session.audio(5000, it * 5000000L) }
         assertEquals(3, session.textCalls)
-        assertEquals(CaptionStatus.ADAPTING, session.pipeline.uiState.value.progress.status)
+        assertEquals(CaptionStatus.TRANSLATION_DELAYED, session.pipeline.uiState.value.progress.status)
         assertFalse(session.feedClosed)
         assertEquals(9, session.speechCalls)
         session.stop()
         assertTrue(session.feedClosed)
         assertEquals(1, session.speechClosed)
     }
-    @Test fun failedTranslationStillShowsIdentifiedSourceTextAndCanRecover() = runTest {
+    @Test fun failedTranslationNeverPublishesIntermediateEnglishAndCanRecover() = runTest {
         val session = Session(this)
         session.failures += true
         session.start(); session.audio(5000)
-        assertEquals("[EN · untranslated] Good morning", session.pipeline.uiState.value.cue?.text)
+        assertNull(session.pipeline.uiState.value.cue)
         repeat(2) { session.audio(5000, (it + 1) * 5000000L) }
         assertEquals(1, session.textCalls)
         session.audio(5000, 15000000)

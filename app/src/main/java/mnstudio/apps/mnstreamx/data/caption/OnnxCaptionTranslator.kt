@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit
 /** One selected language pack, mapped uint8 heads, and single-path live decoding. */
 internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
     private val device: CaptionDevice = CaptionDevice { true },
-    private val budgetMillis: () -> Long = { 8000L }) : CaptionTranslator {
+    private val budgetMillis: () -> Long = { 8000L },
+    private val keepWarm: () -> Boolean = { false }) : CaptionTranslator {
     private var target = "en"
     private var folder: File? = null
     private var encoderFile: File? = null
@@ -23,6 +24,7 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
     private var cachedFile: File? = null
     private var decoder: MappedCaptionSession? = null
     private var cached: MappedCaptionSession? = null
+    private var encoder: MappedCaptionSession? = null
     private var tokenizer: MarianTokenizer? = null
     private var config: MarianModelConfig? = null
     private val nativeMemory by lazy { NativeWhisper() }
@@ -44,13 +46,15 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
         val encoder = CaptionTranslationCatalog.encoder(bundle)
         encoderFile = OnnxMappedModelCache().prepare(directory.resolve(encoder.path), encoder.sha256)
         suspend fun prepareDecoder(asset: ModelAsset): File {
-            requireMemory(CaptionResourcePolicy.MAPPED_DECODER)
-            val mapped = OnnxMappedModelCache(export = MarianLanguageProjection(settings)::export,
-                variant = "language-beam-v1", addedWeightBytes = 32 * CaptionResourcePolicy.MIB)
-                .prepare(directory.resolve(asset.path), asset.sha256)
-            nativeMemory.trimMemory()
-            requireMemory(CaptionResourcePolicy.MAPPED_DECODER)
-            return OnnxOptimizedModelCache().prepare(mapped, asset.sha256)
+            return CaptionReadyModelCache().prepare(directory.resolve(asset.path), asset.sha256) {
+                requireMemory(CaptionResourcePolicy.MAPPED_DECODER)
+                val mapped = OnnxMappedModelCache(export = MarianLanguageProjection(settings)::export,
+                    variant = "language-beam-v1", addedWeightBytes = 32 * CaptionResourcePolicy.MIB)
+                    .prepare(directory.resolve(asset.path), asset.sha256)
+                nativeMemory.trimMemory()
+                requireMemory(CaptionResourcePolicy.MAPPED_DECODER)
+                OnnxOptimizedModelCache().prepare(mapped, asset.sha256)
+            }
         }
         decoderFile = prepareDecoder(CaptionTranslationCatalog.decoder(bundle))
         cachedFile = CaptionTranslationCatalog.cachedDecoder(bundle)?.let { prepareDecoder(it) }
@@ -89,7 +93,7 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
                     fun cachedSession(): OrtSession {
                         val file = cachedFile ?: return firstSession()
                         // The Polish export separates the first and cached decoder; keep only one session resident.
-                        decoder?.close(); decoder = null
+                        if (!keepWarm()) { decoder?.close(); decoder = null }
                         checkCall(); requireMemory(if (cached == null) CaptionResourcePolicy.MAPPED_DECODER else CaptionResourcePolicy.DECODER_WARM)
                         return (cached ?: MappedCaptionSession.open(env, file).also { cached = it }).session
                     }
@@ -98,11 +102,13 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
                         val shape = longArrayOf(1, ids.size.toLong())
                         OnnxTensor.createTensor(env, LongBuffer.wrap(ids), shape).use { input ->
                         OnnxTensor.createTensor(env, LongBuffer.wrap(LongArray(ids.size) { 1 }), shape).use { mask ->
-                            releaseWorkingMemory()
+                            if (!keepWarm()) releaseWorkingMemory()
                             requireMemory(CaptionResourcePolicy.ENCODER)
-                            val encoded = MappedCaptionSession.open(env, checkNotNull(encoderFile)).use { encoder ->
-                                run(encoder.session, mapOf("input_ids" to input, "attention_mask" to mask))
-                            }
+                            val retained = keepWarm()
+                            val encoding = if (retained) encoder ?: MappedCaptionSession.open(env, checkNotNull(encoderFile))
+                                .also { encoder = it } else MappedCaptionSession.open(env, checkNotNull(encoderFile))
+                            val encoded = try { run(encoding.session, mapOf("input_ids" to input, "attention_mask" to mask)) }
+                                finally { if (!retained) encoding.close() }
                             encoded.use { result ->
                                 nativeMemory.trimMemory()
                                 currentCoroutineContext().ensureActive()
@@ -128,7 +134,7 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
         } finally {
             // Release the mapped decoder now, including on failure/cancellation. Waiting
             // for the next audio window leaves its weights resident throughout silence.
-            releaseWorkingMemory()
+            if (!keepWarm()) releaseWorkingMemory()
         }
     }
     private fun requireMemory(stage: String) {
@@ -138,7 +144,8 @@ internal class OnnxCaptionTranslator(private val files: VerifiedModelFiles,
     override fun releaseWorkingMemory() {
         val first = decoder; decoder = null
         val past = cached; cached = null
-        try { first?.close() } finally { past?.close() }
+        val input = encoder; encoder = null
+        try { first?.close() } finally { try { past?.close() } finally { input?.close() } }
         if (tokenizer != null) nativeMemory.trimMemory()
     }
     override fun cancel() { calls.cancel() }

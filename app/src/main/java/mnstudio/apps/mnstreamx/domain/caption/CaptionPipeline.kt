@@ -83,7 +83,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                         engine = voice
                         try {
                             currentCoroutineContext().ensureActive()
-                            val recovery = CaptionWindowRecovery()
+                            val recovery = CaptionWindowRecovery(CaptionWorkingSetPolicy.initialWindow(device.snapshot()))
                             val translationContinuity = CaptionTranslationContinuity()
                             input.limitWindow(recovery.windowMillis)
                             input.open().use { feed ->
@@ -97,7 +97,8 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                         CaptionPresentation.tooOld(window, input.positionUs)) continue
                                     // A parked speech engine needs a fresh compute state. Do not let a
                                     // retained Marian decoder overlap that allocation on low-memory TVs.
-                                    if (textTarget != "en") text.releaseWorkingMemory()
+                                    val retain = CaptionWorkingSetPolicy.retain(device.snapshot())
+                                    if (textTarget != "en" && !retain) text.releaseWorkingMemory()
                                     if (!ramAllowed(voice.memoryStage, text::releaseWorkingMemory)) break
                                     val started = now()
                                     val result = try {
@@ -116,36 +117,42 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     }
                                     currentCoroutineContext().ensureActive()
                                     val speechEnded = now()
+                                    if (!CaptionTextQuality.usable(result.text)) continue
                                     val needsText = textTarget != "en" && !direct &&
                                         result.language != settings.target.tag && result.text.isNotBlank()
-                                    if (needsText) voice.releaseWorkingMemory()
+                                    if (needsText && !retain) voice.releaseWorkingMemory()
                                     val translationStarted = now()
-                                    var untranslated = false
+                                    var delayed = false
                                     val translated = when {
                                         result.text.isBlank() -> ""
                                         direct || result.language == settings.target.tag -> result.text
+                                        result.language != "en" -> {
+                                            status(CaptionStatus.UNSUPPORTED_LANGUAGE)
+                                            continue
+                                        }
                                         !translationContinuity.shouldTranslate() -> {
-                                            untranslated = true
-                                            translationContinuity.untranslated(result.text, result.language)
+                                            delayed = true
+                                            ""
                                         }
                                         else -> try {
+                                            if (!ramAllowed(CaptionResourcePolicy.MAPPED_DECODER, voice::releaseWorkingMemory)) break
                                             text.translate(result.text)
                                         } catch (error: CaptionDeadlineException) {
                                             currentCoroutineContext().ensureActive()
                                             if (token != generation) break
                                             if (error.stage != CaptionStage.TRANSLATION) throw error
                                             // One slow Marian request must not kill the live feed.
-                                            // Open a bounded circuit and show clearly identified
-                                            // source-language text until translation is affordable.
+                                            // Keep the requested language strict: intermediate English
+                                            // must never become the subtitle after a missed deadline.
                                             translationContinuity.deadline()
                                             text.releaseWorkingMemory()
-                                            untranslated = true
-                                            translationContinuity.untranslated(result.text, result.language)
+                                            delayed = true
+                                            ""
                                         }
                                     }
                                     currentCoroutineContext().ensureActive()
                                     val finished = now()
-                                    if (needsText && !untranslated && result.text.isNotBlank()) {
+                                    if (needsText && !delayed && result.text.isNotBlank()) {
                                         translationContinuity.success(
                                             (finished - translationStarted).coerceAtLeast(0),
                                             window.durationMillis)
@@ -154,10 +161,12 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                         (finished - translationStarted).coerceAtLeast(0),
                                         (translationStarted - speechEnded).coerceAtLeast(0), (finished - started).coerceAtLeast(0))
                                     if (token != generation) break
-                                    // Source captions are a transparent fallback, not a claim of translation.
-                                    // Do not let translation timeouts inflate the speech throughput score.
-                                    if (untranslated) throughput = CaptionThroughput()
-                                    val stopped = if (untranslated) null else throughput.assess(window,
+                                    if (delayed) {
+                                        throughput = CaptionThroughput()
+                                        state.value = CaptionPipelineState(CaptionProgress(CaptionStatus.TRANSLATION_DELAYED), timing = timing)
+                                        continue
+                                    }
+                                    val stopped = throughput.assess(window,
                                         if (needsText) timing.speechMillis else timing.totalMillis,
                                         if (needsText) Long.MIN_VALUE else input.positionUs)
                                     if (stopped != null) {
@@ -172,13 +181,12 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                         state.value = CaptionPipelineState(stopped, timing = timing)
                                         break
                                     }
-                                    if (translated.isBlank()) continue
+                                    if (!CaptionTextQuality.usable(translated)) continue
                                     if (CaptionPresentation.tooOld(window, input.positionUs)) continue
-                                    if (!untranslated) recovery.succeeded()
+                                    recovery.succeeded()
                                     val begin = window.startUs + result.startMillis.coerceIn(0, window.durationMillis) * 1000
                                     val end = window.startUs + result.endMillis.coerceIn(0, window.durationMillis) * 1000
-                                    state.value = CaptionPipelineState(CaptionProgress(
-                                        if (untranslated) CaptionStatus.ADAPTING else CaptionStatus.LISTENING),
+                                    state.value = CaptionPipelineState(CaptionProgress(CaptionStatus.LISTENING),
                                         CaptionCue(translated.trim().take(2000), begin, maxOf(begin, end), now()),
                                         timing.totalMillis, timing)
                                 }

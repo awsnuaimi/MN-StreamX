@@ -1,3 +1,4 @@
 <resources>
     <string name="caption_adapting">جارٍ ضبط الترجمة المباشرة وفق قدرة الجهاز. عند البطء قد يظهر النص الأصلي مؤقتًا.</string>
+    <string name="caption_translation_delayed">تعذرت الترجمة إلى اللغة المختارة مؤقتًا. تجري إعادة المحاولة.</string>
 </resources>

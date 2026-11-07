@@ -1,8 +1,9 @@
 package mnstudio.apps.mnstreamx.domain.caption
 
 /** Adaptive live windows for native and translation deadlines; never replay stale audio. */
-class CaptionWindowRecovery {
-    var windowMillis = 5000
+class CaptionWindowRecovery(initialWindowMillis: Int = 5000) {
+    init { require(initialWindowMillis in 2500..5000) }
+    var windowMillis = initialWindowMillis
         private set
     private var consecutiveFailures = 0
     fun retry(): Boolean {
