@@ -23,7 +23,8 @@ data class CaptionSettings(val mode: CaptionMode = CaptionMode.OFF,
     val translationBackend: TranslationBackend = TranslationBackend.OFFLINE) {
     fun normalized() = copy(source = if (source == "auto") "auto" else CaptionLanguage.fromTag(source)?.tag ?: "auto")
 }
-data class SpeechText(val language: String, val text: String, val startMillis: Long = 0, val endMillis: Long = 0)
+data class SpeechText(val language: String, val text: String, val startMillis: Long = 0, val endMillis: Long = 0,
+    val languageOnly: Boolean = false)
 data class CaptionCue(val text: String, val startUs: Long, val endUs: Long, val producedAtMillis: Long)
 enum class CaptionStatus { OFF, EMBEDDED, PREPARING, DOWNLOADING, LOADING, LISTENING, TRANSLATING,
     SLOW_DEVICE, LOW_MEMORY, LOW_STORAGE, MEMORY_PRESSURE, UNAVAILABLE, UNSUPPORTED_LANGUAGE, FAILED, ADAPTING, CLOUD_SETUP_REQUIRED, CLOUD_ERROR,

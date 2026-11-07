@@ -7,7 +7,7 @@ internal object CaptionSpeechPlan {
     fun memoryStage(source: String) = when (source) {
         "ar", "de", "en" -> CaptionResourcePolicy.MOONSHINE_COLD
         "hi" -> CaptionResourcePolicy.VOSK_COLD
-        else -> CaptionResourcePolicy.BASE_COLD
+        else -> CaptionResourcePolicy.TINY_COLD
     }
     fun speechBytes(source: String): Long = when (source) {
         "ar", "de", "en" -> MoonshineCatalog.forSource(source).bytes

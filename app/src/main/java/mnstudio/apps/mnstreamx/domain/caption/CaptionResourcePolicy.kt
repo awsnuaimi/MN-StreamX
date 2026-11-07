@@ -24,13 +24,15 @@ object CaptionResourcePolicy {
     const val DECODER_WARM = "decoder-warm"
     const val MOONSHINE_COLD = "moonshine-cold"
     const val MOONSHINE_STATE = "moonshine-state"
+    const val TINY_COLD = "tiny-cold"
+    const val TINY_STATE = "tiny-state"
     const val BASE_COLD = "base-cold"
     const val BASE_STATE = "base-state"
     const val VOSK_COLD = "vosk-cold"
     const val VOSK_STATE = "vosk-state"
     const val LOCAL_WARM = "local-warm"
     const val NATIVE_TEXT_COLD = "native-text-cold"
-    private val localStages = setOf(MOONSHINE_COLD, MOONSHINE_STATE, BASE_COLD, BASE_STATE,
+    private val localStages = setOf(TINY_COLD, TINY_STATE, MOONSHINE_COLD, MOONSHINE_STATE, BASE_COLD, BASE_STATE,
         VOSK_COLD, VOSK_STATE, LOCAL_WARM, NATIVE_TEXT_COLD)
     fun memory(target: String, availableBytes: Long, systemThresholdBytes: Long,
         systemLowMemory: Boolean): CaptionResourceCheck {
@@ -38,6 +40,8 @@ object CaptionResourcePolicy {
         // background-process reclaim threshold: that value is not an allocation by us.
         val allocationMb = when (target) {
             MOONSHINE_COLD, BASE_COLD, NATIVE_TEXT_COLD -> 160L
+            TINY_COLD -> 128L
+            TINY_STATE -> 64L
             VOSK_COLD -> 176L
             BASE_STATE -> 96L
             MOONSHINE_STATE -> 32L
@@ -57,7 +61,7 @@ object CaptionResourcePolicy {
         val required = (if (target in localStages) 32 * MIB else PLAYBACK_HEADROOM) + allocation
         val available = availableBytes.coerceAtLeast(0)
         val stage = when (target) {
-            SPEECH, SPEECH_WARM, "en", MOONSHINE_COLD, MOONSHINE_STATE, BASE_COLD, BASE_STATE,
+            SPEECH, SPEECH_WARM, "en", TINY_COLD, TINY_STATE, MOONSHINE_COLD, MOONSHINE_STATE, BASE_COLD, BASE_STATE,
                 VOSK_COLD, VOSK_STATE, LOCAL_WARM -> CaptionStage.SPEECH
             else -> CaptionStage.TRANSLATION
         }

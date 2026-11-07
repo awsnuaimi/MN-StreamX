@@ -39,15 +39,17 @@ extern "C" JNIEXPORT jlong JNICALL Java_mnstudio_apps_mnstreamx_data_caption_Nat
         if (!load(*s)) throw std::runtime_error("Speech model unavailable"); return reinterpret_cast<jlong>(s.release());
     } catch (const std::exception&) { mnxError(env, "Could not load the local speech model"); } return 0;
 }
-extern "C" JNIEXPORT jobjectArray JNICALL Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_decode(
-    JNIEnv* env, jobject, jlong pointer, jfloatArray samples, jstring language, jboolean, jstring) {
+static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samples,
+    jstring language, bool detectionOnly) {
     auto* s = reinterpret_cast<SpeechSession*>(pointer);
     if (!s || !samples) { mnxError(env, "Invalid speech input"); return nullptr; }
     const auto count = env->GetArrayLength(samples);
     if (count < 16000 || count > 96000) { mnxError(env, "Invalid speech window"); return nullptr; }
     try {
-        MnxUtf8 source(env, language); if (!source.get()) return nullptr; std::string selected = source.get();
-        if (selected == "auto" && s->detected >= 0) selected = whisper_lang_str(s->detected);
+        MnxUtf8 source(env, language);
+        if (!detectionOnly && !source.get()) return nullptr;
+        std::string selected = detectionOnly ? "auto" : source.get();
+        if (!detectionOnly && selected == "auto" && s->detected >= 0) selected = whisper_lang_str(s->detected);
         if (selected != "auto" && whisper_lang_id(selected.c_str()) < 0) throw std::runtime_error("Unsupported language");
         if (!load(*s)) throw std::runtime_error("Speech model unavailable");
         if (!s->state) s->state = whisper_init_state(s->context);
@@ -56,7 +58,7 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_mnstudio_apps_mnstreamx_data_capt
         if (env->ExceptionCheck()) return nullptr;
         auto o = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
         o.n_threads = s->threads; o.greedy.best_of = 1; o.language = selected.c_str();
-        o.audio_ctx = 0; o.translate = false; o.no_context = true; o.no_timestamps = true; o.single_segment = false;
+        o.audio_ctx = 0; o.detect_language = detectionOnly; o.translate = false; o.no_context = true; o.no_timestamps = true; o.single_segment = false;
         o.n_max_text_ctx = 0; o.max_tokens = 96; o.temperature = 0.0f; o.temperature_inc = 0.0f; o.suppress_nst = true;
         o.print_realtime = false; o.print_progress = false; o.print_timestamps = false; o.print_special = false;
         o.abort_callback = interrupted; o.abort_callback_user_data = s;
@@ -69,7 +71,7 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_mnstudio_apps_mnstreamx_data_capt
         if (status != 0) throw std::runtime_error("Speech inference failed");
         s->detected = whisper_full_lang_id_from_state(s->state); const char* detected = whisper_lang_str(s->detected);
         if (!detected) throw std::runtime_error("Invalid detected language"); std::string text;
-        for (int i = 0; i < whisper_full_n_segments_from_state(s->state); ++i) {
+        for (int i = 0; !detectionOnly && i < whisper_full_n_segments_from_state(s->state); ++i) {
             if (whisper_full_get_segment_no_speech_prob_from_state(s->state, i) > 0.75f) continue;
             double probability = 0.0; int tokens = 0;
             for (int j = 0; j < whisper_full_n_tokens_from_state(s->state, i); ++j) {
@@ -79,7 +81,7 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_mnstudio_apps_mnstreamx_data_capt
             if (tokens == 0 || !std::isfinite(probability) || probability / tokens < -1.2) continue;
             const char* value = whisper_full_get_segment_text_from_state(s->state, i); if (value) text += value;
         }
-        if (text.empty()) s->detected = -1;
+        if (!detectionOnly && text.empty()) s->detected = -1;
         const std::string result[] = {detected, "0", std::to_string(count * 1000LL / 16000), text};
         auto cls = env->FindClass("java/lang/String"); if (!cls) return nullptr;
         auto output = env->NewObjectArray(4, cls, nullptr); env->DeleteLocalRef(cls); if (!output) return nullptr;
@@ -88,6 +90,14 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_mnstudio_apps_mnstreamx_data_capt
             env->SetObjectArrayElement(output, i, value); env->DeleteLocalRef(value);
         } return output;
     } catch (const std::exception&) { mnxError(env, "Local speech failed or was cancelled"); } return nullptr;
+}
+extern "C" JNIEXPORT jobjectArray JNICALL Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_decode(
+    JNIEnv* env, jobject, jlong pointer, jfloatArray samples, jstring language, jboolean, jstring) {
+    return mnxDecodeSpeech(env, pointer, samples, language, false);
+}
+extern "C" JNIEXPORT jobjectArray JNICALL Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_detectLanguage(
+    JNIEnv* env, jobject, jlong pointer, jfloatArray samples) {
+    return mnxDecodeSpeech(env, pointer, samples, nullptr, true);
 }
 extern "C" JNIEXPORT void JNICALL Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_cancel(JNIEnv*, jobject, jlong p) {
     if (p) reinterpret_cast<SpeechSession*>(p)->cancelled.store(true, std::memory_order_relaxed);

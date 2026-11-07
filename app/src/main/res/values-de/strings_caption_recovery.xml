@@ -1,4 +1,5 @@
 <resources>
-    <string name="caption_adapting">Live-Untertitel werden an die Geräteleistung angepasst. Bei Verzögerungen kann vorübergehend der Originaltext erscheinen.</string>
+    <string name="caption_adapting">Die Audioabschnitte werden nach einer Verarbeitungsverzögerung verkürzt.</string>
+    <string name="caption_adapting_details">Anpassung — %1$s: Verarbeitung %2$d ms, Zeitbudget %3$d ms.</string>
     <string name="caption_translation_delayed">Die Übersetzung in die gewählte Sprache ist vorübergehend verzögert. Erneuter Versuch.</string>
 </resources>

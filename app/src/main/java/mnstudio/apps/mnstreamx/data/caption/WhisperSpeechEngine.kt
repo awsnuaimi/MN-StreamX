@@ -21,22 +21,26 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
     init { if (handle == 0L) throw IOException("Speech model could not be loaded") }
     override val memoryStage get() = when {
         stateResident -> CaptionResourcePolicy.LOCAL_WARM
-        weightsResident -> CaptionResourcePolicy.BASE_STATE
-        else -> CaptionResourcePolicy.BASE_COLD
+        weightsResident -> CaptionResourcePolicy.TINY_STATE
+        else -> CaptionResourcePolicy.TINY_COLD
     }
     override suspend fun transcribe(samples: FloatArray, language: String): SpeechText = transcribe(samples, language, false)
     override suspend fun transcribe(samples: FloatArray, language: String, translateToEnglish: Boolean): SpeechText {
-        return decode(samples, language, false, "")
+        return decode(samples, language)
     }
     override suspend fun transcribe(samples: FloatArray, language: String, target: String): SpeechText =
-        decode(samples, language, false, target)
-    private suspend fun decode(samples: FloatArray, language: String, translateToEnglish: Boolean, target: String): SpeechText {
+        decode(samples, language)
+    private suspend fun decode(samples: FloatArray, language: String): SpeechText {
         currentCoroutineContext().ensureActive()
         val pointer = synchronized(lock) { handle }
         check(pointer != 0L)
         weightsResident = true
         val started = System.nanoTime()
-        val rows = try { native.decode(pointer, samples, language, translateToEnglish, target) }
+        val detectionOnly = language == "auto"
+        val rows = try {
+            if (detectionOnly) native.detectLanguage(pointer, samples)
+            else native.decode(pointer, samples, language, false, "")
+        }
         catch (_: TimeoutException) {
             currentCoroutineContext().ensureActive()
             throw CaptionDeadlineException(CaptionStage.SPEECH, (System.nanoTime() - started) / 1000000, 10000)
@@ -47,7 +51,7 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
         val elapsed = (System.nanoTime() - started) / 1000000
         if (elapsed > 10000) throw CaptionDeadlineException(CaptionStage.SPEECH, elapsed, 10000)
         return SpeechText(rows[0], rows[3].trim().take(2000), rows[1].toLongOrNull() ?: 0,
-            rows[2].toLongOrNull() ?: samples.size * 1000L / 16000)
+            rows[2].toLongOrNull() ?: samples.size * 1000L / 16000, languageOnly = detectionOnly)
     }
     override fun cancel() { synchronized(lock) { if (handle != 0L) native.cancel(handle) } }
     override fun recoverAfterDeadline() {

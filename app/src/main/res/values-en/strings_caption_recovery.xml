@@ -1,4 +1,5 @@
 <resources>
-    <string name="caption_adapting">Live captions are adapting to device performance. Original-language text may appear temporarily when translation is slow.</string>
+    <string name="caption_adapting">Shortening audio windows after a processing delay.</string>
+    <string name="caption_adapting_details">Adapting — %1$s: processing took %2$d ms; budget %3$d ms.</string>
     <string name="caption_translation_delayed">Translation to the selected language is temporarily delayed. Retrying.</string>
 </resources>

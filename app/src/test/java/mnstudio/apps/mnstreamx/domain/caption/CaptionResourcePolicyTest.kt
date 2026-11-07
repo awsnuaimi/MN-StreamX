@@ -78,4 +78,11 @@ class CaptionResourcePolicyTest {
         val loaded = CaptionResourcePolicy.memory(CaptionResourcePolicy.MOONSHINE_STATE, 100 * mb, 64 * mb, false)
         assertTrue(loaded.allowed); assertEquals(64L, loaded.requiredMb)
     }
+    @Test fun tinyHasItsOwnIncrementalBudgetAndStillHonoursSystemPressure() {
+        val mib = CaptionResourcePolicy.MIB
+        assertEquals(160L, CaptionResourcePolicy.memory(CaptionResourcePolicy.TINY_COLD, 216 * mib, 0, false).requiredMb)
+        assertTrue(CaptionResourcePolicy.memory(CaptionResourcePolicy.TINY_COLD, 216 * mib, 0, false).allowed)
+        assertFalse(CaptionResourcePolicy.memory(CaptionResourcePolicy.TINY_COLD, 216 * mib, 0, true).allowed)
+        assertEquals(96L, CaptionResourcePolicy.memory(CaptionResourcePolicy.TINY_STATE, 150 * mib, 0, false).requiredMb)
+    }
 }

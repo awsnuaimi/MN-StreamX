@@ -16,4 +16,11 @@ class CaptionModelCatalogTest {
         val total = CaptionModelCatalog.totalBytes("ar", "auto")
         for (tag in listOf("ar", "en", "de", "pl", "hi")) assertTrue(total >= CaptionModelCatalog.totalBytes("ar", tag))
     }
+    @Test fun polishAndAutomaticDetectionUseTheVerifiedTinyBundle() {
+        assertEquals("speech-tiny-q5-v2", CaptionModelCatalog.speech.id)
+        assertEquals(32152673L, CaptionModelCatalog.speech.bytes)
+        assertEquals("ggml-tiny-q5_1.bin", CaptionModelCatalog.speech.assets.single().path)
+        assertEquals(mnstudio.apps.mnstreamx.domain.caption.CaptionResourcePolicy.TINY_COLD, CaptionSpeechPlan.memoryStage("auto"))
+        assertEquals(mnstudio.apps.mnstreamx.domain.caption.CaptionResourcePolicy.TINY_COLD, CaptionSpeechPlan.memoryStage("pl"))
+    }
 }

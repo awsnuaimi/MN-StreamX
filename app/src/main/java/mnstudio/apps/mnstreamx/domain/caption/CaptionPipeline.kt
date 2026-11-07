@@ -112,12 +112,14 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                         voice.recoverAfterDeadline()
                                         input.limitWindow(recovery.windowMillis)
                                         throughput = CaptionThroughput()
-                                        status(CaptionStatus.ADAPTING)
+                                        if (generation == token) state.value = CaptionPipelineState(CaptionProgress(
+                                            CaptionStatus.ADAPTING, stage = error.stage,
+                                            elapsedMillis = error.elapsedMillis, budgetMillis = error.budgetMillis))
                                         continue
                                     }
                                     currentCoroutineContext().ensureActive()
                                     val speechEnded = now()
-                                    if (!CaptionTextQuality.usable(result.text)) continue
+                                    if (!result.languageOnly && !CaptionTextQuality.usable(result.text)) continue
                                     val detected = CaptionLanguage.fromTag(result.language)?.tag
                                     if (detected == null) { status(CaptionStatus.UNSUPPORTED_LANGUAGE); continue }
                                     if (source == "auto") {
@@ -137,6 +139,16 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                             status(CaptionStatus.LISTENING)
                                             continue
                                         }
+                                    }
+                                    // Language detection returns metadata only; never translate or publish it.
+                                    if (result.languageOnly) {
+                                        if (preparedSource != source) {
+                                            text.prepareRoute(source, textTarget) { status(CaptionStatus.DOWNLOADING, it) }
+                                            preparedSource = source
+                                        }
+                                        throughput = CaptionThroughput()
+                                        status(CaptionStatus.LISTENING)
+                                        continue
                                     }
                                     val needsText = detected != textTarget && result.text.isNotBlank()
                                     if (needsText && !retain) voice.releaseWorkingMemory()
@@ -193,7 +205,8 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                         if (recovery.adaptThroughput()) {
                                             input.limitWindow(recovery.windowMillis)
                                             throughput = CaptionThroughput()
-                                            status(CaptionStatus.ADAPTING)
+                                            if (generation == token) state.value = CaptionPipelineState(
+                                                stopped.copy(status = CaptionStatus.ADAPTING), timing = timing)
                                             continue
                                         }
                                         state.value = CaptionPipelineState(stopped, timing = timing)

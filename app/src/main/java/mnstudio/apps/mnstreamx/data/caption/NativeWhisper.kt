@@ -8,6 +8,7 @@ internal class NativeWhisper {
     external fun create(path: String, threads: Int): Long
     external fun decode(handle: Long, samples: FloatArray, language: String, translateToEnglish: Boolean,
         target: String): Array<String>
+    external fun detectLanguage(handle: Long, samples: FloatArray): Array<String>
     external fun cancel(handle: Long)
     external fun park(handle: Long)
     external fun resetState(handle: Long)
