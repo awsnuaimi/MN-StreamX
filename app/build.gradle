@@ -178,6 +178,8 @@ tasks.configureEach { task ->
 dependencies {
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.23.2'
     implementation 'ai.moonshine:moonshine-voice:0.1.6'
+    // Our manifest references InitializationProvider, so it must be on the compile classpath.
+    implementation 'androidx.startup:startup-runtime:1.1.1'
     implementation 'com.alphacephei:vosk-android:0.3.47'
     implementation 'com.microsoft.cognitiveservices.speech:client-sdk:1.51.0'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
