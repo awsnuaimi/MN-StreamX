@@ -29,6 +29,8 @@ import javax.inject.Inject
 import mnstudio.apps.mnstreamx.domain.parental.ParentalControl
 import mnstudio.apps.mnstreamx.domain.parental.ParentalProjection
 import mnstudio.apps.mnstreamx.domain.playback.ChannelPlaybackHandoff
+import mnstudio.apps.mnstreamx.domain.playback.PreparedLiveQueue
+import mnstudio.apps.mnstreamx.domain.performance.*
 import mnstudio.apps.mnstreamx.domain.profile.ProfileScope
 
 @HiltViewModel
@@ -53,6 +55,12 @@ class PlayerViewModel @Inject constructor(
     private var favoriteIds: Set<String>? = null
     private var rebuildJob: Job? = null
     private var original = PlaybackQueue.empty()
+    private var queueSource: mnstudio.apps.mnstreamx.domain.model.AppSettings? = null
+    private var queueSourceKnown = false
+    private var queueRequested = false
+    private var pendingMove: Int? = null
+    private var preparedQueue: PreparedLiveQueue? = null
+    private val queueTiming = PerformanceSpans(PerformanceJournal.recorder)
     private val favoriteController = FavoriteController(viewModelScope, favorites, onReset = { favoriteIds = null }) {
         favoriteIds = it
         state.update { current -> current.copy(detachedChannel = current.detachedChannel?.let { channel ->
@@ -87,15 +95,17 @@ class PlayerViewModel @Inject constructor(
                     state.update { it.copy(isLoading = false, sourceChanged = true) }
                     return@launch
                 }
+                queueSource = source;queueSourceKnown = true
                 val id = savedStateHandle.get<String>("channelId")
                 val selected = try {
                     if (id == null) null else LoadTimings.measure(LoadTimings.Stage.CHANNEL_LOOKUP) {
                         val access = parental.state.value
-                        val handed = playbackHandoff.take(historyRecorder.sourceKey,id,access.epoch)?.takeIf {
+                        val handed = playbackHandoff.takeSelection(historyRecorder.sourceKey,id,access.epoch)?.takeIf {
                             source != null && access.profileId == source.profileId &&
-                                access.allows(ProfileScope.source(historyRecorder.sourceKey.orEmpty()).orEmpty(),it)
+                                access.allows(ProfileScope.source(historyRecorder.sourceKey.orEmpty()).orEmpty(),it.channel)
                         }
-                        handed ?: if (source == null) channels.getPlaybackChannel(id)
+                        preparedQueue = handed?.queue
+                        handed?.channel ?: if (source == null) channels.getPlaybackChannel(id)
                             else channels.getPlaybackChannel(source, id)
                     }
                 } catch (error: CancellationException) { throw error }
@@ -104,7 +114,7 @@ class PlayerViewModel @Inject constructor(
                     val marked = favoriteIds?.let { selected.copy(isFavorite = selected.id in it) } ?: selected
                     state.update { it.copy(detachedChannel = marked, isLoading = false, errorMessage = null) }
                 }
-                organizer.setChannels(if (source == null) channels.getChannels() else channels.getCachedChannels(source).orEmpty())
+                if (selected == null) requestChannels()
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
@@ -118,7 +128,33 @@ class PlayerViewModel @Inject constructor(
 
     fun retryFavorites() = favoriteController.retry()
 
-    fun onPlaybackStarted(channel: Channel) = historyRecorder.onFirstFrame(channel)
+    fun onPlaybackStarted(channel: Channel) {
+        historyRecorder.onFirstFrame(channel)
+        val current = state.value.channel
+        if (current?.id == channel.id && current.streamUrl == channel.streamUrl) requestChannels()
+    }
+
+    /** First-frame work has priority; an explicit panel/zap request bypasses the deferral. */
+    fun requestChannels() {
+        if (!queueSourceKnown || queueRequested) return
+        queueRequested = true
+        queueTiming.start(PerformanceStage.LIVE_QUEUE_PREPARE)
+        state.update { it.copy(queueLoading = true) }
+        val prepared = preparedQueue;preparedQueue = null
+        if (prepared != null && organizer.restore(prepared.config,prepared.catalog)) return
+        viewModelScope.launch {
+            try {
+                val source = queueSource
+                organizer.setChannels(if (source == null) channels.getChannels() else channels.getCachedChannels(source).orEmpty())
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) {
+                queueRequested = false;pendingMove = null
+                queueTiming.finish(queueTiming.currentTicket(),PerformanceOutcome.FAILED)
+                state.update { it.copy(queueLoading = false,isLoading = false,
+                    errorMessage = if (it.channel == null) "تعذر فتح بيانات القناة." else null) }
+            }
+        }
+    }
 
     fun showLastChannelMenu() = lastChannel.start()
     fun hideLastChannelMenu() = lastChannel.stop()
@@ -135,6 +171,7 @@ class PlayerViewModel @Inject constructor(
         if (state.value.channel?.id == present.id && state.value.channel?.streamUrl == present.streamUrl) return true
         if (index >= 0) { selectChannel(present.id); return true }
         savedStateHandle["channelId"] = present.id
+        pendingMove = null
         savedStateHandle["group"] = null
         savedStateHandle["query"] = ""
         savedStateHandle["favoritesOnly"] = false
@@ -152,6 +189,7 @@ class PlayerViewModel @Inject constructor(
         val index = snapshot.queue.indexOf(id)
         if (index < 0 || (index == snapshot.currentIndex && snapshot.detachedChannel == null)) return
         savedStateHandle["channelId"] = id
+        pendingMove = null
         state.value = snapshot.copy(currentIndex = index, detachedChannel = null, errorMessage = null)
         lastChannel.onSelectionChanged()
     }
@@ -159,6 +197,11 @@ class PlayerViewModel @Inject constructor(
     private fun moveChannel(direction: Int) {
         val snapshot = state.value
         if (snapshot.channel == null) return
+        if (snapshot.queueLoading || !queueRequested) {
+            pendingMove = direction
+            requestChannels()
+            return
+        }
         snapshot.queue.adjacentIdFrom(snapshot.channel?.id, direction, original)?.let(::selectChannel)
     }
 
@@ -176,15 +219,28 @@ class PlayerViewModel @Inject constructor(
             }
             original = base
             // A DB emission must not undo zapping performed during background filtering.
-            val id = savedStateHandle.get<String>("channelId")
+            val storedId = savedStateHandle.get<String>("channelId")
+            val direction = pendingMove
+            pendingMove = null
+            val id = direction?.let { queue.adjacentIdFrom(storedId,it,base) } ?: storedId
+            if (id != storedId) savedStateHandle["channelId"] = id
             val index = queue.indexOf(id)
-            val detached = if (snapshot.favoritesOnly && index < 0)
-                base.channels.getOrNull(base.indexOf(id)) else null
+            val detached = (if (snapshot.favoritesOnly && index < 0)
+                base.channels.getOrNull(base.indexOf(id)) else null) ?: state.value.detachedChannel?.takeIf {
+                    index < 0 && base.size == 0 && it.id == id
+                }
             state.value = state.value.copy(queue = queue, currentIndex = index, detachedChannel = detached,
-                isLoading = false,
+                isLoading = false,queueLoading = false,
                 errorMessage = if (index < 0 && detached == null)
                     "القناة غير متاحة. اختر قناة من القائمة أو حدّث القنوات." else null)
             lastChannel.onSelectionChanged()
+            queueTiming.finish(queueTiming.currentTicket())
         }
+    }
+
+    override fun onCleared() {
+        preparedQueue = null
+        queueTiming.finish(queueTiming.currentTicket(),PerformanceOutcome.CANCELLED)
+        super.onCleared()
     }
 }

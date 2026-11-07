@@ -24,7 +24,7 @@ class ChannelHandoffViewModelTest {
         override suspend fun saveSettings(settings: AppSettings) = Unit
     }
     private val playlists = object : PlaylistRepository {
-        override suspend fun loadPlaylist(url: String) = Playlist("Synthetic",listOf(row))
+        override suspend fun loadPlaylist(url: String) = Playlist("Synthetic",listOf(row,row.copy(id = "2")))
         override suspend fun loadXtream(serverUrl: String,username: String,password: String) = loadPlaylist(serverUrl)
     }
     private val access = MutableStateFlow(ParentalControl.Disabled.state.value)
@@ -38,10 +38,10 @@ class ChannelHandoffViewModelTest {
     @Test fun clickingAVisibleChannelReachesThePlayerBeforeDatabaseAndQueueWork() = runTest(dispatcher) {
         val home = home();runCurrent()
         assertTrue(home.preparePlayback(row.id,home.uiState.value.browseScope))
-        var lookups = 0;val queue = CompletableDeferred<List<Channel>>()
+        var lookups = 0;var queueReads = 0;val queue = CompletableDeferred<List<Channel>>()
         val repository = object : ChannelRepository {
             override suspend fun getPlaybackChannel(source: AppSettings,id: String): Channel? { lookups++;error("Unexpected database read") }
-            override suspend fun getCachedChannels(source: AppSettings) = queue.await()
+            override suspend fun getCachedChannels(source: AppSettings): List<Channel> { queueReads++;return queue.await() }
             override suspend fun getChannels() = queue.await()
             override suspend fun getChannel(id: String): Channel? = null
             override suspend fun loadFromM3u(url: String) = emptyList<Channel>()
@@ -58,6 +58,8 @@ class ChannelHandoffViewModelTest {
         assertEquals(row.streamUrl,player.uiState.value.channel?.streamUrl)
         assertFalse(player.uiState.value.isLoading);assertEquals(0,lookups)
         assertEquals(0,player.uiState.value.queue.size)
+        player.onPlaybackStarted(row);runCurrent()
+        assertEquals(0,queueReads)
         queue.complete(listOf(row,row.copy(id = "2")));runCurrent()
         assertEquals(2,player.uiState.value.queue.size)
         player.nextChannel();assertEquals("2",player.uiState.value.channel?.id)
@@ -70,5 +72,15 @@ class ChannelHandoffViewModelTest {
         access.value = access.value.copy(profileId = "11111111-1111-4111-8111-111111111111",epoch = 1)
         assertFalse(home.preparePlayback(row.id,key))
         assertNull(handoff.take(key,row.id,1))
+    }
+
+    @Test fun anAccessEpochChangeDropsThePreparedListEvenWhenTheSelectedChannelIsAllowed() = runTest(dispatcher) {
+        val home = home();runCurrent()
+        access.value = access.value.copy(epoch = 1)
+        val key = home.uiState.value.browseScope
+        assertTrue(home.preparePlayback(row.id,key))
+        val selected = handoff.takeSelection(key,row.id,1)
+        assertEquals(row.id,selected?.channel?.id)
+        assertNull(selected?.queue)
     }
 }

@@ -13,6 +13,7 @@ import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryState
 import mnstudio.apps.mnstreamx.player.controller.PlayerController
 import mnstudio.apps.mnstreamx.player.recovery.*
 import mnstudio.apps.mnstreamx.util.LoadTimings
+import mnstudio.apps.mnstreamx.domain.performance.PerformanceOutcome
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -154,14 +155,15 @@ internal class PlayerPlaybackSession(
         val created = player ?: return
         if (!started) return
         val wantsPlayback = created.playWhenReady
-        retireAttempt()
+        retireAttempt(PerformanceOutcome.FAILED)
         mnstudio.apps.mnstreamx.player.PlaybackDiagnostics.record(error)
         onBuffering(channel, false)
         onError(channel, error.errorCodeName)
         recovery.error(wantsPlayback && LiveRecoveryErrors.retryable(error))
     }
 
-    private fun retireAttempt() {
+    private fun retireAttempt(outcome: PerformanceOutcome = PerformanceOutcome.CANCELLED) {
+        controller.cancelStartup(outcome)
         val created = player ?: return
         val previous = listener ?: return
         generation++; listener = null

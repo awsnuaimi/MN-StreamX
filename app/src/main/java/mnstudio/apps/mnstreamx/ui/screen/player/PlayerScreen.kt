@@ -120,12 +120,15 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     }
     fun openCards() {
         if (channel == null || error != null) return
+        viewModel.requestChannels()
         surface.hideControls(); panels = panels.cards(); focusedId = channel.id; focusEpoch++
     }
     fun openMore() {
+        viewModel.requestChannels()
         panels = panels.more()
     }
     fun openChannels() {
+        viewModel.requestChannels()
         surface.hideControls(); panels = panels.channels(); focusedId = null
     }
     fun back() {
@@ -235,13 +238,13 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
             if ((state.isLoading || (channel != null && buffering)) && error == null)
                 CircularProgressIndicator(Modifier.align(Alignment.Center))
             if (error != null) PlayerErrorOverlay(error, channel != null && !state.sourceChanged,
-                state.queue.size > 0, errorFocus,
+                state.queue.size > 0 || channel != null, errorFocus,
                 onRetry = { surface.cancelRecovery(); retry++; focusEpoch++ }, onChannels = ::openChannels,
                 onBack = { surface.cancelRecovery(); onBack(channel?.id) },
                 recovery = if (state.sourceChanged || state.errorMessage != null) LiveRecoveryState() else recoveryState)
             if (panels.panel == PlayerPanel.CHANNELS) PlayerChannelPanel(state.queue.channels, state.currentIndex,
                 organizationFilterName(state.selectedGroup, state.organization), state.query, state.favoritesOnly, onSelect = ::selectChannel,
-                onDismiss = ::back, onRemoteKey = ::handleRemote)
+                onDismiss = ::back, onRemoteKey = ::handleRemote, loading = state.queueLoading)
             if (panels.panel == PlayerPanel.MORE && channel != null) {
             val lastChannel by viewModel.lastChannelState.collectAsStateWithLifecycle()
             val recallScope = rememberCoroutineScope()

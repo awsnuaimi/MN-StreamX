@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -24,13 +25,14 @@ import org.robolectric.shadows.ShadowDialog
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, qualifiers = "w960dp-h720dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalTestApi::class)
 class PlayerPanelFocusUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val channels = (0 until 120).map { Channel("$it", "Station $it", streamUrl = "synthetic:$it") }
     private var panel by mutableStateOf(PlayerPanel.MORE)
     private var initial = PlayerMoreAction.FAVORITE
     private var last by mutableStateOf(LastChannelUiState())
+    private var loading by mutableStateOf(false)
 
     private fun board() {
         compose.setContent {
@@ -43,8 +45,9 @@ class PlayerPanelFocusUiTest {
                         FavoriteUiState(), true, initial, { _, _ -> false }, { panel = PlayerPanel.WATCHING },
                         onAction = { if (it == PlayerMoreAction.CHANNELS) panel = PlayerPanel.CHANNELS },
                         onRetryFavorites = {}, lastChannel = last)
-                    if (panel == PlayerPanel.CHANNELS) PlayerChannelPanel(channels, 75, null, "", false,
-                        {}, { panel = PlayerPanel.MORE }, { _, _ -> false })
+                    if (panel == PlayerPanel.CHANNELS) PlayerChannelPanel(if (loading) emptyList() else channels,
+                        if (loading) -1 else 75, null, "", false,
+                        {}, { panel = PlayerPanel.MORE }, { _, _ -> false }, loading)
                 }
             }
         }
@@ -95,5 +98,34 @@ class PlayerPanelFocusUiTest {
         compose.waitForFocus("player-more-FAVORITE")
         compose.runOnIdle { last = LastChannelUiState(targetId = "1") }
         compose.onNodeWithTag("player-more-FAVORITE").assertIsFocused()
+    }
+
+    @Test fun aLoadingPanelKeepsCloseReachableAndRestoresThePlayingRowWhenTheQueueArrives() {
+        loading = true
+        board()
+        compose.onNodeWithTag("player-more-list").performScrollToIndex(PlayerMoreAction.CHANNELS.ordinal)
+        compose.onNodeWithTag("player-more-CHANNELS").performClick()
+        focusLatestDialog()
+        compose.onNodeWithTag("player-channel-loading").assertIsDisplayed()
+        compose.waitForFocus("player-channels-close")
+        compose.runOnIdle { loading = false }
+        compose.onNodeWithTag("player-channel-loading").assertDoesNotExist()
+        compose.waitForFocus("player-channel-75")
+        compose.onNodeWithTag("player-channels-close").performClick()
+        focusLatestDialog()
+        compose.waitForFocus("player-more-CHANNELS")
+    }
+
+    @Test fun queueArrivalCannotStealFocusAfterTheUserMovesWhileLoading() {
+        loading = true
+        board()
+        compose.onNodeWithTag("player-more-list").performScrollToIndex(PlayerMoreAction.CHANNELS.ordinal)
+        compose.onNodeWithTag("player-more-CHANNELS").performClick()
+        focusLatestDialog()
+        compose.waitForFocus("player-channels-close")
+        compose.onNodeWithTag("player-channels-close").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.runOnIdle { loading = false }
+        compose.onNodeWithTag("player-channel-loading").assertDoesNotExist()
+        compose.onNodeWithTag("player-channels-close").assertIsFocused()
     }
 }

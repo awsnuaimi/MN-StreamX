@@ -25,6 +25,7 @@ class PlayerHistoryIntegrationTest {
         val model = model(); runCurrent()
         assertTrue(history.records(settings.key).value.isEmpty())
         model.onPlaybackStarted(channels.rows[0])
+        runCurrent() // The confirmed first frame releases deferred queue preparation.
         model.selectChannel("b"); runCurrent()
         model.onPlaybackStarted(channels.rows[0])
         assertEquals(listOf("a"), history.records(settings.key).value.map { it.channelId })
@@ -35,6 +36,7 @@ class PlayerHistoryIntegrationTest {
     @Test fun openingAHistoryChannelOutsideTheCurrentGroupReusesTheLoadedQueue() = runTest(dispatcher) {
         val saved = SavedStateHandle(mapOf("channelId" to "a", "group" to "One"))
         val model = model(saved); runCurrent()
+        model.requestChannels(); runCurrent() // Explicit history navigation needs the queue.
         assertEquals(2, model.uiState.value.queue.size)
         assertTrue(model.selectHistoryChannel(channels.rows[2], settings.key)); runCurrent()
         assertEquals("c", model.uiState.value.channel?.id)
@@ -54,6 +56,7 @@ class PlayerHistoryIntegrationTest {
     }
     @Test fun aHistoryChannelAlreadyInTheQueueKeepsTheCurrentGroupAndStateChangesImmediately() = runTest(dispatcher) {
         val model = model(SavedStateHandle(mapOf("channelId" to "a", "group" to "One"))); runCurrent()
+        model.requestChannels(); runCurrent()
         assertTrue(model.selectHistoryChannel(channels.rows[1], settings.key))
         assertEquals("b", model.uiState.value.channel?.id)
         assertEquals("One", model.uiState.value.selectedGroup)

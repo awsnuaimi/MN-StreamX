@@ -43,6 +43,7 @@ import kotlinx.coroutines.ensureActive
 import mnstudio.apps.mnstreamx.domain.parental.ParentalControl
 import mnstudio.apps.mnstreamx.domain.parental.ParentalProjection
 import mnstudio.apps.mnstreamx.domain.playback.ChannelPlaybackHandoff
+import mnstudio.apps.mnstreamx.domain.playback.PreparedLiveQueue
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -62,6 +63,8 @@ class HomeViewModel @Inject constructor(
     private var filterJob: Job? = null
     private var preparationActive = true
     private var catalogTree = OrganizationTree()
+    private var preparedCatalog: PreparedLiveQueue? = null
+    private var preparedAccessEpoch = Long.MIN_VALUE
     private var catalogChannels: List<Channel> = emptyList()
     private var channelIndex = ChannelBrowseIndex()
     private val openedAtNanos = System.nanoTime()
@@ -96,7 +99,10 @@ class HomeViewModel @Inject constructor(
         })
 
     private fun onCatalogChanged(value: OrganizedChannels) {
-        val result = ParentalProjection.prune(value,parental.state.value)
+        val access = parental.state.value
+        val result = ParentalProjection.prune(value,access)
+        preparedCatalog = organizer.currentConfig()?.let { PreparedLiveQueue(it,result) }
+        preparedAccessEpoch = access.epoch
         catalogTree = result.tree
         catalogChannels = result.channels
         state.update { it.copy(channels = result.channels,
@@ -120,7 +126,8 @@ class HomeViewModel @Inject constructor(
         val source = ProfileScope.source(expectedScope) ?: return false
         val access = parental.state.value
         if (access.profileId != ProfileScope.profile(expectedScope) || !access.allows(source,channel)) return false
-        playbackHandoff.offer(expectedScope,channel,access.epoch)
+        val prepared = preparedCatalog.takeIf { preparedAccessEpoch == access.epoch }
+        playbackHandoff.offer(expectedScope,channel,access.epoch,prepared)
         return true
     }
 
@@ -215,7 +222,7 @@ class HomeViewModel @Inject constructor(
 
     private fun resetSource(source: AppSettings?, error: String? = null) {
         filterJob?.cancel();filterJob = null
-        organizer.clearChannels()
+        organizer.clearChannels();preparedCatalog = null;preparedAccessEpoch = Long.MIN_VALUE
         catalogTree = OrganizationTree();catalogChannels = emptyList();channelIndex = ChannelBrowseIndex();pendingBrowse = null;browseDraft = null;browseMemory.clear();contextRestore = false
         val selected = source?.hasSelectedSource() == true
         state.value = HomeUiState(isLoading = selected,needsSource = source != null && !selected,

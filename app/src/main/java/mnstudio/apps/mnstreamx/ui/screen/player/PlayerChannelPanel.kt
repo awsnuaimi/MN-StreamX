@@ -19,11 +19,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.res.stringResource
 import mnstudio.apps.mnstreamx.R
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +46,7 @@ import mnstudio.apps.mnstreamx.ui.component.channel.ChannelLogo
 import mnstudio.apps.mnstreamx.ui.component.channel.FavoriteBadge
 import mnstudio.apps.mnstreamx.ui.component.common.AppButton
 import mnstudio.apps.mnstreamx.ui.component.common.Resume
+import mnstudio.apps.mnstreamx.ui.component.common.FocusInputEpoch
 
 @Composable
 fun PlayerChannelPanel(
@@ -54,18 +57,27 @@ fun PlayerChannelPanel(
     favoritesOnly: Boolean,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
-    onRemoteKey: (KeyEvent, Boolean) -> Boolean
+    onRemoteKey: (KeyEvent, Boolean) -> Boolean,
+    loading: Boolean = false
 ) {
     val focus = rememberPlayerFocus()
     val currentId = channels.getOrNull(currentIndex)?.id
     val context = "player-channels:$currentId"
     val controls = "$context:controls"
-    val keys = remember(channels) { channels.map { it.id } }
+    val keys = remember(channels, loading) { if (loading) emptyList() else channels.map { it.id } }
     val list = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
+    var loadingInput by remember { mutableStateOf<Long?>(null) }
     Dialog(onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val windowFocused = LocalWindowInfo.current.isWindowFocused
         focus.Resume(setOf(context, controls), context, currentId.takeIf { focus.bookmarks.get(context) == null })
+        LaunchedEffect(loading, currentId) {
+            if (loading) loadingInput = FocusInputEpoch.value
+            else {
+                if (loadingInput == FocusInputEpoch.value && currentId != null) focus.request(context, currentId)
+                loadingInput = null
+            }
+        }
         focus.Maintain(context, keys)
         focus.Restore(context, keys, ready = windowFocused,
             onEmpty = { focus.request(controls, "close") }, scrollTo = { index ->
@@ -93,7 +105,8 @@ fun PlayerChannelPanel(
                     }
                     if (query.isNotBlank()) Text(stringResource(R.string.player_search, query), maxLines = 1,
                         overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-                    if (channels.isEmpty()) Text(stringResource(R.string.player_empty_list))
+                    if (loading) CircularProgressIndicator(Modifier.testTag("player-channel-loading"))
+                    else if (channels.isEmpty()) Text(stringResource(R.string.player_empty_list))
                     LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth().testTag("player-channel-list"),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(channels, key = { _, channel -> channel.id }) { index, channel ->

@@ -26,6 +26,7 @@ class PlayerLastChannelIntegrationTest {
         val model = model(); runCurrent()
         assertEquals(0, history.subscriptions)
         model.onPlaybackStarted(channels.rows[0])
+        runCurrent()
         model.selectChannel("b"); model.onPlaybackStarted(channels.rows[1])
         model.showLastChannelMenu(); runCurrent()
         val first = model.recallLastChannel()!!
@@ -45,6 +46,7 @@ class PlayerLastChannelIntegrationTest {
     @Test fun focusingAndAnUnconfirmedFailedChannelCannotReplaceTheConfirmedPair() = runTest(dispatcher) {
         val model = model(group = null); runCurrent()
         model.onPlaybackStarted(channels.rows[0])
+        runCurrent()
         model.selectChannel("b"); model.onPlaybackStarted(channels.rows[1])
         model.selectChannel("c")
         model.onPlaybackStarted(channels.rows[0]) // Delayed frame from an old selection.
@@ -61,6 +63,7 @@ class PlayerLastChannelIntegrationTest {
     @Test fun reopeningAPlayerUsesTheExistingSourceHistoryWithoutCreatingASecondSubscription() = runTest(dispatcher) {
         val first = model(); runCurrent()
         first.onPlaybackStarted(channels.rows[0])
+        runCurrent()
         first.selectChannel("b"); first.onPlaybackStarted(channels.rows[1])
         first.showLastChannelMenu(); runCurrent(); assertEquals(1, history.active)
         owner.clear(); runCurrent(); assertEquals(0, history.active)
@@ -87,7 +90,8 @@ class PlayerLastChannelIntegrationTest {
 
     @Test fun recallingAChannelOutsideTheCurrentGroupUsesTheLoadedFullQueue() = runTest(dispatcher) {
         history.set(settings.key, "a", "c")
-        val model = model(); runCurrent(); model.showLastChannelMenu(); runCurrent()
+        val model = model(); runCurrent(); model.requestChannels(); runCurrent()
+        model.showLastChannelMenu(); runCurrent()
         val result = model.recallLastChannel()!!
         assertEquals("c", result.channel.id)
         assertTrue(model.selectHistoryChannel(result.channel, result.sourceKey)); runCurrent()
