@@ -229,16 +229,83 @@ dependencies {
     testImplementation 'androidx.compose.ui:ui-test-junit4'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
-// Package pinned notices from source; building does not fetch licenses over the network.
+// Package a verified notice even when a mobile-editor copy is absent or reformatted.
+def captionNoticeAssets = layout.buildDirectory.dir('generated/captionNotices')
+def captionNoticeFile = captionNoticeAssets.map { it.file('licenses/onnxruntime-ThirdPartyNotices.txt') }
+def captionOffline = gradle.startParameter.offline
 def captionNotices = tasks.register('prepareCaptionNotices') {
     def source = layout.projectDirectory.file('src/main/assets/onnxruntime-ThirdPartyNotices.txt')
     def expected = 'e9e90971a8e75a9a8ac0c6412e29c1202d079998389915aa485f46c816c3b4cc'
-    inputs.file(source)
+    // InputFiles deliberately tolerates an absent optional source copy.
+    inputs.files(source).withPropertyName('optionalCaptionNotice')
     inputs.property('noticeSha256', expected)
+    inputs.property('noticeNormalization', 'utf8-bom-lf-final-newline-v1')
+    outputs.file(captionNoticeFile)
     doLast {
-        def notice = source.asFile
-        if (!notice.isFile() || java.security.MessageDigest.getInstance('SHA-256').digest(notice.bytes).encodeHex().toString() != expected)
-            throw new GradleException('The pinned ONNX Runtime notice is missing or changed.')
+        def hash = { byte[] bytes ->
+            java.security.MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString()
+        }
+        def canonical = { byte[] bytes ->
+            def text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
+            if (text.startsWith('\uFEFF')) text = text.substring(1)
+            text = text.replace('\r\n', '\n').replace('\r', '\n')
+            while (text.endsWith('\n')) text = text.substring(0, text.length() - 1)
+            (text + '\n').getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        }
+        def output = captionNoticeFile.get().asFile
+        byte[] verified = null
+        // Reuse either the checked-in source or a previously generated verified copy.
+        for (def candidate : [source.asFile, output]) {
+            if (candidate.isFile() && candidate.length() <= 1048576L) {
+                byte[] bytes = canonical(candidate.bytes)
+                if (hash(bytes) == expected) { verified = bytes; break }
+            }
+        }
+        if (verified == null) {
+            if (captionOffline) throw new GradleException(
+                'ONNX Runtime 1.23.2 notices are absent or invalid. Restore ' +
+                'app/src/main/assets/onnxruntime-ThirdPartyNotices.txt or build once without --offline.')
+            logger.lifecycle('Preparing verified ONNX Runtime 1.23.2 notices from the official source.')
+            def connection = new URI('https://raw.githubusercontent.com/microsoft/onnxruntime/v1.23.2/ThirdPartyNotices.txt').toURL().openConnection()
+            connection.connectTimeout = 15000
+            connection.readTimeout = 20000
+            connection.setRequestProperty('User-Agent', 'MN-StreamX-Build/1.0')
+            byte[] downloaded
+            try {
+                downloaded = connection.inputStream.withCloseable { stream ->
+                    def buffer = new byte[65536]
+                    def content = new ByteArrayOutputStream()
+                    int count
+                    while ((count = stream.read(buffer)) != -1) {
+                        if (content.size() + count > 1048576) throw new IOException('Notice exceeds the pinned download limit.')
+                        content.write(buffer, 0, count)
+                    }
+                    content.toByteArray()
+                }
+            } catch (IOException error) {
+                throw new GradleException('Cannot obtain verified ONNX Runtime notices. Restore ' +
+                    'app/src/main/assets/onnxruntime-ThirdPartyNotices.txt or retry with network access.', error)
+            } finally {
+                if (connection instanceof java.net.HttpURLConnection) connection.disconnect()
+            }
+            if (hash(downloaded) != expected) throw new GradleException(
+                'Official ONNX Runtime notice checksum mismatch; refusing to package unverified text.')
+            verified = canonical(downloaded)
+            if (hash(verified) != expected) throw new GradleException('Unexpected pinned notice text encoding.')
+        }
+        if (!output.parentFile.isDirectory() && !output.parentFile.mkdirs())
+            throw new GradleException('Cannot create the generated caption notice directory.')
+        def temporary = File.createTempFile('onnx-notice-', '.part', output.parentFile)
+        try {
+            temporary.bytes = verified
+            try {
+                java.nio.file.Files.move(temporary.toPath(), output.toPath(),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                java.nio.file.Files.move(temporary.toPath(), output.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+        } finally { temporary.delete() }
     }
 }
+android.sourceSets.main.assets.srcDir(captionNoticeAssets)
 tasks.named('preBuild').configure { dependsOn(captionNotices) }
