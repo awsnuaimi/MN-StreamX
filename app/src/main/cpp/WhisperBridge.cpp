@@ -1,4 +1,5 @@
 #include <jni.h>
+#include <android/log.h>
 #include "CaptionJni.h"
 #include <whisper.h>
 #include <atomic>
@@ -20,11 +21,22 @@ bool interrupted(void* pointer) {
     auto* s = static_cast<SpeechSession*>(pointer);
     return s->cancelled.load(std::memory_order_relaxed) || std::chrono::steady_clock::now() >= s->deadline;
 }
+long long elapsedMs(std::chrono::steady_clock::time_point start) {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start).count();
+}
+void reportStage(const char* stage, long long millis, int audioMs = 0) {
+    __android_log_print(ANDROID_LOG_INFO, "MNX.CaptionPerf",
+        "whisper_native_stage=%s elapsed_ms=%lld audio_ms=%d", stage, millis, audioMs);
+}
 bool load(SpeechSession& s) {
     if (s.cancelled.load(std::memory_order_relaxed)) return false;
     if (s.context) return true;
     auto options = whisper_context_default_params(); options.use_gpu = false; options.flash_attn = true;
-    s.context = whisper_init_from_file_with_params_no_state(s.path.c_str(), options); return s.context != nullptr;
+    const auto started = std::chrono::steady_clock::now();
+    s.context = whisper_init_from_file_with_params_no_state(s.path.c_str(), options);
+    reportStage("model_load", elapsedMs(started));
+    return s.context != nullptr;
 }
 void park(SpeechSession& s) {
     whisper_free_state(s.state); s.state = nullptr; whisper_free(s.context); s.context = nullptr; mnxPurgeMemory();
@@ -52,7 +64,11 @@ static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samp
         if (!detectionOnly && selected == "auto" && s->detected >= 0) selected = whisper_lang_str(s->detected);
         if (selected != "auto" && whisper_lang_id(selected.c_str()) < 0) throw std::runtime_error("Unsupported language");
         if (!load(*s)) throw std::runtime_error("Speech model unavailable");
-        if (!s->state) s->state = whisper_init_state(s->context);
+        if (!s->state) {
+            const auto started = std::chrono::steady_clock::now();
+            s->state = whisper_init_state(s->context);
+            reportStage("state_init", elapsedMs(started));
+        }
         if (!s->state) throw std::runtime_error("Speech state unavailable");
         std::vector<float> audio(static_cast<size_t>(count)); env->GetFloatArrayRegion(samples, 0, count, audio.data());
         if (env->ExceptionCheck()) return nullptr;
@@ -63,7 +79,9 @@ static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samp
         o.print_realtime = false; o.print_progress = false; o.print_timestamps = false; o.print_special = false;
         o.abort_callback = interrupted; o.abort_callback_user_data = s;
         s->deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        const auto inferenceStarted = std::chrono::steady_clock::now();
         const auto status = whisper_full_with_state(s->context, s->state, o, audio.data(), count);
+        reportStage("inference", elapsedMs(inferenceStarted), count / 16);
         if (s->cancelled.load(std::memory_order_relaxed)) throw std::runtime_error("Speech cancelled");
         if (std::chrono::steady_clock::now() >= s->deadline) {
             mnxError(env, "Local speech exceeded its deadline", "java/util/concurrent/TimeoutException"); return nullptr;
