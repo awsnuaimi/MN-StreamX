@@ -13,14 +13,19 @@
 namespace {
 struct SpeechSession {
     whisper_context* context = nullptr; whisper_state* state = nullptr;
-    std::atomic<bool> cancelled{false}; std::string path; int threads = 1; int detected = -1;
+    std::atomic<bool> cancelled{false}; std::atomic<bool> deadlineReached{false}; std::string path; int threads = 1; int detected = -1;
     std::chrono::steady_clock::time_point deadline;
     long long modelLoadMs = -1, stateInitMs = -1, inferenceMs = -1;
     ~SpeechSession() { whisper_free_state(state); whisper_free(context); }
 };
 bool interrupted(void* pointer) {
     auto* s = static_cast<SpeechSession*>(pointer);
-    return s->cancelled.load(std::memory_order_relaxed) || std::chrono::steady_clock::now() >= s->deadline;
+    if (s->cancelled.load(std::memory_order_relaxed)) return true;
+    if (std::chrono::steady_clock::now() >= s->deadline) {
+        s->deadlineReached.store(true, std::memory_order_relaxed);
+        return true;
+    }
+    return false;
 }
 long long elapsedMs(std::chrono::steady_clock::time_point start) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -85,11 +90,16 @@ static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samp
         o.n_max_text_ctx = 0; o.max_tokens = 96; o.temperature = 0.0f; o.temperature_inc = 0.0f; o.suppress_nst = true;
         o.print_realtime = false; o.print_progress = false; o.print_timestamps = false; o.print_special = false;
         o.abort_callback = interrupted; o.abort_callback_user_data = s;
-        s->deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        s->deadlineReached.store(false, std::memory_order_relaxed);
         const auto inferenceStarted = std::chrono::steady_clock::now();
+        s->deadline = inferenceStarted + std::chrono::seconds(10);
         const auto status = whisper_full_with_state(s->context, s->state, o, audio.data(), count);
         s->inferenceMs = elapsedMs(inferenceStarted);
         reportStage("inference", s->inferenceMs, count / 16);
+        __android_log_print(ANDROID_LOG_INFO, "MNX.CaptionPerf",
+            "whisper_exit status=%d deadline_callback=%d cancelled=%d elapsed_ms=%lld",
+            status, s->deadlineReached.load(std::memory_order_relaxed) ? 1 : 0,
+            s->cancelled.load(std::memory_order_relaxed) ? 1 : 0, s->inferenceMs);
         if (s->cancelled.load(std::memory_order_relaxed)) throw std::runtime_error("Speech cancelled");
         if (std::chrono::steady_clock::now() >= s->deadline) {
             mnxError(env, "Local speech exceeded its deadline", "java/util/concurrent/TimeoutException"); return nullptr;
