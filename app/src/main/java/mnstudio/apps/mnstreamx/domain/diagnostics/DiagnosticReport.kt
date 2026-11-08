@@ -1,6 +1,7 @@
 package mnstudio.apps.mnstreamx.domain.diagnostics
 
 import mnstudio.apps.mnstreamx.domain.model.HomeLanguage
+import mnstudio.apps.mnstreamx.domain.caption.CaptionDiagnosticJournal
 import java.time.Instant
 import mnstudio.apps.mnstreamx.domain.performance.PerformanceReport
 
@@ -23,6 +24,12 @@ object DiagnosticReport {
             if (snapshot.performance.isNotEmpty()) {
                 appendLine(PerformanceReport.title(language));appendLine(PerformanceReport.note(language))
                 PerformanceReport.rows(snapshot.performance).forEach { appendLine(it) };appendLine()
+            }
+            val captionMeasurements = CaptionDiagnosticJournal.snapshot()
+            if (captionMeasurements.isNotEmpty()) {
+                appendLine("Caption diagnostics / Spracherkennungsdiagnose (current session)")
+                captionMeasurements.forEach { appendLine(it) }
+                appendLine()
             }
             appendLine(text.checks())
             checks.take(12).forEach { check ->

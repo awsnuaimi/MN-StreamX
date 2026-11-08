@@ -1,6 +1,7 @@
 package mnstudio.apps.mnstreamx.data.caption
 
 import android.util.Log
+import mnstudio.apps.mnstreamx.domain.caption.CaptionDiagnosticJournal
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import mnstudio.apps.mnstreamx.domain.caption.CaptionSpeechDetector
@@ -21,6 +22,8 @@ internal class DetectedSpeechEngine(private val voice: SpeechEngine,
         decode: suspend (FloatArray) -> SpeechText): SpeechText {
         val started = System.nanoTime()
         val span = detector.speech(samples)
+        CaptionDiagnosticJournal.record("CAPTION_VAD", (System.nanoTime() - started) / 1_000_000,
+            "speech=${span != null},audio_ms=${samples.size * 1000L / 16000}")
         // Android Log methods are unavailable in local JVM unit tests. Diagnostics
         // must never interrupt transcription, including when logging is unsupported.
         try {

@@ -182,6 +182,9 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     }
                                     currentCoroutineContext().ensureActive()
                                     val finished = now()
+                                    CaptionDiagnosticJournal.record("CAPTION_TRANSLATE",
+                                        (finished - translationStarted).coerceAtLeast(0),
+                                        "required=$needsText,delayed=$delayed")
                                     if (needsText && !delayed && result.text.isNotBlank()) {
                                         translationContinuity.success(
                                             (finished - translationStarted).coerceAtLeast(0),
@@ -200,6 +203,8 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                         if (needsText) timing.speechMillis else timing.totalMillis,
                                         if (needsText) Long.MIN_VALUE else input.positionUs)
                                     if (stopped != null) {
+                                        CaptionDiagnosticJournal.record("CAPTION_STOPPED", stopped.elapsedMillis ?: 0L,
+                                            "stage=${stopped.stage},budget_ms=${stopped.budgetMillis}")
                                         // A transient warm-up or delayed window must not permanently
                                         // disable captions; back off twice, then report a sustained deficit.
                                         if (recovery.adaptThroughput()) {

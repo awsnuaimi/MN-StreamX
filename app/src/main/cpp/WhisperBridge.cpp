@@ -15,6 +15,7 @@ struct SpeechSession {
     whisper_context* context = nullptr; whisper_state* state = nullptr;
     std::atomic<bool> cancelled{false}; std::string path; int threads = 1; int detected = -1;
     std::chrono::steady_clock::time_point deadline;
+    long long modelLoadMs = -1, stateInitMs = -1, inferenceMs = -1;
     ~SpeechSession() { whisper_free_state(state); whisper_free(context); }
 };
 bool interrupted(void* pointer) {
@@ -35,7 +36,8 @@ bool load(SpeechSession& s) {
     auto options = whisper_context_default_params(); options.use_gpu = false; options.flash_attn = true;
     const auto started = std::chrono::steady_clock::now();
     s.context = whisper_init_from_file_with_params_no_state(s.path.c_str(), options);
-    reportStage("model_load", elapsedMs(started));
+    s.modelLoadMs = elapsedMs(started);
+    reportStage("model_load", s.modelLoadMs);
     return s.context != nullptr;
 }
 void park(SpeechSession& s) {
@@ -67,7 +69,8 @@ static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samp
         if (!s->state) {
             const auto started = std::chrono::steady_clock::now();
             s->state = whisper_init_state(s->context);
-            reportStage("state_init", elapsedMs(started));
+            s->stateInitMs = elapsedMs(started);
+            reportStage("state_init", s->stateInitMs);
         }
         if (!s->state) throw std::runtime_error("Speech state unavailable");
         std::vector<float> audio(static_cast<size_t>(count)); env->GetFloatArrayRegion(samples, 0, count, audio.data());
@@ -81,7 +84,8 @@ static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samp
         s->deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
         const auto inferenceStarted = std::chrono::steady_clock::now();
         const auto status = whisper_full_with_state(s->context, s->state, o, audio.data(), count);
-        reportStage("inference", elapsedMs(inferenceStarted), count / 16);
+        s->inferenceMs = elapsedMs(inferenceStarted);
+        reportStage("inference", s->inferenceMs, count / 16);
         if (s->cancelled.load(std::memory_order_relaxed)) throw std::runtime_error("Speech cancelled");
         if (std::chrono::steady_clock::now() >= s->deadline) {
             mnxError(env, "Local speech exceeded its deadline", "java/util/concurrent/TimeoutException"); return nullptr;
@@ -126,3 +130,12 @@ extern "C" JNIEXPORT void JNICALL Java_mnstudio_apps_mnstreamx_data_caption_Nati
 }
 extern "C" JNIEXPORT void JNICALL Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_trimMemory(JNIEnv*, jobject) { mnxPurgeMemory(); }
 extern "C" JNIEXPORT void JNICALL Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_release(JNIEnv*, jobject, jlong p) { delete reinterpret_cast<SpeechSession*>(p); mnxPurgeMemory(); }
+extern "C" JNIEXPORT jlongArray JNICALL Java_mnstudio_apps_mnstreamx_data_caption_NativeWhisper_stageTimings(
+    JNIEnv* env, jobject, jlong pointer) {
+    if (!pointer) return nullptr;
+    auto* s = reinterpret_cast<SpeechSession*>(pointer);
+    const jlong values[3] = {s->modelLoadMs, s->stateInitMs, s->inferenceMs};
+    auto output = env->NewLongArray(3);
+    if (output) env->SetLongArrayRegion(output, 0, 3, values);
+    return output;
+}
