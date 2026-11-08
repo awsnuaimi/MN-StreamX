@@ -77,7 +77,10 @@ static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samp
         if (env->ExceptionCheck()) return nullptr;
         auto o = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
         o.n_threads = s->threads; o.greedy.best_of = 1; o.language = selected.c_str();
-        o.audio_ctx = 0; o.detect_language = detectionOnly; o.translate = false; o.no_context = true; o.no_timestamps = true; o.single_segment = false;
+        // Bound encoder attention for short live-caption windows (2.5–3.5 s).
+        // The previous value 0 selected the model's full audio context.
+        // 384 retains headroom for these windows; benchmark on-device.
+        o.audio_ctx = 384; o.detect_language = detectionOnly; o.translate = false; o.no_context = true; o.no_timestamps = true; o.single_segment = false;
         o.n_max_text_ctx = 0; o.max_tokens = 96; o.temperature = 0.0f; o.temperature_inc = 0.0f; o.suppress_nst = true;
         o.print_realtime = false; o.print_progress = false; o.print_timestamps = false; o.print_special = false;
         o.abort_callback = interrupted; o.abort_callback_user_data = s;
