@@ -21,10 +21,16 @@ internal class DetectedSpeechEngine(private val voice: SpeechEngine,
         decode: suspend (FloatArray) -> SpeechText): SpeechText {
         val started = System.nanoTime()
         val span = detector.speech(samples)
-        Log.i("MNX.CaptionPerf", "vad_ms=${(System.nanoTime() - started) / 1_000_000} audio_ms=${samples.size * 1000L / 16000} has_speech=${span != null}")
+        // Android Log methods are unavailable in local JVM unit tests. Diagnostics
+        // must never interrupt transcription, including when logging is unsupported.
+        try {
+            Log.i("MNX.CaptionPerf", "vad_ms=${(System.nanoTime() - started) / 1_000_000} audio_ms=${samples.size * 1000L / 16000} has_speech=${span != null}")
+        } catch (_: RuntimeException) {
+            // Android's unmocked Log implementation throws on the JVM test runner.
+        }
         if (span == null) return SpeechText(language, "")
         currentCoroutineContext().ensureActive()
-        val selected = if (span.start == 0 && span.end == samples.size) samples else samples.copyOfRange(span.start, span.end)
+        val selected = if (span.start == 0 && samples.indices.contains(span.end)) samples else samples.copyOfRange(span.start, span.end)
         val text = decode(selected)
         val offset = span.start * 1000L / 16000
         return text.copy(startMillis = text.startMillis + offset, endMillis = text.endMillis + offset)
