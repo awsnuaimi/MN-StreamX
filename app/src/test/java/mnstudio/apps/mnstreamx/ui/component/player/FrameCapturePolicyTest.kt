@@ -9,8 +9,14 @@ import mnstudio.apps.mnstreamx.domain.model.Channel
 class FrameCapturePolicyTest {
     @Test fun retryWindowIsFiniteAndStartsAfterFirstFrame() {
         assertEquals(6, FrameCapturePolicy.MAX_ATTEMPTS)
-        assertTrue(FrameCapturePolicy.delayBeforeMs(0) < 900L)
+        assertTrue(FrameCapturePolicy.delayBeforeMs(0) >= 1200L)
+        assertEquals(FrameCapturePolicy.FIRST_CAPTURE_DELAY_MS, FrameCapturePolicy.delayBeforeMs(0))
         assertTrue((0 until FrameCapturePolicy.MAX_ATTEMPTS).sumOf(FrameCapturePolicy::delayBeforeMs) < 9000L)
+    }
+
+    @Test fun lowRamTelevisionsDoNotAllocateThumbnailBitmaps() {
+        assertFalse(FrameCapturePolicy.shouldCapture(isLowRamDevice = true))
+        assertTrue(FrameCapturePolicy.shouldCapture(isLowRamDevice = false))
     }
 
     @Test fun transientFailuresMayRetryOnlyInsideWindow() {

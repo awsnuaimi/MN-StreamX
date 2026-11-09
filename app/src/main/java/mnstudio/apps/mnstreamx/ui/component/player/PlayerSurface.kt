@@ -1,10 +1,10 @@
 package mnstudio.apps.mnstreamx.ui.component.player
 
+import android.app.ActivityManager
+import android.content.Context
 import android.view.KeyEvent
 import android.view.View
-import android.util.TypedValue
 import android.util.Log
-import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.exoplayer.ExoPlayer
 import mnstudio.apps.mnstreamx.domain.model.CaptionSettings
 import mnstudio.apps.mnstreamx.domain.model.CaptionMode
@@ -64,6 +64,10 @@ fun PlayerSurface(
     val currentChannel by rememberUpdatedState(channel)
     val scope = rememberCoroutineScope()
     val network = remember(context) { AndroidPlaybackNetwork(context).observe() }
+    val captureEnabled = remember(context) {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        FrameCapturePolicy.shouldCapture(manager?.isLowRamDevice == true)
+    }
     var renderedFrame by remember { mutableStateOf<RenderedChannelFrame?>(null) }
     val audioTap = remember { CaptionAudioTap() }
     val generatedAudio = captionSettings.mode == CaptionMode.GENERATED
@@ -78,8 +82,9 @@ fun PlayerSurface(
                     reportBuffering(selected.id, loading)
             },
             onStarted = { selected, mediaId ->
-                Log.i("MNX.FrameCapture", "first video frame rendered")
-                renderedFrame = RenderedChannelFrame(selected, mediaId)
+                if (captureEnabled) {
+                    renderedFrame = RenderedChannelFrame(selected, mediaId)
+                }
                 reportStarted(selected)
             }, onRecovery = { selected, state ->
                 if (selected.id == currentChannel.id && selected.streamUrl == currentChannel.streamUrl)
@@ -101,7 +106,8 @@ fun PlayerSurface(
 
     PlayerTechnicalInfoObserver(if (technicalInfoEnabled) session.player else null, channel.id, onTechnicalInfo)
 
-    LaunchedEffect(channel.id, channel.streamUrl, retryToken, renderedFrame, session.player) {
+    LaunchedEffect(channel.id, channel.streamUrl, retryToken, renderedFrame, session.player, captureEnabled) {
+        if (!captureEnabled) return@LaunchedEffect
         val frame = renderedFrame ?: return@LaunchedEffect
         val player = session.player ?: return@LaunchedEffect
         fun current() = session.player === player && frame.matches(channel, player.currentMediaItem?.mediaId)
@@ -170,14 +176,7 @@ fun PlayerSurface(
         update = { view ->
             val timeout = controllerTimeoutMs.coerceIn(3000, 8000)
             if (view.controllerShowTimeoutMs != timeout) view.controllerShowTimeoutMs = timeout
-            view.subtitleView?.apply {
-                visibility = if (captionSettings.mode == CaptionMode.EMBEDDED) View.VISIBLE else View.GONE
-                setApplyEmbeddedStyles(false)
-                setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, captionSettings.textSize.sp.toFloat())
-                setStyle(CaptionStyleCompat(android.graphics.Color.WHITE,
-                    if (captionSettings.shaded) 0xB0000000.toInt() else android.graphics.Color.TRANSPARENT,
-                    android.graphics.Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, android.graphics.Color.BLACK, null))
-            }
+            view.applyCaptionPresentation(captionSettings)
             view.player = session.player
             view.keepScreenOn = session.player != null
         },

@@ -19,10 +19,15 @@ internal enum class FrameCaptureResult {
 
 internal object FrameCapturePolicy {
     const val MAX_ATTEMPTS = 6
+    // Channel surfing should not allocate a ~900 KB bitmap for every transient tune.
+    const val FIRST_CAPTURE_DELAY_MS = 1_500L
+
+    /** Retain existing previews but avoid creating new bitmaps on low-RAM Android TVs. */
+    fun shouldCapture(isLowRamDevice: Boolean): Boolean = !isLowRamDevice
 
     fun delayBeforeMs(attempt: Int): Long {
         require(attempt in 0 until MAX_ATTEMPTS)
-        return longArrayOf(150, 350, 700, 1200, 1600, 2000)[attempt]
+        return longArrayOf(FIRST_CAPTURE_DELAY_MS, 350, 700, 1200, 1600, 2000)[attempt]
     }
 
     fun isProtected(windowFlags: Int?, secureFlag: Int): Boolean =

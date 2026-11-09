@@ -19,6 +19,7 @@ internal fun PlayerTechnicalInfoObserver(player: ExoPlayer?, channelId: String,
     val report by rememberUpdatedState(onInfo)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(player, channelId, lifecycle) {
+        val emissions = TechnicalInfoEmissionGate()
         fun publish() {
             val current = player?.currentMediaItem?.mediaId?.startsWith("$channelId:") == true
             val ready = player?.playbackState == Player.STATE_READY
@@ -32,7 +33,7 @@ internal fun PlayerTechnicalInfoObserver(player: ExoPlayer?, channelId: String,
                     audioChannels = player.audioFormat?.channelCount ?: 0
                 )
             } else PlaybackTechnicalInfo()
-            report(channelId, info)
+            if (emissions.accept(info)) report(channelId, info)
         }
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) { publish() }
@@ -72,5 +73,14 @@ internal class PlayerInfoLifecycleSubscription(
         closed = true
         lifecycle.removeObserver(observer)
         detach()
+    }
+}
+/** Scoped to one player and channel; avoid redundant Compose state writes on Media3 events. */
+internal class TechnicalInfoEmissionGate {
+    private var last: PlaybackTechnicalInfo? = null
+    fun accept(value: PlaybackTechnicalInfo): Boolean {
+        if (value == last) return false
+        last = value
+        return true
     }
 }
