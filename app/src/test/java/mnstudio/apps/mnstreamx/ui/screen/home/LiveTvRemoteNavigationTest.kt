@@ -77,6 +77,14 @@ class LiveTvRemoteNavigationTest {
         compose.onNodeWithTag("live-channel-30").performKeyInput { repeat(10) { advanceEventTime(350); pressKey(Key.DirectionUp) } }
         focused("20"); compose.runOnIdle { assertNull(played) }
     }
+    @Test fun queuedPagePressesLandOnTheNewestTargetWithoutStartingPlayback() {
+        board(); focus("live-channel-0")
+        val height = compose.onNodeWithTag("live-channel-list").fetchSemanticsNode().boundsInRoot.height
+        val page = LiveTvNavigationPolicy.visibleRows(height.toInt(), 44, 5)
+        compose.onRoot().performKeyInput { repeat(3) { pressKey(Key.PageDown) } }
+        focused("${page * 3}")
+        compose.runOnIdle { assertNull(played) }
+    }
     @Test fun categoriesAndHeaderReturnToTheListThroughExplicitRoutes() {
         board(); focus("live-channel-0")
         compose.onNodeWithTag("live-channel-0").performKeyInput { pressKey(Key.DirectionUp) }

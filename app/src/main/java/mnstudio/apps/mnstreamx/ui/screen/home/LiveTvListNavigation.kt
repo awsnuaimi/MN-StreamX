@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /** One latest intent owns scrolling and focus; an outgoing screen cannot finish an old request. */
 internal class LiveTvListNavigation(private val spans: PerformanceSpans = PerformanceSpans(PerformanceJournal.recorder)) {
     data class Request(val revision: Long, val key: String?, val position: HomeGridPosition? = null,
-        val token: Long? = null, val instant: Boolean = false)
+        val token: Long? = null, val instant: Boolean = false, val fast: Boolean = false)
     private var revision = 0L
     private var measurement: Long? = null
     private val mutable = MutableStateFlow<Request?>(null)
@@ -66,9 +66,10 @@ internal class LiveTvListNavigation(private val spans: PerformanceSpans = Perfor
         return upShortcut.down(key.eventTime, key.repeatCount > 0 || key.isLongPress,
             key.deviceId, canStart = false) == LiveTvUpShortcut.Result.DOUBLE
     }
-    fun request(key: String?, position: HomeGridPosition? = null, token: Long? = null, instant: Boolean = false) {
+    fun request(key: String?, position: HomeGridPosition? = null, token: Long? = null,
+        instant: Boolean = false, fast: Boolean = false) {
         measurement = spans.start(PerformanceStage.LIVE_FOCUS)
-        mutable.value = Request(++revision, key, position, token, instant)
+        mutable.value = Request(++revision, key, position, token, instant, fast)
     }
     fun current(ticket: Long) = mutable.value?.revision == ticket
     fun finish(ticket: Long, outcome: PerformanceOutcome = PerformanceOutcome.COMPLETE) {

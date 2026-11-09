@@ -43,4 +43,16 @@ class LiveTvNavigationPolicyTest {
         assertEquals("browsed", nav.requests.value?.key)
         assertEquals(position, nav.requests.value?.position); assertTrue(nav.requests.value!!.instant)
     }
+    @Test fun queuedFastMovementKeepsItsIntentAndRevision() {
+        val nav = LiveTvListNavigation()
+        nav.request("a", fast = true)
+        val earlier = nav.requests.value!!.revision
+        nav.request("d", fast = true)
+        assertEquals("d", nav.requests.value?.key)
+        assertTrue(nav.requests.value!!.fast)
+        nav.finish(earlier)
+        assertEquals("d", nav.requests.value?.key)
+        nav.finish(nav.requests.value!!.revision)
+        assertNull(nav.requests.value)
+    }
 }

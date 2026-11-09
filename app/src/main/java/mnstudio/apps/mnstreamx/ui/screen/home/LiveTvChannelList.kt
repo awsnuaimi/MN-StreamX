@@ -1,6 +1,7 @@
 package mnstudio.apps.mnstreamx.ui.screen.home
 
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.runtime.*
@@ -69,7 +70,7 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
             rows.getOrNull(list.firstVisibleItemIndex)?.channel(selectedChannelId, preferredQualities)?.id, list.firstVisibleItemScrollOffset, 1)
         navigation.request(rows[selectedTarget].key, position, if (selected) restore?.token else null, instant = true)
     }
-    LaunchedEffect(navigation, rows, ready, rowPx) {
+    LaunchedEffect(navigation, rows, index, ready, rowPx) {
         navigation.requests.collectLatest { request ->
             if (request == null || !ready || rows.isEmpty()) return@collectLatest
             val targetIndex = index.keyPosition(request.key ?: currentEntry ?: currentActive).takeIf { it >= 0 }
@@ -86,14 +87,20 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
                     list.scrollToItem(target.index, target.offset)
                 } else {
                     val item = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == targetIndex }
-                    if (item == null) list.animateScrollToItem(targetIndex) else {
+                    if (item == null) {
+                        if (request.fast) list.scrollToItem(targetIndex)
+                        else list.animateScrollToItem(targetIndex)
+                    } else {
                         val info = list.layoutInfo
                         val delta = when {
                             item.offset < info.viewportStartOffset -> item.offset - info.viewportStartOffset
                             item.offset + item.size > info.viewportEndOffset -> item.offset + item.size - info.viewportEndOffset
                             else -> 0
                         }
-                        if (delta != 0) list.animateScrollBy(delta.toFloat())
+                        if (delta != 0) {
+                            if (request.fast) list.scrollBy(delta.toFloat())
+                            else list.animateScrollBy(delta.toFloat())
+                        }
                     }
                 }
                 snapshotFlow { list.layoutInfo.visibleItemsInfo.any { it.index == targetIndex } && mounted[rows[targetIndex].key] != null }.first { it }
@@ -139,7 +146,7 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
             true
         } else {
             val pending = navigation.requests.value?.key
-            val position = index.keyPosition(pending ?: activeKey).coerceAtLeast(0)
+            val position = LiveTvFocusIntent.position(pending, focusedKey, activeKey, rows.size, index::keyPosition)
             val gesture = if (event.key == Key.DirectionUp && !key.isAltPressed && !key.isCtrlPressed && !key.isMetaPressed && !key.isShiftPressed)
                 navigation.upShortcut.down(key.eventTime, key.repeatCount > 0 || key.isLongPress, key.deviceId)
                 else LiveTvUpShortcut.Result.NORMAL
@@ -167,7 +174,8 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
                 categories()
             } else {
                 val next = LiveTvNavigationPolicy.target(position, delta, rows.size)
-                if (next != position) navigation.request(rows[next].key)
+                if (next != position) navigation.request(rows[next].key,
+                    fast = LiveTvFocusIntent.fastScroll(delta, key.repeatCount > 0, pending != null))
             }
             true
         }
