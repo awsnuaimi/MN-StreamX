@@ -16,7 +16,8 @@ class CaptionThroughput {
         if (elapsedMillis > 10000) return stopped(CaptionStage.THROUGHPUT, elapsedMillis, 10000)
         if (positionUs != Long.MIN_VALUE) {
             val lag = ((positionUs - window.startUs) / 1000 - window.durationMillis).coerceAtLeast(0)
-            if (lag > 8000) return stopped(CaptionStage.LAG, lag, 8000)
+            if (lag > CaptionPresentation.MAX_WINDOW_LAG_MS)
+                return stopped(CaptionStage.LAG, lag, CaptionPresentation.MAX_WINDOW_LAG_MS)
         }
         val previous = previousStartUs
         previousStartUs = window.startUs

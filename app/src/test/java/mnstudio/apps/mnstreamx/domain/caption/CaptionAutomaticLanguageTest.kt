@@ -11,6 +11,39 @@ import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CaptionAutomaticLanguageTest {
+    @Test fun anAutomaticPolishSpeechResultCanTranslateTheFirstWindow() = runTest {
+        val windows = Channel<AudioWindow>(1)
+        val input = object : CaptionAudioInput {
+            override val positionUs = Long.MIN_VALUE
+            override fun open() = CaptionFeed(windows) { }
+        }
+        val languages = mutableListOf<String>(); var translations = 0
+        val models = object : CaptionModels {
+            override suspend fun prepare(progress: (Int) -> Unit) = File("whisper")
+        }
+        val speech = SpeechEngineFactory { object : SpeechEngine {
+            override suspend fun transcribe(samples: FloatArray, language: String): SpeechText {
+                languages += language
+                return SpeechText("pl", "Dzien dobry", 0, 3500)
+            }
+            override fun cancel() = Unit
+            override fun close() = Unit
+        } }
+        val text = CaptionTranslatorFactory { object : CaptionTranslator {
+            override suspend fun prepare(target: String, progress: (Int) -> Unit) = Unit
+            override suspend fun translate(text: String): String { translations++; return "صباح الخير" }
+            override fun cancel() = Unit
+            override fun close() = Unit
+        } }
+        val pipeline = CaptionPipeline(backgroundScope, StandardTestDispatcher(testScheduler),
+            models, speech, text, CaptionDevice { true })
+        pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = "auto"))
+        runCurrent(); windows.send(AudioWindow(FloatArray(3500 * 16), 0)); runCurrent()
+        assertEquals(listOf("auto"), languages)
+        assertEquals(1, translations)
+        assertEquals("صباح الخير", pipeline.uiState.value.cue?.text)
+        pipeline.stop(); runCurrent()
+    }
     @Test fun autoSwitchClosesTheInitialRecognizerAndDiscardsItsDetectionWindow() = runTest {
         val windows = Channel<AudioWindow>(1)
         val input = object : CaptionAudioInput {

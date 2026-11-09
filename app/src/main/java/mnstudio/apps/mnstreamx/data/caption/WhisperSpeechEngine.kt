@@ -44,10 +44,12 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
         check(pointer != 0L)
         weightsResident = true
         val started = System.nanoTime()
-        val detectionOnly = language == "auto"
+        // Whisper full decoding with language="auto" detects the language and
+        // transcribes in the SAME request. A detect-only call discarded the
+        // first voiced window and required a second expensive inference.
+        val automatic = language == "auto"
         val rows = try {
-            if (detectionOnly) native.detectLanguage(pointer, samples)
-            else native.decode(pointer, samples, language, false, "")
+            native.decode(pointer, samples, language, false, "")
         }
         catch (_: TimeoutException) {
             captureNativeStages(pointer, true)
@@ -62,14 +64,14 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
         val elapsed = (System.nanoTime() - started) / 1000000
         captureNativeStages(pointer, true)
         CaptionDiagnosticJournal.record("WHISPER_DECODE", elapsed,
-            "audio_ms=${samples.size * 1000L / 16000},mode=${if (detectionOnly) "detect" else "speech"}")
-        Log.i("MNX.CaptionPerf", "whisper_decode_ms=$elapsed audio_ms=${samples.size * 1000L / 16000} mode=${if (detectionOnly) "detect" else "transcribe"}")
+            "audio_ms=${samples.size * 1000L / 16000},mode=${if (automatic) "auto" else "speech"}")
+        Log.i("MNX.CaptionPerf", "whisper_decode_ms=$elapsed audio_ms=${samples.size * 1000L / 16000} mode=${if (automatic) "auto" else "transcribe"}")
         if (elapsed > 10000) throw CaptionDeadlineException(CaptionStage.SPEECH, elapsed, 10000)
         val resultText = rows[3].trim().take(2000)
         CaptionDiagnosticJournal.record("WHISPER_RESULT", elapsed,
-            "chars=${resultText.length},detected=${rows[0].take(8)},mode=${if (detectionOnly) "detect" else "speech"}")
+            "chars=${resultText.length},detected=${rows[0].take(8)},mode=${if (automatic) "auto" else "speech"}")
         return SpeechText(rows[0], resultText, rows[1].toLongOrNull() ?: 0,
-            rows[2].toLongOrNull() ?: samples.size * 1000L / 16000, languageOnly = detectionOnly)
+            rows[2].toLongOrNull() ?: samples.size * 1000L / 16000, languageOnly = false)
     }
     private fun captureNativeStages(pointer: Long, includeInference: Boolean) {
         // The native timing accessor is read only after a synchronous JNI operation returns.
@@ -83,6 +85,8 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
             // Negative status codes are expected when the deadline aborts.
             if (timings.size >= 6) CaptionDiagnosticJournal.record("WHISPER_EXIT", timings[2].coerceAtLeast(0),
                 "status=${timings[3]},deadline=${timings[4]},ctx=${timings[5]}")
+            if (timings.size >= 9) CaptionDiagnosticJournal.record("WHISPER_SEGMENTS", timings[2].coerceAtLeast(0),
+                "seen=${timings[6]},kept=${timings[7]},rejected=${timings[8]}")
         }
     }
     override fun cancel() { synchronized(lock) { if (handle != 0L) native.cancel(handle) } }

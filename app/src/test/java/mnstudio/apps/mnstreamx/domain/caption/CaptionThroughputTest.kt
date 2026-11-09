@@ -24,9 +24,12 @@ class CaptionThroughputTest {
         val failure = CaptionThroughput().assess(window(0), 10001, Long.MIN_VALUE)
         assertEquals(CaptionStage.THROUGHPUT, failure?.stage); assertEquals(10000L, failure?.budgetMillis)
     }
-    @Test fun anOutdatedResultIsRejectedAfterInferenceAsWellAsBeforeIt() {
-        val failure = CaptionThroughput().assess(window(0), 1000, 14000000)
-        assertEquals(CaptionStage.LAG, failure?.stage); assertEquals(9000L, failure?.elapsedMillis)
+    @Test fun boundedDelayIsAcceptedButOverTwentySecondsOfLagIsRejected() {
+        assertNull(CaptionThroughput().assess(window(0), 9000, 14000000))
+        val failure = CaptionThroughput().assess(window(0), 1000, 27000000)
+        assertEquals(CaptionStage.LAG, failure?.stage)
+        assertEquals(22000L, failure?.elapsedMillis)
+        assertEquals(20000L, failure?.budgetMillis)
     }
     @Test fun aFastWindowResetsTheSlowStreak() {
         val policy = CaptionThroughput()

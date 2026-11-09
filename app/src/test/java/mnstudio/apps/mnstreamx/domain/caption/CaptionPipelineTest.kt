@@ -97,7 +97,7 @@ class CaptionPipelineTest {
         assertEquals(CaptionStatus.LOW_MEMORY, p.uiState.value.progress.status)
         assertEquals(1, e.closed); assertTrue(input.closed)
     }
-    @Test fun sustainedSlowInferenceStopsInsteadOfAccumulatingDelay() = runTest {
+    @Test fun sustainedSlowInferencePublishesBestEffortInsteadOfEndingTheFeed() = runTest {
         val e = Engines().apply { cost = 7000 }; val p = with(e) { pipeline() }; val input = Input()
         p.start(input, enabled); runCurrent()
         for (i in 0..2) { input.speech(i * 5000000L); runCurrent() }
@@ -105,8 +105,21 @@ class CaptionPipelineTest {
         for (i in 3..5) { input.speech(i * 5000000L, 3500); runCurrent() }
         assertEquals(CaptionStatus.ADAPTING, p.uiState.value.progress.status)
         for (i in 6..8) { input.speech(i * 5000000L, 2500); runCurrent() }
-        assertEquals(CaptionStatus.SLOW_DEVICE, p.uiState.value.progress.status)
+        assertTrue(p.uiState.value.progress.status in setOf(CaptionStatus.ADAPTING, CaptionStatus.LISTENING))
+        assertEquals("translated:Good morning", p.uiState.value.cue?.text)
+        assertEquals(0, e.closed); assertFalse(input.closed)
+        p.stop(); runCurrent()
         assertEquals(1, e.closed); assertTrue(input.closed)
+    }
+    @Test fun nineSecondSpeechCanStillPublishWhenPlaybackClockIsFourteenSecondsAhead() = runTest {
+        val e = Engines().apply { cost = 9000 }
+        val p = with(e) { pipeline() }
+        val input = Input().apply { positionUs = 14_000_000L }
+        p.start(input, enabled); runCurrent()
+        input.speech(0L, 5000); runCurrent()
+        assertEquals("translated:Good morning", p.uiState.value.cue?.text)
+        assertEquals(1, e.opened)
+        p.stop(); runCurrent()
     }
     @Test fun failedTranslationPreparationClosesPartialResourcesWithoutOpeningSpeech() = runTest {
         val e = Engines().apply { failPrepare = true }; val p = with(e) { pipeline() }

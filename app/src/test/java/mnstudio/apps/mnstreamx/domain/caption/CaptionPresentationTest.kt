@@ -5,6 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CaptionPresentationTest {
+    @Test fun staleWindowGuardMatchesTheLiveLagBudget() {
+        val w = AudioWindow(FloatArray(3500 * 16), 0)
+        assertTrue(CaptionPresentation.tooOld(w, 17_000_000L))
+        assertFalse(CaptionPresentation.tooOld(w, 17_000_000L, CaptionPresentation.MAX_WINDOW_LAG_MS))
+        assertFalse(CaptionPresentation.tooOld(w, 23_500_000L, CaptionPresentation.MAX_WINDOW_LAG_MS))
+        assertTrue(CaptionPresentation.tooOld(w, 23_500_001L, CaptionPresentation.MAX_WINDOW_LAG_MS))
+    }
     @Test fun futureAndExpiredCuesAreHiddenWhileLateCuesHaveABoundedReadingTime() {
         val cue = CaptionCue("subtitle", 5000000, 9000000, 1000)
         assertEquals("", CaptionPresentation.visible(cue, 4000000, 1500))

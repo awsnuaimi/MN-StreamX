@@ -19,6 +19,7 @@ struct SpeechSession {
     long long modelLoadMs = -1, stateInitMs = -1, inferenceMs = -1;
     int lastStatus = -999;
     int lastAudioContext = 0;
+    int segmentsSeen = 0, segmentsKept = 0, segmentsRejected = 0;
     ~SpeechSession() { whisper_free_state(state); whisper_free(context); }
 };
 bool interrupted(void* pointer) {
@@ -96,6 +97,8 @@ static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samp
         o.print_realtime = false; o.print_progress = false; o.print_timestamps = false; o.print_special = false;
         o.abort_callback = interrupted; o.abort_callback_user_data = s;
         s->deadlineReached.store(false, std::memory_order_relaxed);
+        s->segmentsSeen = 0; s->segmentsKept = 0; s->segmentsRejected = 0;
+        s->lastStatus = -999;
         const auto inferenceStarted = std::chrono::steady_clock::now();
         s->deadline = inferenceStarted + std::chrono::seconds(10);
         const auto status = whisper_full_with_state(s->context, s->state, o, audio.data(), count);
@@ -115,14 +118,20 @@ static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samp
         s->detected = whisper_full_lang_id_from_state(s->state); const char* detected = whisper_lang_str(s->detected);
         if (!detected) throw std::runtime_error("Invalid detected language"); std::string text;
         for (int i = 0; !detectionOnly && i < whisper_full_n_segments_from_state(s->state); ++i) {
-            if (whisper_full_get_segment_no_speech_prob_from_state(s->state, i) > 0.75f) continue;
+            ++s->segmentsSeen;
+            if (whisper_full_get_segment_no_speech_prob_from_state(s->state, i) > 0.75f) {
+                ++s->segmentsRejected; continue;
+            }
             double probability = 0.0; int tokens = 0;
             for (int j = 0; j < whisper_full_n_tokens_from_state(s->state, i); ++j) {
                 auto token = whisper_full_get_token_data_from_state(s->state, i, j);
                 if (token.id < whisper_token_eot(s->context)) { probability += token.plog; ++tokens; }
             }
-            if (tokens == 0 || !std::isfinite(probability) || probability / tokens < -1.2) continue;
-            const char* value = whisper_full_get_segment_text_from_state(s->state, i); if (value) text += value;
+            if (tokens == 0 || !std::isfinite(probability) || probability / tokens < -1.2) {
+                ++s->segmentsRejected; continue;
+            }
+            const char* value = whisper_full_get_segment_text_from_state(s->state, i);
+            if (value) { text += value; ++s->segmentsKept; }
         }
         if (!detectionOnly && text.empty()) s->detected = -1;
         const std::string result[] = {detected, "0", std::to_string(count * 1000LL / 16000), text};
@@ -156,10 +165,10 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_mnstudio_apps_mnstreamx_data_captio
     if (!pointer) return nullptr;
     auto* s = reinterpret_cast<SpeechSession*>(pointer);
     // First three slots preserve the existing diagnostic contract.
-    const jlong values[6] = {s->modelLoadMs, s->stateInitMs, s->inferenceMs,
+    const jlong values[9] = {s->modelLoadMs, s->stateInitMs, s->inferenceMs,
         s->lastStatus, s->deadlineReached.load(std::memory_order_relaxed) ? 1 : 0,
-        s->lastAudioContext};
-    auto output = env->NewLongArray(6);
-    if (output) env->SetLongArrayRegion(output, 0, 6, values);
+        s->lastAudioContext, s->segmentsSeen, s->segmentsKept, s->segmentsRejected};
+    auto output = env->NewLongArray(9);
+    if (output) env->SetLongArrayRegion(output, 0, 9, values);
     return output;
 }

@@ -94,7 +94,11 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     if (window == null) { status(CaptionStatus.UNAVAILABLE); break }
                                     currentCoroutineContext().ensureActive()
                                     if (window.samples.size < 16000 || !recovery.accepts(window) ||
-                                        CaptionPresentation.tooOld(window, input.positionUs)) continue
+                                        CaptionPresentation.tooOld(window, input.positionUs, CaptionPresentation.MAX_WINDOW_LAG_MS)) {
+                                        if (window.samples.size >= 16000) CaptionDiagnosticJournal.record(
+                                            "CAPTION_SKIP", 0, "reason=stale_or_oversize")
+                                        continue
+                                    }
                                     // A parked speech engine needs a fresh compute state. Do not let a
                                     // retained Marian decoder overlap that allocation on low-memory TVs.
                                     val retain = CaptionWorkingSetPolicy.retain(device.snapshot())
@@ -119,9 +123,15 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                     }
                                     currentCoroutineContext().ensureActive()
                                     val speechEnded = now()
-                                    if (!result.languageOnly && !CaptionTextQuality.usable(result.text)) continue
+                                    if (!result.languageOnly && !CaptionTextQuality.usable(result.text)) {
+                                        CaptionDiagnosticJournal.record("CAPTION_SKIP", 0, "reason=speech_empty")
+                                        continue
+                                    }
                                     val detected = CaptionLanguage.fromTag(result.language)?.tag
-                                    if (detected == null) { status(CaptionStatus.UNSUPPORTED_LANGUAGE); continue }
+                                    if (detected == null) {
+                                        CaptionDiagnosticJournal.record("CAPTION_SKIP", 0, "reason=unsupported_language")
+                                        status(CaptionStatus.UNSUPPORTED_LANGUAGE); continue
+                                    }
                                     if (source == "auto") {
                                         source = detected
                                         if (source != "pl") {
@@ -203,26 +213,36 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                                         if (needsText) timing.speechMillis else timing.totalMillis,
                                         if (needsText) Long.MIN_VALUE else input.positionUs)
                                     if (stopped != null) {
-                                        CaptionDiagnosticJournal.record("CAPTION_STOPPED", stopped.elapsedMillis ?: 0L,
+                                        CaptionDiagnosticJournal.record("CAPTION_SLOW", stopped.elapsedMillis ?: 0L,
                                             "stage=${stopped.stage},budget_ms=${stopped.budgetMillis}")
-                                        // A transient warm-up or delayed window must not permanently
-                                        // disable captions; back off twice, then report a sustained deficit.
                                         if (recovery.adaptThroughput()) {
                                             input.limitWindow(recovery.windowMillis)
                                             throughput = CaptionThroughput()
-                                            if (generation == token) state.value = CaptionPipelineState(
-                                                stopped.copy(status = CaptionStatus.ADAPTING), timing = timing)
+                                        }
+                                        // Never publish truly stale dialogue. A slow but still
+                                        // bounded result, however, is preferable to a blank screen.
+                                        if (stopped.stage == CaptionStage.LAG) {
+                                            CaptionDiagnosticJournal.record("CAPTION_SKIP", 0, "reason=lag")
+                                            state.value = CaptionPipelineState(stopped.copy(status = CaptionStatus.ADAPTING),
+                                                timing = timing)
                                             continue
                                         }
-                                        state.value = CaptionPipelineState(stopped, timing = timing)
-                                        break
                                     }
-                                    if (!CaptionTextQuality.usable(translated)) continue
-                                    if (CaptionPresentation.tooOld(window, input.positionUs)) continue
+                                    if (!CaptionTextQuality.usable(translated)) {
+                                        CaptionDiagnosticJournal.record("CAPTION_SKIP", 0, "reason=translated_empty")
+                                        continue
+                                    }
+                                    if (CaptionPresentation.tooOld(window, input.positionUs, CaptionPresentation.MAX_WINDOW_LAG_MS)) {
+                                        CaptionDiagnosticJournal.record("CAPTION_SKIP", 0, "reason=stale_after_decode")
+                                        continue
+                                    }
                                     recovery.succeeded()
                                     val begin = window.startUs + result.startMillis.coerceIn(0, window.durationMillis) * 1000
                                     val end = window.startUs + result.endMillis.coerceIn(0, window.durationMillis) * 1000
-                                    state.value = CaptionPipelineState(CaptionProgress(CaptionStatus.LISTENING),
+                                    CaptionDiagnosticJournal.record("CAPTION_CUE", timing.totalMillis,
+                                        "chars=${translated.length},lang=$detected")
+                                    state.value = CaptionPipelineState(
+                                        CaptionProgress(if (stopped != null) CaptionStatus.ADAPTING else CaptionStatus.LISTENING),
                                         CaptionCue(translated.trim().take(2000), begin, maxOf(begin, end), now()),
                                         timing.totalMillis, timing)
                                 }
@@ -243,18 +263,32 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                     requiredMb = CaptionResourcePolicy.ceilingMb(error.requiredBytes)))
             }
             catch (error: CaptionDeadlineException) {
+                CaptionDiagnosticJournal.record("CAPTION_FAILURE", error.elapsedMillis,
+                    "stage=${error.stage},type=deadline")
                 if (generation == token) state.value = CaptionPipelineState(CaptionProgress(CaptionStatus.SLOW_DEVICE,
                     stage = error.stage, elapsedMillis = error.elapsedMillis, budgetMillis = error.budgetMillis))
             }
-            catch (_: TimeoutException) { status(CaptionStatus.SLOW_DEVICE) }
+            catch (_: TimeoutException) {
+                CaptionDiagnosticJournal.record("CAPTION_FAILURE", 0, "type=timeout")
+                status(CaptionStatus.SLOW_DEVICE)
+            }
             catch (error: CaptionMemoryException) {
+                CaptionDiagnosticJournal.record("CAPTION_FAILURE", 0, "type=memory")
                 if (generation == token) state.value = CaptionPipelineState(CaptionProgress(error.check.failure,
                     availableMb = error.check.availableMb, requiredMb = error.check.requiredMb,
                     stage = error.check.stage, systemThresholdMb = error.check.systemThresholdMb))
             }
-            catch (_: OutOfMemoryError) { status(CaptionStatus.LOW_MEMORY) }
-            catch (_: UnsatisfiedLinkError) { status(CaptionStatus.UNAVAILABLE) }
-            catch (_: Exception) {
+            catch (_: OutOfMemoryError) {
+                CaptionDiagnosticJournal.record("CAPTION_FAILURE", 0, "type=oom")
+                status(CaptionStatus.LOW_MEMORY)
+            }
+            catch (_: UnsatisfiedLinkError) {
+                CaptionDiagnosticJournal.record("CAPTION_FAILURE", 0, "type=native_link")
+                status(CaptionStatus.UNAVAILABLE)
+            }
+            catch (error: Exception) {
+                CaptionDiagnosticJournal.record("CAPTION_FAILURE", 0,
+                    "type=${error.javaClass.simpleName.take(32)}")
                 status(if (settings.translationBackend == TranslationBackend.CLOUD) CaptionStatus.CLOUD_ERROR
                     else CaptionStatus.FAILED)
             } finally { storageCoordinator?.endSession() }
