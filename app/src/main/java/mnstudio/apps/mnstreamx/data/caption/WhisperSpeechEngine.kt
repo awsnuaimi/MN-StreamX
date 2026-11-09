@@ -65,17 +65,24 @@ internal class WhisperSpeechEngine(model: File) : SpeechEngine {
             "audio_ms=${samples.size * 1000L / 16000},mode=${if (detectionOnly) "detect" else "speech"}")
         Log.i("MNX.CaptionPerf", "whisper_decode_ms=$elapsed audio_ms=${samples.size * 1000L / 16000} mode=${if (detectionOnly) "detect" else "transcribe"}")
         if (elapsed > 10000) throw CaptionDeadlineException(CaptionStage.SPEECH, elapsed, 10000)
-        return SpeechText(rows[0], rows[3].trim().take(2000), rows[1].toLongOrNull() ?: 0,
+        val resultText = rows[3].trim().take(2000)
+        CaptionDiagnosticJournal.record("WHISPER_RESULT", elapsed,
+            "chars=${resultText.length},detected=${rows[0].take(8)},mode=${if (detectionOnly) "detect" else "speech"}")
+        return SpeechText(rows[0], resultText, rows[1].toLongOrNull() ?: 0,
             rows[2].toLongOrNull() ?: samples.size * 1000L / 16000, languageOnly = detectionOnly)
     }
     private fun captureNativeStages(pointer: Long, includeInference: Boolean) {
         // The native timing accessor is read only after a synchronous JNI operation returns.
         val timings = native.stageTimings(pointer)
-        if (timings.size != 3) return
+        if (timings.size < 3) return
         if (!includeInference && timings[0] >= 0) CaptionDiagnosticJournal.record("WHISPER_MODEL_LOAD", timings[0])
         if (includeInference) {
             if (timings[1] >= 0) CaptionDiagnosticJournal.record("WHISPER_STATE_INIT", timings[1])
             if (timings[2] >= 0) CaptionDiagnosticJournal.record("WHISPER_INFERENCE", timings[2])
+            // Record native outcome in the exported report, not just logcat.
+            // Negative status codes are expected when the deadline aborts.
+            if (timings.size >= 6) CaptionDiagnosticJournal.record("WHISPER_EXIT", timings[2].coerceAtLeast(0),
+                "status=${timings[3]},deadline=${timings[4]},ctx=${timings[5]}")
         }
     }
     override fun cancel() { synchronized(lock) { if (handle != 0L) native.cancel(handle) } }

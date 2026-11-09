@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 #include "CaptionJni.h"
+#include "WhisperLiveWindow.h"
 #include <whisper.h>
 #include <atomic>
 #include <algorithm>
@@ -16,6 +17,8 @@ struct SpeechSession {
     std::atomic<bool> cancelled{false}; std::atomic<bool> deadlineReached{false}; std::string path; int threads = 1; int detected = -1;
     std::chrono::steady_clock::time_point deadline;
     long long modelLoadMs = -1, stateInitMs = -1, inferenceMs = -1;
+    int lastStatus = -999;
+    int lastAudioContext = 0;
     ~SpeechSession() { whisper_free_state(state); whisper_free(context); }
 };
 bool interrupted(void* pointer) {
@@ -82,18 +85,21 @@ static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samp
         if (env->ExceptionCheck()) return nullptr;
         auto o = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
         o.n_threads = s->threads; o.greedy.best_of = 1; o.language = selected.c_str();
-        // Bound encoder attention for short live-caption windows (2.5–3.5 s).
-        // The previous value 0 selected the model's full audio context.
-        // Experimental 256-token audio context for short live-caption windows.
-        // Compare latency and Polish recognition quality against the 384 baseline.
-        o.audio_ctx = 256; o.detect_language = detectionOnly; o.translate = false; o.no_context = true; o.no_timestamps = true; o.single_segment = false;
-        o.n_max_text_ctx = 0; o.max_tokens = 96; o.temperature = 0.0f; o.temperature_inc = 0.0f; o.suppress_nst = true;
+        // Match encoder attention to actual samples after VAD trimming.
+        // 16-kHz Whisper mel frames use a 10-ms hop and 2x encoder stride.
+        // Fixed 256 wastes compute for 1–3.5-s clips and can truncate 6-s clips.
+        o.audio_ctx = mnxCaptionAudioContext(count);
+        o.max_tokens = mnxCaptionMaxTokens(count);
+        s->lastAudioContext = o.audio_ctx;
+        o.detect_language = detectionOnly; o.translate = false; o.no_context = true; o.no_timestamps = true; o.single_segment = false;
+        o.n_max_text_ctx = 0; o.temperature = 0.0f; o.temperature_inc = 0.0f; o.suppress_nst = true;
         o.print_realtime = false; o.print_progress = false; o.print_timestamps = false; o.print_special = false;
         o.abort_callback = interrupted; o.abort_callback_user_data = s;
         s->deadlineReached.store(false, std::memory_order_relaxed);
         const auto inferenceStarted = std::chrono::steady_clock::now();
         s->deadline = inferenceStarted + std::chrono::seconds(10);
         const auto status = whisper_full_with_state(s->context, s->state, o, audio.data(), count);
+        s->lastStatus = status;
         s->inferenceMs = elapsedMs(inferenceStarted);
         reportStage("inference", s->inferenceMs, count / 16);
         __android_log_print(ANDROID_LOG_INFO, "MNX.CaptionPerf",
@@ -101,7 +107,8 @@ static jobjectArray mnxDecodeSpeech(JNIEnv* env, jlong pointer, jfloatArray samp
             status, s->deadlineReached.load(std::memory_order_relaxed) ? 1 : 0,
             s->cancelled.load(std::memory_order_relaxed) ? 1 : 0, s->inferenceMs);
         if (s->cancelled.load(std::memory_order_relaxed)) throw std::runtime_error("Speech cancelled");
-        if (std::chrono::steady_clock::now() >= s->deadline) {
+        if (s->deadlineReached.load(std::memory_order_relaxed) ||
+            std::chrono::steady_clock::now() >= s->deadline) {
             mnxError(env, "Local speech exceeded its deadline", "java/util/concurrent/TimeoutException"); return nullptr;
         }
         if (status != 0) throw std::runtime_error("Speech inference failed");
@@ -148,8 +155,11 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_mnstudio_apps_mnstreamx_data_captio
     JNIEnv* env, jobject, jlong pointer) {
     if (!pointer) return nullptr;
     auto* s = reinterpret_cast<SpeechSession*>(pointer);
-    const jlong values[3] = {s->modelLoadMs, s->stateInitMs, s->inferenceMs};
-    auto output = env->NewLongArray(3);
-    if (output) env->SetLongArrayRegion(output, 0, 3, values);
+    // First three slots preserve the existing diagnostic contract.
+    const jlong values[6] = {s->modelLoadMs, s->stateInitMs, s->inferenceMs,
+        s->lastStatus, s->deadlineReached.load(std::memory_order_relaxed) ? 1 : 0,
+        s->lastAudioContext};
+    auto output = env->NewLongArray(6);
+    if (output) env->SetLongArrayRegion(output, 0, 6, values);
     return output;
 }

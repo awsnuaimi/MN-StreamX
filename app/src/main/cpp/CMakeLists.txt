@@ -23,9 +23,16 @@ if(NOT WHISPER_SOURCE_DIR)
         URL https://codeload.github.com/ggml-org/whisper.cpp/tar.gz/refs/tags/v1.9.5
         URL_HASH SHA256=ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720)
     FetchContent_MakeAvailable(whisper_source)
+    set(MNX_WHISPER_ROOT "${whisper_source_SOURCE_DIR}")
 else()
     add_subdirectory(${WHISPER_SOURCE_DIR} whisper_source)
+    set(MNX_WHISPER_ROOT "${WHISPER_SOURCE_DIR}")
 endif()
+# The pinned v1.9.5 upstream performs language detection before applying
+# params.audio_ctx. Patch its first encoder so automatic detection is bounded
+# to the same live window as normal transcription.
+include(${CMAKE_CURRENT_SOURCE_DIR}/WhisperWindowPatch.cmake)
+mnx_patch_whisper_window("${MNX_WHISPER_ROOT}")
 include(${CMAKE_CURRENT_SOURCE_DIR}/BergamotBuild.cmake)
 add_library(mnx-whisper SHARED WhisperBridge.cpp SentencePieceBridge.cpp BergamotBridge.cpp BergamotZstd.cpp)
 target_include_directories(mnx-whisper PRIVATE ${SENTENCEPIECE_SOURCE_DIR}/src ${zstd_SOURCE_DIR}/lib)
