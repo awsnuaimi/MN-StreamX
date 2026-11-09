@@ -27,15 +27,19 @@ internal object LiveChannelRows {
         }
         val rows = groups.entries.mapIndexed { index, (family, group) ->
             checkpoint()
-            val variants = group.distinctBy { it.id }.sortedBy {
+            // Most provider families have one stream. Avoid allocating a deduplication
+            // set and sort buffers for every single-channel row in a large catalog.
+            val variants = if (group.size == 1) listOf(group[0]) else group.distinctBy { it.id }.sortedBy {
                 rank.indexOf(metadata.get(it).quality).takeIf { n -> n >= 0 } ?: Int.MAX_VALUE
             }
             LiveChannelRow(group.first().id,metadata.get(group.first()).title,variants,index,metadata.familyKey(family))
         }
-        val collator = Collator.getInstance(locale)
         return when (sort) {
             LiveChannelSort.PROVIDER -> rows
-            LiveChannelSort.NAME -> rows.sortedWith { a,b -> checkpoint();collator.compare(a.title,b.title) }
+            LiveChannelSort.NAME -> {
+                val collator = Collator.getInstance(locale)
+                rows.sortedWith { a,b -> checkpoint();collator.compare(a.title,b.title) }
+            }
             LiveChannelSort.FAVORITES -> rows.sortedWith { a,b -> checkpoint();b.favorite.compareTo(a.favorite) }
         }.also { checkpoint() }
     }

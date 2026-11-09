@@ -45,4 +45,36 @@ class LiveChannelNumbersTest {
         val result = numbers.apply(rows(source.takeLast(20)), index)
         assertEquals((7471..7490).toList(), result.map { it.number }); assertEquals(7490, source.size)
     }
+    @Test fun newNumberingMatchesProviderFamiliesEvenWithDuplicateQualityStreams() {
+        val duplicated = listOf(
+            Channel("a", "PL| Music FHD", streamUrl = "url:a", group = "PL"),
+            Channel("a", "PL| Music FHD", streamUrl = "url:a", group = "PL"),
+            Channel("b", "PL| Music HD", streamUrl = "url:b", group = "PL"),
+            Channel("c", "PL| News HD", streamUrl = "url:c", group = "PL"),
+            Channel("d", "DE| Music HD", streamUrl = "url:d", group = "DE")
+        )
+        val actual = LiveChannelNumbers().forCatalog(duplicated)
+        val expected = rows(duplicated).mapIndexed { index, row -> row.preferenceKey to index + 1 }.toMap()
+        assertEquals(expected, actual)
+        assertEquals(3, actual.size)
+        assertEquals(1, actual[rows(duplicated).first().preferenceKey])
+    }
+
+    @Test fun cancelledCalculationNeverPublishesPartiallyNumberedCatalog() {
+        val owner = LiveChannelNumbers()
+        val first = owner.forCatalog(channels)
+        val next = channels.reversed()
+        var checkpoints = 0
+        try {
+            owner.forCatalog(next) {
+                checkpoints++
+                if (checkpoints == 3) throw IllegalStateException("cancelled")
+            }
+            fail("expected cancellation")
+        } catch (expected: IllegalStateException) {
+            assertEquals("cancelled", expected.message)
+        }
+        assertSame(first, owner.forCatalog(channels))
+        assertEquals(rows(next).mapIndexed { i, row -> row.preferenceKey to i + 1 }.toMap(), owner.forCatalog(next))
+    }
 }
