@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import mnstudio.apps.mnstreamx.R
+import mnstudio.apps.mnstreamx.ui.component.common.tvFocusIndicator
 import mnstudio.apps.mnstreamx.ui.component.channel.ChannelLogo
 import mnstudio.apps.mnstreamx.ui.presentation.DeckChannelItem
 import mnstudio.apps.mnstreamx.ui.presentation.PlayerTileLayout
@@ -62,9 +63,10 @@ internal fun DeckChannelTile(item: DeckChannelItem, playing: Boolean,
 private fun DeckTileSurface(enabled: Boolean, playing: Boolean, onClick: () -> Unit, modifier: Modifier,
     content: @Composable () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    Surface(onClick = onClick, enabled = enabled, modifier = modifier.onFocusChanged { focused = it.isFocused },
+    Surface(onClick = onClick, enabled = enabled, modifier = modifier.tvFocusIndicator(MaterialTheme.shapes.small)
+            .onFocusChanged { focused = it.isFocused },
         shape = MaterialTheme.shapes.small, contentColor = MaterialTheme.colorScheme.onSurface,
         color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-        border = when { focused -> BorderStroke(3.dp, MaterialTheme.colorScheme.primary); playing -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline); else -> null },
+        border = when { focused -> BorderStroke(3.dp, MaterialTheme.colorScheme.primary); playing -> BorderStroke(2.dp, MaterialTheme.colorScheme.secondary); else -> null },
         content = content)
 }

@@ -33,6 +33,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.graphics.Color
@@ -46,6 +48,7 @@ import mnstudio.apps.mnstreamx.ui.component.channel.ChannelLogo
 import mnstudio.apps.mnstreamx.ui.component.channel.FavoriteBadge
 import mnstudio.apps.mnstreamx.ui.component.common.AppButton
 import mnstudio.apps.mnstreamx.ui.component.common.Resume
+import mnstudio.apps.mnstreamx.ui.component.common.tvFocusIndicator
 import mnstudio.apps.mnstreamx.ui.component.common.FocusInputEpoch
 
 @Composable
@@ -128,13 +131,20 @@ private fun PlayerChannelRow(
     channel: Channel, number: Int, playing: Boolean, onClick: () -> Unit, modifier: Modifier
 ) {
     var focused by remember { mutableStateOf(false) }
+    val playingLabel = stringResource(R.string.player_playing)
     Surface(onClick = onClick,
-        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+        modifier = modifier.fillMaxWidth().tvFocusIndicator(MaterialTheme.shapes.medium)
+            .semantics { if (playing) stateDescription = playingLabel }
+            .onFocusChanged { focused = it.isFocused },
         shape = MaterialTheme.shapes.medium,
         color = if (focused) MaterialTheme.colorScheme.primaryContainer else if (playing) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(if (focused) 3.dp else 1.dp,
-            if (focused || playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)) {
+        border = BorderStroke(if (focused) 3.dp else if (playing) 2.dp else 1.dp,
+            when {
+                focused -> MaterialTheme.colorScheme.primary
+                playing -> MaterialTheme.colorScheme.secondary
+                else -> MaterialTheme.colorScheme.outline
+            })) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(number.toString(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)

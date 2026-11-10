@@ -27,6 +27,7 @@ import mnstudio.apps.mnstreamx.domain.model.PlayerAppearance
 import mnstudio.apps.mnstreamx.ui.component.channel.FavoriteFeedback
 import mnstudio.apps.mnstreamx.ui.component.common.AppButton
 import mnstudio.apps.mnstreamx.ui.component.common.Resume
+import mnstudio.apps.mnstreamx.ui.component.common.tvFocusIndicator
 import mnstudio.apps.mnstreamx.ui.screen.player.deck.*
 import mnstudio.apps.mnstreamx.ui.state.FavoriteUiState
 import mnstudio.apps.mnstreamx.ui.state.LastChannelError
@@ -139,7 +140,8 @@ private fun MoreActionRow(action: PlayerMoreAction, isFavorite: Boolean, favorit
         PlayerMoreAction.NEXT -> DeckIcon.NEXT
     }
     Surface(onClick = onClick, enabled = enabled,
-        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+        modifier = modifier.fillMaxWidth().tvFocusIndicator(MaterialTheme.shapes.medium)
+            .onFocusChanged { focused = it.isFocused },
         shape = MaterialTheme.shapes.medium, color = if (focused) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
         border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
