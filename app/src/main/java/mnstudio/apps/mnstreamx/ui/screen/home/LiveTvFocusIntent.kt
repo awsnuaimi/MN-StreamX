@@ -17,6 +17,31 @@ internal object LiveTvFocusIntent {
         return 0
     }
 
+    /**
+     * Restore a list row after a background projection replaces the mounted items.
+     * A hidden row cannot be focused: use its previous position (next surviving row,
+     * or the previous row when it was the last one). A fresh list entry instead
+     * respects an explicit session selection before adaptive recommendations.
+     */
+    fun restoredRowKey(
+        focusedChannelId: String?,
+        selectedChannelId: String?,
+        adaptiveEntryKey: String?,
+        previousIndex: Int,
+        count: Int,
+        keyForChannel: (String?) -> String?,
+        keyAt: (Int) -> String?
+    ): String? {
+        if (count <= 0) return null
+        if (focusedChannelId != null) {
+            keyForChannel(focusedChannelId)?.let { return it }
+            keyAt(previousIndex.coerceIn(0, count - 1))?.let { return it }
+        }
+        keyForChannel(selectedChannelId)?.let { return it }
+        adaptiveEntryKey?.let { return it }
+        return keyAt(previousIndex.coerceIn(0, count - 1))
+    }
+
     /** Skip scroll animations only for page jumps, key repeats or a queued burst. */
     fun fastScroll(delta: Int, repeated: Boolean, pending: Boolean): Boolean =
         pending || repeated || delta < -1 || delta > 1

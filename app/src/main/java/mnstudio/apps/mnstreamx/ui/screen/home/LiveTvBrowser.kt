@@ -145,6 +145,11 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
             ?.let { rowIndex.forFamily(it)?.key }
     }
     val browseContext = remember(catalog.browseScope, catalog.selectedGroup, catalog.query, catalog.favoritesOnly, accessEpoch) { Any() }
+    // Projection refreshes may temporarily unmount LazyColumn focus targets.
+    // Keep a one-shot intent until the replacement projection has mounted.
+    var resumeAfterProjection by remember(browseContext) { mutableStateOf(false) }
+    var resumeAfterMenu by remember(browseContext) { mutableStateOf(false) }
+    var lastHandledProjection by remember(browseContext) { mutableStateOf<Any?>(null) }
     SideEffect { navigation.bind(browseContext) }
     var groupEntry by remember(catalog.browseScope, accessEpoch) { mutableStateOf<LiveTvGroupEntry?>(null) }
     val selectGroup: (String?) -> Unit = { group -> groupEntry = LiveTvGroupEntry(group); onGroup(group) }
@@ -192,6 +197,27 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
         }
     }
     BackHandler((detailsFocused || detailEntryPending) && rows.isNotEmpty()) { focusList() }
+    LaunchedEffect(displayed?.input, resumeAfterProjection, resumeAfterMenu) {
+        val result = displayed ?: return@LaunchedEffect
+        if (!freshProjection || rows.isEmpty()) return@LaunchedEffect
+        val changed = lastHandledProjection !== result.input
+        if (!changed && !resumeAfterProjection && !resumeAfterMenu) return@LaunchedEffect
+        lastHandledProjection = result.input
+        val shouldResume = resumeAfterProjection || resumeAfterMenu || navigation.ownsFocus
+        if (!shouldResume || detailsFocused || detailEntryPending || manage || menuKey != null) return@LaunchedEffect
+        val target = LiveTvFocusIntent.restoredRowKey(focused, state.selectedChannelId,
+            predictedEntry, lastIndex, rows.size,
+            { rowIndex.forChannel(it)?.key }, { rows.getOrNull(it)?.key })
+        if (target != null) {
+            // An AlertDialog can still own focus during its dismissal animation.
+            // Wait for the new row tree to be placed before requesting a focus target.
+            withFrameNanos { }
+            if (resumeAfterProjection || resumeAfterMenu) entry.requestFocus()
+            navigation.request(target, fast = true)
+        }
+        resumeAfterProjection = false
+        resumeAfterMenu = false
+    }
     val program: (Channel) -> ChannelProgramInfo = { ChannelProgramInfo.from(it, guides.forChannel(it, state.browseScope, accessEpoch)) }
     val translated = HomeChannelPresentation.kind(captions) == HomeTranslationKind.GENERATED
     val request by rememberUpdatedState(onGuideChannels)
@@ -242,6 +268,10 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
                             .onPreviewKeyEvent(navigation::handle).focusRequester(entry)
                             .onFocusChanged {
                                 val entering = it.hasFocus && !navigation.ownsFocus
+                                if (!it.hasFocus && navigation.ownsFocus && displayed == null &&
+                                    focused != null && menuKey == null && !detailsFocused && !detailEntryPending) {
+                                    resumeAfterProjection = true
+                                }
                                 navigation.ownsFocus = it.hasFocus; listFocused = it.hasFocus
                                 if (it.isFocused) navigation.enter(predictedEntry)
                                 else if (entering) navigation.clearShortcut()
@@ -254,6 +284,7 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
                                 navigation, sidebarFocus, ready = displayed != null, preferredQualities = preferences.value.preferredQualities, index = rowIndex,
                                 sidebarOnRight = appearance.sidebarOnRight, emptyEntry = emptyFocus.takeIf { fallbackReady },
                                 onEnterDetails = {
+                                    resumeAfterProjection = false
                                     detailEntryPending = true
                                     detailMemory.restoreOrRequestFocus(watch)
                                 }, entryKey = predictedEntry)
@@ -288,7 +319,11 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
             onFavorite = { onFavorite(row.channel(focused, preferences.value.preferredQualities)); menuKey = null; runCatching { entry.requestFocus() } },
             onPlay = { menuKey = null; watchChannel(it) },
             onTranslate = { menuKey = null; onTranslate(row.channel(focused, preferences.value.preferredQualities)) },
-            onHide = onPreference?.let { change -> { change { it.copy(hiddenChannels = it.hiddenChannels + row.variants.map { c -> c.id }) }; menuKey = null; entry.requestFocus() } },
+            onHide = onPreference?.let { change -> {
+                change { it.copy(hiddenChannels = it.hiddenChannels + row.variants.map { c -> c.id }) }
+                resumeAfterMenu = true
+                menuKey = null
+            } },
             onHideCategory = onPreference?.takeIf { state.selectedGroup != null || row.variants.first().group != null }?.let { change -> {
                 val folder = FolderFilter.id(state.selectedGroup)
                 val group = state.selectedGroup ?: row.variants.first().group

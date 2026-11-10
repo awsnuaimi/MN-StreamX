@@ -26,6 +26,30 @@ class LiveTvFocusIntentTest {
         assertEquals(0, position(null, null, null))
     }
 
+    private fun restored(focused: String? = null, selected: String? = null,
+        adaptive: String? = null, previous: Int = 0, remaining: List<String> = keys): String? =
+        LiveTvFocusIntent.restoredRowKey(focused, selected, adaptive, previous,
+            remaining.size, { id -> remaining.firstOrNull { it == id } }, remaining::getOrNull)
+
+    @Test fun aHiddenMiddleRowMovesFocusToTheNextRemainingRow() {
+        assertEquals("d", restored(focused = "c", previous = 2, remaining = listOf("a", "b", "d")))
+    }
+
+    @Test fun aHiddenLastRowMovesFocusToTheNearestPreviousRow() {
+        assertEquals("c", restored(focused = "d", previous = 3, remaining = listOf("a", "b", "c")))
+        assertNull(restored(focused = "d", previous = 3, remaining = emptyList()))
+    }
+
+    @Test fun catalogRefreshKeepsTheActualFocusedRowInsteadOfSelection() {
+        assertEquals("c", restored(focused = "c", selected = "a", adaptive = "d", previous = 2))
+    }
+
+    @Test fun queuedListEntryPrefersExplicitRestoreThenAdaptiveRow() {
+        assertEquals("b", restored(selected = "b", adaptive = "d"))
+        assertEquals("d", restored(adaptive = "d"))
+        assertEquals("a", restored())
+    }
+
     @Test fun fastScrollingIsOnlyUsedForBurstsRepeatsAndPageJumps() {
         assertFalse(LiveTvFocusIntent.fastScroll(1, repeated = false, pending = false))
         assertFalse(LiveTvFocusIntent.fastScroll(-1, repeated = false, pending = false))
