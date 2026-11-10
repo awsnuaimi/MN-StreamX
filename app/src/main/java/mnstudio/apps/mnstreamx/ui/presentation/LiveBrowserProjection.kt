@@ -17,8 +17,10 @@ internal class LiveProjectionContext(val state: HomeUiState, val preferences: Li
 internal data class LiveBrowserResult(val input: Any, val context: LiveProjectionContext,
     val personal: HomeUiState, val index: LiveChannelIndex)
 
-internal class LiveBrowserProjection {
-    private val metadata = LiveChannelMetadataCache()
+internal class LiveBrowserProjection(
+    private val budget: LiveProjectionCacheBudget = LiveProjectionCacheBudget.forDevice(256, false)
+) {
+    private val metadata = LiveChannelMetadataCache(budget.metadataEntries)
     private val numbering = LiveChannelNumbers()
     private var personalContext: LiveProjectionContext? = null
     private var personal: HomeUiState? = null
@@ -54,20 +56,31 @@ internal class LiveBrowserProjection {
             channels = base.channels,groups = base.groups,organization = base.organization,
             visibleChannels = state.visibleChannels.filter { checkpoint();preferences.visible(it) })
         val numbers = numbering.forCatalog(state.channels,metadata,checkpoint)
-        val rows = numbering.apply(LiveChannelRows.project(visible.visibleChannels,sort,locale,metadata,checkpoint),numbers)
-            .map { candidate ->
-                checkpoint()
-                val previousRow = reusableRows[candidate.preferenceKey]
-                (previousRow?.takeIf { it == candidate } ?: candidate).also {
-                    reusableRows[candidate.preferenceKey] = it
-                    if (reusableRows.size > 12_000) reusableRows.entries.iterator().apply { next();remove() }
+        val candidateRows = numbering.apply(
+            LiveChannelRows.project(visible.visibleChannels, sort, locale, metadata, checkpoint), numbers)
+        // Avoid churning a small LRU for every row of a much larger catalog.
+        // The currently displayed projection retains its own rows independently.
+        val rows = if (candidateRows.size > budget.reusableRows) {
+            reusableRows.clear()
+            candidateRows
+        } else candidateRows.map { candidate ->
+            checkpoint()
+            val previousRow = reusableRows[candidate.preferenceKey]
+            (previousRow?.takeIf { it == candidate } ?: candidate).also {
+                reusableRows[candidate.preferenceKey] = it
+                if (reusableRows.size > budget.reusableRows) {
+                    reusableRows.entries.iterator().apply { next(); remove() }
                 }
             }
+        }
         checkpoint()
         personal = visible;personalContext = context
         return LiveBrowserResult(input,context,visible,LiveChannelIndex(rows)).also {
             prepared.add(Prepared(it,sort,locale))
-            while (prepared.size > 4 || prepared.sumOf { value -> value.result.index.rows.size } > 12_000) prepared.removeAt(0)
+            while (prepared.size > budget.preparedViews ||
+                prepared.size > 1 && prepared.sumOf { value -> value.result.index.rows.size } > budget.preparedRows) {
+                prepared.removeAt(0)
+            }
         }
     }
 }

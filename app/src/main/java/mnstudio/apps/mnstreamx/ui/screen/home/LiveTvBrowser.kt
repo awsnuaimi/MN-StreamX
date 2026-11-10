@@ -1,5 +1,6 @@
 package mnstudio.apps.mnstreamx.ui.screen.home
 
+import android.app.ActivityManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
@@ -16,6 +17,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
@@ -61,7 +63,14 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
         catalog.visibleChannels, catalog.channels, catalog.groups, catalog.organization, sort,
         preferences.value.hiddenChannels, preferences.value.hiddenGroups, preferences.value.hiddenFolders,
         preferences.ready, appearance.language, accessEpoch, projectionDispatcher) { Any() }
-    val projection = remember(catalog.browseScope, accessEpoch) { LiveBrowserProjection() }
+    val appContext = LocalContext.current.applicationContext
+    val projectionBudget = remember(appContext) {
+        val memory = appContext.getSystemService(ActivityManager::class.java)
+        LiveProjectionCacheBudget.forDevice(memory?.memoryClass ?: 128, memory?.isLowRamDevice ?: true)
+    }
+    val projection = remember(catalog.browseScope, accessEpoch, projectionBudget) {
+        LiveBrowserProjection(projectionBudget)
+    }
     val projectionContext = LiveProjectionContext(catalog,preferences.value,accessEpoch)
     val projected by produceState<LiveBrowserResult?>(null, input) {
         if (preferences.ready && !catalog.isFiltering) value = PerformanceJournal.measure(PerformanceStage.LIVE_PROJECT) {
@@ -231,7 +240,7 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
                         if (detail && active != null && channel != null) LiveTvDetail(active, channel, program(channel),
                             guides.forChannel(channel, state.browseScope, accessEpoch).nowMillis, colors, labels, translated,
                             captions.settings.target.tag.uppercase(Locale.ROOT), watch, entry, { watchChannel(channel) },
-                            { onTranslate(channel) }, Modifier.weight(1f).fillMaxHeight().onFocusChanged { detailsFocused = it.hasFocus },
+                            { onTranslate(channel) }, Modifier.weight(1f).fillMaxHeight().onFocusChanged { detailsFocused = it.isFocused },
                             sidebarOnRight = appearance.sidebarOnRight, above = categories, groupEntry = detailMemory)
                     }
                 }
