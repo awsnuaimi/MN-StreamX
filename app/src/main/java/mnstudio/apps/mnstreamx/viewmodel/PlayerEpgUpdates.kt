@@ -16,6 +16,7 @@ internal fun observePlayerEpg(
     channel: Channel?,
     settings: AppSettings,
     repository: LiveEpgRepository,
+    uiTickMillis: Long = 15_000L,
     clock: () -> Long = System::currentTimeMillis
 ): Flow<PlayerEpgUiState> = flow {
     if (channel == null) { emit(PlayerEpgUiState()); return@flow }
@@ -46,6 +47,6 @@ internal fun observePlayerEpg(
         }
         emit(PlayerEpgUiState(channelId = channel.id, schedule = schedule,
             nowMillis = clock(), errorMessage = message))
-        delay(15_000)
+        delay(uiTickMillis.coerceIn(5_000L, 60_000L))
     }
 }

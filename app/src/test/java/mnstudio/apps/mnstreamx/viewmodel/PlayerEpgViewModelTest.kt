@@ -128,6 +128,25 @@ class PlayerEpgViewModelTest {
         assertEquals("a", state.channelId)
     }
 
+    @Test fun cardGuideTickerCanBeSlowerWithoutChangingTheActivePlayerDefault() = runTest(dispatcher) {
+        val updates = mutableListOf<Long>()
+        var calls = 0
+        backgroundScope.launch {
+            observePlayerEpg(a, AppSettings(), fake { _, _ ->
+                calls++
+                EpgSchedule(listOf(Program("Schedule", epoch, epoch + 120_000)))
+            }, uiTickMillis = 30_000L) { epoch + testScheduler.currentTime }
+                .collect { updates += it.nowMillis }
+        }
+        runCurrent();advanceTimeBy(351);runCurrent()
+        val before = updates.size
+        advanceTimeBy(15_000);runCurrent()
+        assertEquals(before, updates.size)
+        advanceTimeBy(15_001);runCurrent()
+        assertEquals(before + 1, updates.size)
+        assertEquals(1, calls)
+    }
+
     @Test fun unsupportedChannelsStopPollingUntilTheSelectionChanges() = runTest(dispatcher) {
         var calls = 0
         var state = PlayerEpgUiState()

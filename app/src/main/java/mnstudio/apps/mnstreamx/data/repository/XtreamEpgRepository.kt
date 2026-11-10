@@ -24,11 +24,16 @@ internal class XtreamEpgRepository(
     private val now: () -> Long = System::currentTimeMillis,
     private val io: CoroutineDispatcher = Dispatchers.IO
 ) : LiveEpgRepository {
-    private val mutex = Mutex()
+    // Bounded lock striping keeps requests for the same channel/cache key atomic,
+    // without serializing unrelated EPG network calls behind a single slow server.
+    // Fixed size avoids accumulating one Mutex per channel in large IPTV catalogs.
+    private val cacheLocks = Array(16) { Mutex() }
+
+    private fun lockFor(key: String): Mutex = cacheLocks[(key.hashCode() and Int.MAX_VALUE) % cacheLocks.size]
 
     override suspend fun load(channel: Channel, settings: AppSettings): EpgSchedule? = withContext(io) {
         val request = XtreamEpgRequest.create(channel, settings) ?: return@withContext null
-        mutex.withLock {
+        lockFor(request.cacheKey).withLock {
             coroutineContext.ensureActive()
             val saved = cache.read(request.cacheKey, now())
             if (saved?.isFresh(now()) == true) return@withLock EpgSchedule(saved.programs)

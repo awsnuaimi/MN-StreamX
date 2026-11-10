@@ -1,6 +1,7 @@
 package mnstudio.apps.mnstreamx.data.repository
 
 import mnstudio.apps.mnstreamx.data.source.epg.XtreamEpgCache
+import mnstudio.apps.mnstreamx.data.source.xtream.XtreamEpgRequest
 import mnstudio.apps.mnstreamx.data.source.xtream.XtreamUrls
 import mnstudio.apps.mnstreamx.domain.model.AppSettings
 import mnstudio.apps.mnstreamx.domain.model.Channel
@@ -122,8 +123,61 @@ class XtreamEpgRepositoryTest {
         assertFalse(loaded.isStale)
     }
 
-    private fun channel(settings: AppSettings): Channel {
+    @Test fun unrelatedChannelsCanFetchInParallelWithoutSerializingThePlayer() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val firstChannel = channel(account, "123")
+        val firstLock = lockStripe(firstChannel)
+        val secondChannel = (124..300).asSequence().map { channel(account, it.toString()) }
+            .first { lockStripe(it) != firstLock }
+        val entered = mutableListOf<String>()
+        val release = CompletableDeferred<Unit>()
+        val repository = XtreamEpgRepository(XtreamEpgCache(temporary.newFolder()), { url ->
+            entered += url.queryParameter("stream_id").orEmpty()
+            release.await()
+            programs
+        }, { start }, dispatcher)
+        val first = async { repository.load(firstChannel, account) }
+        val second = async { repository.load(secondChannel, account) }
+        runCurrent()
+        try {
+            assertEquals(2, entered.size)
+            assertTrue("123" in entered)
+            assertEquals(2, entered.toSet().size)
+        } finally { release.complete(Unit) }
+        assertEquals(programs, first.await()?.programs)
+        assertEquals(programs, second.await()?.programs)
+    }
+
+    @Test fun requestsForTheSameChannelStillShareOneCacheWriteAndFetch() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var calls = 0
+        val repository = XtreamEpgRepository(XtreamEpgCache(temporary.newFolder()), {
+            calls++
+            started.complete(Unit)
+            release.await()
+            programs
+        }, { start }, dispatcher)
+        val first = async { repository.load(channel(account), account) }
+        runCurrent()
+        assertTrue(started.isCompleted)
+        val second = async { repository.load(channel(account), account) }
+        runCurrent()
+        assertEquals(1, calls)
+        release.complete(Unit)
+        assertEquals(programs, first.await()?.programs)
+        assertEquals(programs, second.await()?.programs)
+        assertEquals(1, calls)
+    }
+
+    private fun lockStripe(channel: Channel): Int {
+        val key = requireNotNull(XtreamEpgRequest.create(channel, account)).cacheKey
+        return (key.hashCode() and Int.MAX_VALUE) % 16
+    }
+
+    private fun channel(settings: AppSettings, id: String = "123"): Channel {
         val urls = XtreamUrls(settings.xtreamServer, settings.xtreamUsername, settings.xtreamPassword)
-        return Channel(urls.channelId("123"), "News", streamUrl = urls.stream("123", "ts"))
+        return Channel(urls.channelId(id), "News", streamUrl = urls.stream(id, "ts"))
     }
 }

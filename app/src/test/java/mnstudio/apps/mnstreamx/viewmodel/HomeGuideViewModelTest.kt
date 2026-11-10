@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModelStore
 import mnstudio.apps.mnstreamx.domain.model.*
 import mnstudio.apps.mnstreamx.domain.parental.*
 import mnstudio.apps.mnstreamx.domain.profile.ProfileScope
+import mnstudio.apps.mnstreamx.ui.state.HomeGuideState
 import mnstudio.apps.mnstreamx.domain.repository.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -122,6 +123,34 @@ class HomeGuideViewModelTest {
         assertEquals(2, maximum)
         vm.bind((100 until 120).map(::channel));runCurrent();advanceTimeBy(1_000);runCurrent()
         assertEquals((100 until 108).map(Int::toString), calls.filter { it.toInt() >= 100 })
+    }
+
+    @Test fun channelsSharingAnIdButNotAStreamHaveIndependentGuideCards() = runTest(dispatcher) {
+        val first = channel(3)
+        val variant = first.copy(streamUrl = "https://synthetic.invalid/variant")
+        val vm = model(fake { row, _ ->
+            EpgSchedule(listOf(Program(row.streamUrl, 0, Long.MAX_VALUE)))
+        })
+        backgroundScope.launch { vm.uiState.collect() }
+        vm.bind(listOf(first, variant))
+        runCurrent();advanceTimeBy(351);runCurrent()
+        val guide = vm.uiState.value
+        assertEquals(2, guide.entries.size)
+        val owner = ProfileScope.of(settings.state.value)
+        assertEquals(first.streamUrl, guide.forChannel(first, owner, access.state.value.epoch)
+            .schedule.programs.single().title)
+        assertEquals(variant.streamUrl, guide.forChannel(variant, owner, access.state.value.epoch)
+            .schedule.programs.single().title)
+    }
+
+    @Test fun synchronousGuideUpdatesAreCoalescedIntoFewerSnapshots() = runTest(dispatcher) {
+        val emissions = mutableListOf<HomeGuideState>()
+        val vm = model(fake { _, _ -> EpgSchedule(emptyList()) })
+        backgroundScope.launch { vm.uiState.collect { emissions += it } }
+        vm.bind((0 until 20).map(::channel), HomeGuideViewModel.MAX_BROWSER_CHANNELS)
+        runCurrent();advanceTimeBy(351);runCurrent()
+        assertEquals(20, vm.uiState.value.entries.size)
+        assertTrue("Too many EPG UI snapshots: ${emissions.size}", emissions.size < 25)
     }
 
     @Test fun clearingTheBrowserWindowCancelsRequestsEvenWhileTheHostStillCollects() = runTest(dispatcher) {

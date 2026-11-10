@@ -40,8 +40,19 @@ class HomeGuideViewModel @Inject constructor(settings: SettingsRepository, repos
         channelFlow {
             send(HomeGuideState(owner, access.epoch))
             if (allowed.isEmpty()) return@channelFlow
-            val rows = linkedMapOf<String, HomeProgramUiState>()
+            val rows = linkedMapOf<Pair<String, String>, HomeProgramUiState>()
             val lock = Mutex()
+            // Conflate simultaneous card updates into one immutable UI snapshot.
+            // Otherwise a 40-channel EPG window can rebuild its rows 40 times
+            // on the same clock tick even when every schedule is unchanged.
+            val changes = CoroutineChannel<Unit>(CoroutineChannel.CONFLATED)
+            launch {
+                for (signal in changes) {
+                    yield() // let the other ready card collectors finish this burst
+                    val snapshot = lock.withLock { rows.values.toList() }
+                    send(HomeGuideState(owner, access.epoch, snapshot))
+                }
+            }
             val limited = object : LiveEpgRepository {
                 override suspend fun load(channel: Channel, settings: AppSettings): EpgSchedule? = permits.withPermit {
                     val before = parental.state.value
@@ -53,13 +64,16 @@ class HomeGuideViewModel @Inject constructor(settings: SettingsRepository, repos
                 }
             }
             allowed.forEach { channel -> launch {
-                observePlayerEpg(channel, request.account, limited).collect { guide ->
+                // 30 seconds is sufficient for small guide-card progress bars.
+                // The active player retains its faster 15-second ticker.
+                observePlayerEpg(channel, request.account, limited, uiTickMillis = 30_000L).collect { guide ->
                     val now = parental.state.value
                     if (now.epoch != access.epoch || now.profileId != request.account.profileId || !now.allows(source, channel)) return@collect
                     lock.withLock {
-                        rows[channel.id] = HomeProgramUiState(channel.id, channel.streamUrl, guide.schedule, guide.nowMillis)
-                        trySend(HomeGuideState(owner, access.epoch, rows.values.toList()))
+                        rows[channel.id to channel.streamUrl] = HomeProgramUiState(
+                            channel.id, channel.streamUrl, guide.schedule, guide.nowMillis)
                     }
+                    changes.trySend(Unit)
                 }
             } }
         }.buffer(CoroutineChannel.CONFLATED)
