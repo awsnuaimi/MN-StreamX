@@ -7,6 +7,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DiagnosticReportTest {
+    @Test fun includesOnlyNumericLivePlaybackHealthWithoutStreamIdentifiers() {
+        val live = mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthSummary(
+            durationMs = 900_000, firstFrameMs = 2_500, bufferingEvents = 3, bufferingMs = 17_000,
+            longestBufferMs = 9_000, recoveryAttempts = 2, playerErrors = 1, finished = true)
+        val report = DiagnosticReport.build(diagnosticSnapshot().copy(liveHealth = listOf(live)),
+            DiagnosticSource.XTREAM, null, emptyList(), emptyList(), HomeLanguage.GERMAN)
+        assertTrue(report.contains("Live-TV-Wiedergabezustand"))
+        assertTrue(report.contains("firstFrame=2500 ms"))
+        assertTrue(report.contains("maxBuffer=9000 ms"))
+        assertTrue(report.contains("retries=2"))
+    }
     @Test fun reportsWhitelistDataInsteadOfAttemptingToMaskArbitraryExceptionOrProviderText() {
         val secrets = listOf("private-user-42","secret-password-99","private-host.invalid","token-X9Y8Z7","AA:BB:CC:DD:EE:FF")
         val malicious = diagnosticSnapshot().copy(version = "https://${secrets[2]}/${secrets[0]}/${secrets[1]}",abis = secrets + "arm64-v8a")

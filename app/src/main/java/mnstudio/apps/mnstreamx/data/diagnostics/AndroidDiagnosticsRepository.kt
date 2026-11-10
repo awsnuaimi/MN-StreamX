@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mnstudio.apps.mnstreamx.domain.performance.PerformanceJournal
+import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthJournal
 import mnstudio.apps.mnstreamx.data.image.ImageDiagnostics
 
 internal class AndroidDiagnosticsRepository(context: Context) : DiagnosticsRepository {
@@ -19,13 +20,15 @@ internal class AndroidDiagnosticsRepository(context: Context) : DiagnosticsRepos
         .connectTimeout(6,TimeUnit.SECONDS).readTimeout(8,TimeUnit.SECONDS).callTimeout(10,TimeUnit.SECONDS).build()))
     private val reports = DiagnosticReports(File(context.applicationContext.cacheDir,"diagnostic-reports"))
     override suspend fun snapshot() = withContext(Dispatchers.IO) {
-        environment.read().copy(performance = PerformanceJournal.snapshot(), images = ImageDiagnostics.read(app))
+        environment.read().copy(performance = PerformanceJournal.snapshot(), images = ImageDiagnostics.read(app),
+            liveHealth = LivePlaybackHealthJournal.snapshot())
     }
     override fun sourceKind(source: AppSettings) = probe.kind(source)
     override suspend fun probe(source: AppSettings,onCheck: (DiagnosticCheck) -> Unit) = probe.run(source,onCheck)
     override suspend fun export(snapshot: DiagnosticSnapshot, source: DiagnosticSource, sourceKey: String?,
         checks: List<DiagnosticCheck>, events: List<DiagnosticEvent>, language: HomeLanguage) = withContext(Dispatchers.IO) {
         reports.write(DiagnosticReport.build(snapshot.copy(performance = PerformanceJournal.snapshot(),
-            images = ImageDiagnostics.read(app)),source,sourceKey,checks,events,language))
+            images = ImageDiagnostics.read(app), liveHealth = LivePlaybackHealthJournal.snapshot()),
+            source,sourceKey,checks,events,language))
     }
 }

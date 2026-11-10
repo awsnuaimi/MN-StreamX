@@ -26,5 +26,6 @@ data class DiagnosticSnapshot(
     val lowMemory: Boolean?, val heapUsed: Long, val heapLimit: Long,
     val diskAvailable: Long?, val diskTotal: Long?, val codecs: Set<DiagnosticCodec>?,
     val performance: List<mnstudio.apps.mnstreamx.domain.performance.PerformanceSummary> = emptyList(),
-    val images: mnstudio.apps.mnstreamx.domain.image.ImageDiagnosticsSnapshot? = null
+    val images: mnstudio.apps.mnstreamx.domain.image.ImageDiagnosticsSnapshot? = null,
+    val liveHealth: List<mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthSummary> = emptyList()
 )

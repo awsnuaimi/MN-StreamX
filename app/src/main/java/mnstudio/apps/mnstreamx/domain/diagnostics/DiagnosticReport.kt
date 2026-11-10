@@ -25,6 +25,24 @@ object DiagnosticReport {
                 appendLine(PerformanceReport.title(language));appendLine(PerformanceReport.note(language))
                 PerformanceReport.rows(snapshot.performance).forEach { appendLine(it) };appendLine()
             }
+            if (snapshot.liveHealth.isNotEmpty()) {
+                appendLine(text.text("صحة تشغيل Live TV (آخر 8 جلسات)",
+                    "Live TV playback health (last 8 selections)",
+                    "Live-TV-Wiedergabezustand (letzte 8 Auswahlen)"))
+                appendLine(text.text("قياسات جلسة التطبيق فقط؛ ليست دليلًا على سبب انقطاع البث.",
+                    "Process-local measurements; not proof of a stream outage cause.",
+                    "Messwerte dieser App-Sitzung; keine Aussage zur Ursache eines Streamausfalls."))
+                snapshot.liveHealth.take(8).forEachIndexed { index, item ->
+                    val firstFrame = item.firstFrameMs?.coerceIn(0, 604_800_000)?.toString() ?: "-"
+                    appendLine("#${index + 1} | duration=${item.durationMs.coerceIn(0, 604_800_000)} ms" +
+                        " | firstFrame=$firstFrame ms | buffers=${item.bufferingEvents.coerceIn(0, 1_000_000)}" +
+                        " | buffered=${item.bufferingMs.coerceIn(0, 604_800_000)} ms" +
+                        " | maxBuffer=${item.longestBufferMs.coerceIn(0, 604_800_000)} ms" +
+                        " | retries=${item.recoveryAttempts.coerceIn(0, 1_000_000)}" +
+                        " | errors=${item.playerErrors.coerceIn(0, 1_000_000)} | finished=${item.finished}")
+                }
+                appendLine()
+            }
             val captionMeasurements = CaptionDiagnosticJournal.snapshot()
             if (captionMeasurements.isNotEmpty()) {
                 appendLine("Caption diagnostics / Spracherkennungsdiagnose (current session)")

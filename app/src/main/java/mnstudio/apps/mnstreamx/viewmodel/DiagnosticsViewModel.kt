@@ -123,5 +123,8 @@ class DiagnosticsViewModel @Inject constructor(private val settings: SettingsRep
     }
     fun consumeShare() { mutable.update { it.copy(shareFile = null) } }
     fun shareFailed() { mutable.update { it.copy(shareFailure = true,shareFile = null) } }
-    fun clearEvents() { DiagnosticJournal.clear() }
+    fun clearEvents() {
+        DiagnosticJournal.clear()
+        mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthJournal.clear()
+    }
 }

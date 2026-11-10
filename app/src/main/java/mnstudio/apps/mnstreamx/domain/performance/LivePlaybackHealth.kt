@@ -1,0 +1,114 @@
+package mnstudio.apps.mnstreamx.domain.performance
+
+import java.util.ArrayDeque
+
+/** Non-identifying, process-local live TV telemetry. No URLs or channel IDs are retained. */
+data class LivePlaybackHealthSummary(
+    val durationMs: Long,
+    val firstFrameMs: Long?,
+    val bufferingEvents: Int,
+    val bufferingMs: Long,
+    val longestBufferMs: Long,
+    val recoveryAttempts: Int,
+    val playerErrors: Int,
+    val finished: Boolean
+)
+
+/** Tracks one selected channel across its automatic reconnect attempts. No timers or jobs. */
+internal class LivePlaybackHealthSession(
+    private val nowMs: () -> Long,
+    private val startedAt: Long = nowMs()
+) {
+    private var endedAt: Long? = null
+    private var firstFrameAt: Long? = null
+    private var bufferingSince: Long? = null
+    private var bufferingEvents = 0
+    private var bufferingMs = 0L
+    private var longestBufferMs = 0L
+    private var recoveryAttempts = 0
+    private var playerErrors = 0
+
+    @Synchronized fun buffering() {
+        if (endedAt != null || bufferingSince != null) return
+        bufferingSince = nowMs()
+        if (bufferingEvents < Int.MAX_VALUE) bufferingEvents++
+    }
+
+    @Synchronized fun bufferEnded() {
+        if (endedAt != null) return
+        closeBuffer(nowMs())
+    }
+
+    @Synchronized fun firstFrame() {
+        if (endedAt != null || firstFrameAt != null) return
+        firstFrameAt = nowMs()
+    }
+
+    @Synchronized fun retry() {
+        if (endedAt == null && recoveryAttempts < Int.MAX_VALUE) recoveryAttempts++
+    }
+
+    @Synchronized fun error() {
+        if (endedAt != null) return
+        if (playerErrors < Int.MAX_VALUE) playerErrors++
+        closeBuffer(nowMs())
+    }
+
+    @Synchronized fun finish() {
+        if (endedAt != null) return
+        val at = nowMs()
+        closeBuffer(at)
+        endedAt = at
+    }
+
+    @Synchronized fun snapshot(): LivePlaybackHealthSummary {
+        val end = endedAt ?: nowMs()
+        val pending = bufferingSince?.let { elapsed(it, end) } ?: 0L
+        return LivePlaybackHealthSummary(
+            durationMs = elapsed(startedAt, end),
+            firstFrameMs = firstFrameAt?.let { elapsed(startedAt, it) },
+            bufferingEvents = bufferingEvents,
+            bufferingMs = (bufferingMs + pending).coerceAtMost(MAX_DURATION_MS),
+            longestBufferMs = maxOf(longestBufferMs, pending),
+            recoveryAttempts = recoveryAttempts,
+            playerErrors = playerErrors,
+            finished = endedAt != null
+        )
+    }
+
+    private fun closeBuffer(at: Long) {
+        val start = bufferingSince ?: return
+        val duration = elapsed(start, at)
+        bufferingMs = (bufferingMs + duration).coerceAtMost(MAX_DURATION_MS)
+        longestBufferMs = maxOf(longestBufferMs, duration)
+        bufferingSince = null
+    }
+
+    private fun elapsed(start: Long, end: Long) = (end - start).coerceIn(0L, MAX_DURATION_MS)
+
+    companion object { const val MAX_DURATION_MS = 7L * 24 * 60 * 60 * 1000 }
+}
+
+/** Fixed eight-session window; playback callbacks only update primitive counters. */
+internal class LivePlaybackHealthRecorder(private val nowMs: () -> Long = { System.nanoTime() / 1_000_000 }) {
+    private val sessions = ArrayDeque<LivePlaybackHealthSession>()
+
+    @Synchronized fun begin(): LivePlaybackHealthSession {
+        val session = LivePlaybackHealthSession(nowMs)
+        sessions.addFirst(session)
+        while (sessions.size > LIMIT) sessions.removeLast()
+        return session
+    }
+
+    @Synchronized fun snapshot(): List<LivePlaybackHealthSummary> = sessions.map { it.snapshot() }
+    @Synchronized fun clear() = sessions.clear()
+
+    companion object { const val LIMIT = 8 }
+}
+
+internal object LivePlaybackHealthJournal {
+    private val recorder = LivePlaybackHealthRecorder()
+    fun begin() = recorder.begin()
+    fun snapshot(): List<LivePlaybackHealthSummary> = recorder.snapshot()
+    fun clear() = recorder.clear()
+}

@@ -14,6 +14,8 @@ import mnstudio.apps.mnstreamx.player.controller.PlayerController
 import mnstudio.apps.mnstreamx.player.recovery.*
 import mnstudio.apps.mnstreamx.util.LoadTimings
 import mnstudio.apps.mnstreamx.domain.performance.PerformanceOutcome
+import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthJournal
+import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -43,6 +45,7 @@ internal class PlayerPlaybackSession(
     private var savedPosition = 0L
     private var wasLive = true
     private var shouldPlay = true
+    private var health: LivePlaybackHealthSession? = null
     private val recovery = LiveRecoveryController(scope,
         onState = { state ->
             if (state.phase == LiveRecoveryPhase.WAITING_NETWORK || state.phase == LiveRecoveryPhase.EXHAUSTED)
@@ -76,6 +79,7 @@ internal class PlayerPlaybackSession(
     fun selectChannel(selected: Channel, retry: Int) {
         if (selected.id == channel.id && selected.streamUrl == channel.streamUrl && retry == retryToken) return
         recovery.close()
+        health?.finish(); health = null
         channel = selected; retryToken = retry
         savedPosition = 0L; wasLive = true; shouldPlay = true
         recovery.reset()
@@ -87,6 +91,7 @@ internal class PlayerPlaybackSession(
     private fun retrySelection() {
         if (!started) return
         if (player?.playWhenReady != true) { recovery.paused(); return }
+        health?.retry()
         playSelection(resume = false, automatic = true)
     }
 
@@ -107,6 +112,7 @@ internal class PlayerPlaybackSession(
 
     private fun playSelection(resume: Boolean, automatic: Boolean = false) {
         val created = player ?: return
+        if (health == null) health = LivePlaybackHealthJournal.begin()
         listener?.let(created::removeListener)
         val selected = channel
         val request = ++generation
@@ -119,12 +125,15 @@ internal class PlayerPlaybackSession(
             override fun onRenderedFirstFrame() {
                 if (!isCurrent() || firstFrameRecorded) return
                 firstFrameRecorded = true
+                health?.firstFrame()
                 LoadTimings.recordSince(LoadTimings.Stage.FIRST_FRAME, startedAt)
                 onStarted(selected, mediaId)
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (!isCurrent()) return
                 onBuffering(selected, playbackState == Player.STATE_BUFFERING)
+                if (playbackState == Player.STATE_BUFFERING && created.playWhenReady) health?.buffering()
+                else health?.bufferEnded()
                 if (playbackState == Player.STATE_READY) { recovery.ready(); onError(selected, null) }
                 else if (playbackState == Player.STATE_BUFFERING && created.playWhenReady) recovery.buffering()
             }
@@ -132,7 +141,13 @@ internal class PlayerPlaybackSession(
                 if (isCurrent()) recovery.playing(isPlaying)
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (isCurrent() && !playWhenReady) recovery.paused()
+                if (!isCurrent()) return
+                if (!playWhenReady) {
+                    health?.bufferEnded()
+                    recovery.paused()
+                } else if (created.playbackState == Player.STATE_BUFFERING) {
+                    health?.buffering()
+                }
             }
             override fun onPlayerError(error: PlaybackException) {
                 if (isCurrent()) failed(error)
@@ -140,6 +155,7 @@ internal class PlayerPlaybackSession(
         }.also(created::addListener)
         if (!automatic) onError(selected, null)
         onBuffering(selected, true)
+        if (!resume || shouldPlay) health?.buffering()
         try {
             controller.playUrl(selected.streamUrl, mediaId, selected.name)
             if (resume && !wasLive && savedPosition > 0L) created.seekTo(savedPosition)
@@ -155,6 +171,7 @@ internal class PlayerPlaybackSession(
         val created = player ?: return
         if (!started) return
         val wantsPlayback = created.playWhenReady
+        health?.error()
         retireAttempt(PerformanceOutcome.FAILED)
         mnstudio.apps.mnstreamx.player.PlaybackDiagnostics.record(error)
         onBuffering(channel, false)
@@ -172,6 +189,7 @@ internal class PlayerPlaybackSession(
     }
 
     fun stop() {
+        health?.finish(); health = null
         started = false; generation++
         networkJob?.cancel(); networkJob = null
         recovery.close()
