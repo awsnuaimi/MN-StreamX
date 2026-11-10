@@ -167,13 +167,31 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     }
     LaunchedEffect(menuKey, manage) { if (menuKey != null || manage) numeric.clear() }
     var detailsFocused by remember { mutableStateOf(false) }
-    var observedInput by remember { mutableStateOf(input) }
-    val returnToList = observedInput !== input && navigation.ownsFocus && displayed == null
-    SideEffect {
-        observedInput = input
-        if (returnToList) { navigation.enter(predictedEntry); entry.requestFocus() }
+    // A remote Back can arrive before Compose has dispatched the detail focus event.
+    // Keep the entry intent until the focus owner has actually changed.
+    var detailEntryPending by remember { mutableStateOf(false) }
+    fun focusList() {
+        detailEntryPending = false
+        entry.requestFocus()
+        // A parent FocusRequester alone does not reliably restore a LazyColumn child.
+        // The navigation consumer scrolls the keyed row into view before requesting focus.
+        if (displayed != null && rows.isNotEmpty()) {
+            navigation.request(active?.key, fast = true)
+        } else {
+            navigation.cancel()
+        }
     }
-    BackHandler(detailsFocused && rows.isNotEmpty()) { entry.requestFocus() }
+    var observedInput by remember { mutableStateOf(input) }
+    val returnToList = observedInput !== input && displayed == null &&
+        (navigation.ownsFocus || detailsFocused || detailEntryPending)
+    SideEffect { observedInput = input }
+    LaunchedEffect(input) {
+        if (returnToList) {
+            withFrameNanos { }
+            focusList()
+        }
+    }
+    BackHandler((detailsFocused || detailEntryPending) && rows.isNotEmpty()) { focusList() }
     val program: (Channel) -> ChannelProgramInfo = { ChannelProgramInfo.from(it, guides.forChannel(it, state.browseScope, accessEpoch)) }
     val translated = HomeChannelPresentation.kind(captions) == HomeTranslationKind.GENERATED
     val request by rememberUpdatedState(onGuideChannels)
@@ -209,8 +227,14 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
             val detail = maxWidth >= 680.dp && LocalDensity.current.fontScale <= 1.6f
             val detailAvailable = detail && active != null && channel != null
             var previousDetail by remember { mutableStateOf(detailAvailable) }
-            val restoreDetail = previousDetail && !detailAvailable && detailsFocused
-            SideEffect { previousDetail = detailAvailable; if (restoreDetail) entry.requestFocus() }
+            val restoreDetail = previousDetail && !detailAvailable && (detailsFocused || detailEntryPending)
+            SideEffect { previousDetail = detailAvailable }
+            LaunchedEffect(detailAvailable) {
+                if (restoreDetail) {
+                    withFrameNanos { }
+                    focusList()
+                }
+            }
             CompositionLocalProvider(LocalLayoutDirection provides if (appearance.sidebarOnRight) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     CompositionLocalProvider(LocalLayoutDirection provides contentDirection) {
@@ -229,7 +253,10 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
                                 categories, watch, detailAvailable, Modifier.fillMaxSize(), appearance.showChannelLogos,
                                 navigation, sidebarFocus, ready = displayed != null, preferredQualities = preferences.value.preferredQualities, index = rowIndex,
                                 sidebarOnRight = appearance.sidebarOnRight, emptyEntry = emptyFocus.takeIf { fallbackReady },
-                                onEnterDetails = { detailMemory.restoreOrRequestFocus(watch) }, entryKey = predictedEntry)
+                                onEnterDetails = {
+                                    detailEntryPending = true
+                                    detailMemory.restoreOrRequestFocus(watch)
+                                }, entryKey = predictedEntry)
                             if (fallbackKind != "none") key(input, fallbackKind) {
                                 LiveTvEmptyFocus(fallbackKind, labels, colors, emptyFocus, categories, sidebarFocus, appearance.sidebarOnRight,
                                     { fallbackReady = it }, onPreferencesRetry, { onQuery(""); onGroup(null) }, Modifier.align(Alignment.Center))
@@ -240,7 +267,10 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
                         if (detail && active != null && channel != null) LiveTvDetail(active, channel, program(channel),
                             guides.forChannel(channel, state.browseScope, accessEpoch).nowMillis, colors, labels, translated,
                             captions.settings.target.tag.uppercase(Locale.ROOT), watch, entry, { watchChannel(channel) },
-                            { onTranslate(channel) }, Modifier.weight(1f).fillMaxHeight().onFocusChanged { detailsFocused = it.isFocused },
+                            { onTranslate(channel) }, Modifier.weight(1f).fillMaxHeight().onFocusChanged {
+                                detailsFocused = it.hasFocus
+                                if (it.hasFocus) detailEntryPending = false
+                            },
                             sidebarOnRight = appearance.sidebarOnRight, above = categories, groupEntry = detailMemory)
                     }
                 }

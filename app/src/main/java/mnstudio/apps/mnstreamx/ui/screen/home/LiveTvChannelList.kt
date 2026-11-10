@@ -105,9 +105,21 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
                 }
                 snapshotFlow { list.layoutInfo.visibleItemsInfo.any { it.index == targetIndex } && mounted[rows[targetIndex].key] != null }.first { it }
                 if (!navigation.current(request.revision)) return@collectLatest
-                mounted[rows[targetIndex].key]?.requestFocus()
-                snapshotFlow { focusedKey == rows[targetIndex].key }.first { it }
+                val targetKey = rows[targetIndex].key
+                // Attaching a LazyColumn item does not guarantee that its focus target is
+                // already placed. Retry over a few frames instead of waiting forever for
+                // an onFocusChanged event that never comes.
+                repeat(8) {
+                    if (focusedKey != targetKey && navigation.current(request.revision)) {
+                        mounted[targetKey]?.requestFocus()
+                        withFrameNanos { }
+                    }
+                }
                 if (!navigation.current(request.revision)) return@collectLatest
+                if (focusedKey != targetKey) {
+                    navigation.finish(request.revision, PerformanceOutcome.FAILED)
+                    return@collectLatest
+                }
                 if (rows[targetIndex].variants.any { it.id == preferred }) restoredId = preferred
                 request.token?.let(restoredCallback)
                 navigation.finish(request.revision)
