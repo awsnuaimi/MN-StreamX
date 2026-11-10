@@ -36,7 +36,14 @@ internal fun PlayerTechnicalInfoObserver(player: ExoPlayer?, channelId: String,
             if (emissions.accept(info)) report(channelId, info)
         }
         val listener = object : Player.Listener {
-            override fun onEvents(player: Player, events: Player.Events) { publish() }
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) ||
+                    events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
+                    events.contains(Player.EVENT_VIDEO_SIZE_CHANGED) ||
+                    events.contains(Player.EVENT_TRACKS_CHANGED)) {
+                    publish()
+                }
+            }
         }
         val subscription = player?.let { current ->
             PlayerInfoLifecycleSubscription(lifecycle,
@@ -48,6 +55,10 @@ internal fun PlayerTechnicalInfoObserver(player: ExoPlayer?, channelId: String,
     }
 }
 
+/**
+ * Owns exactly one listener connection while its screen is STARTED.
+ * A STOP/START round-trip must reconnect, but disposal is terminal.
+ */
 internal class PlayerInfoLifecycleSubscription(
     private val lifecycle: Lifecycle,
     private val connect: () -> Unit,
@@ -56,18 +67,31 @@ internal class PlayerInfoLifecycleSubscription(
     private var connected = false
     private var closed = false
     private val observer = LifecycleEventObserver { _, event ->
-        if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_DESTROY) detach()
-    }
-    init {
-        lifecycle.addObserver(observer)
-        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-            connected = true
-            connect()
+        when (event) {
+            Lifecycle.Event.ON_START -> attach()
+            Lifecycle.Event.ON_STOP, Lifecycle.Event.ON_DESTROY -> detach()
+            else -> Unit
         }
     }
-    private fun detach() {
-        if (connected) { connected = false; disconnect() }
+
+    init {
+        lifecycle.addObserver(observer)
+        // addObserver may synchronously deliver ON_START; attach() is idempotent.
+        attach()
     }
+
+    private fun attach() {
+        if (closed || connected || !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
+        connect()
+        connected = true
+    }
+
+    private fun detach() {
+        if (!connected) return
+        connected = false
+        disconnect()
+    }
+
     fun close() {
         if (closed) return
         closed = true

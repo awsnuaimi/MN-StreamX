@@ -12,7 +12,7 @@ class PlayerInfoLifecycleSubscriptionTest {
         override val lifecycle: Lifecycle get() = registry
     }
 
-    @Test fun stoppingTheScreenDetachesAndNeverReattachesAReleasedPlayer() {
+    @Test fun stopAndStartReconnectsExactlyOnceWithoutDuplicatingListeners() {
         val owner = Owner()
         owner.registry.currentState = Lifecycle.State.STARTED
         var attached = 0
@@ -22,31 +22,55 @@ class PlayerInfoLifecycleSubscriptionTest {
         owner.registry.currentState = Lifecycle.State.CREATED
         assertEquals(1, detached)
         owner.registry.currentState = Lifecycle.State.STARTED
-        assertEquals(1, attached)
+        assertEquals(2, attached)
+        owner.registry.currentState = Lifecycle.State.RESUMED
+        assertEquals(2, attached)
+        owner.registry.currentState = Lifecycle.State.CREATED
+        assertEquals(2, detached)
         subscription.close()
-        assertEquals(1, detached)
+        assertEquals(2, detached)
     }
 
     @Test fun disposalBeforeStopDetachesExactlyOnceAndRemovesTheObserver() {
         val owner = Owner()
         owner.registry.currentState = Lifecycle.State.STARTED
+        var attached = 0
         var detached = 0
-        val subscription = PlayerInfoLifecycleSubscription(owner.lifecycle, {}, { detached++ })
-        subscription.close(); subscription.close()
-        owner.registry.currentState = Lifecycle.State.DESTROYED
+        val subscription = PlayerInfoLifecycleSubscription(owner.lifecycle, { attached++ }, { detached++ })
+        subscription.close()
+        subscription.close()
+        owner.registry.currentState = Lifecycle.State.CREATED
+        owner.registry.currentState = Lifecycle.State.STARTED
+        assertEquals(1, attached)
         assertEquals(1, detached)
         assertEquals(0, owner.registry.observerCount)
     }
 
-    @Test fun stoppedScreensDoNotSubscribeToAnOldPlayer() {
+    @Test fun stoppedScreenConnectsOnlyAfterStartAndDisconnectsOnStop() {
         val owner = Owner()
         owner.registry.currentState = Lifecycle.State.CREATED
         var attached = 0
         var detached = 0
         val subscription = PlayerInfoLifecycleSubscription(owner.lifecycle, { attached++ }, { detached++ })
-        owner.registry.currentState = Lifecycle.State.STARTED
-        subscription.close()
         assertEquals(0, attached)
-        assertEquals(0, detached)
+        owner.registry.currentState = Lifecycle.State.STARTED
+        assertEquals(1, attached)
+        owner.registry.currentState = Lifecycle.State.CREATED
+        assertEquals(1, detached)
+        subscription.close()
+        assertEquals(1, detached)
+    }
+
+    @Test fun destroyedScreenDoesNotReconnectOrRetainAnObserver() {
+        val owner = Owner()
+        owner.registry.currentState = Lifecycle.State.STARTED
+        var attached = 0
+        var detached = 0
+        val subscription = PlayerInfoLifecycleSubscription(owner.lifecycle, { attached++ }, { detached++ })
+        owner.registry.currentState = Lifecycle.State.DESTROYED
+        assertEquals(1, attached)
+        assertEquals(1, detached)
+        subscription.close()
+        assertEquals(0, owner.registry.observerCount)
     }
 }
