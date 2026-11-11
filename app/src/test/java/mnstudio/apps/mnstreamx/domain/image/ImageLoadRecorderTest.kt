@@ -57,6 +57,23 @@ class ImageLoadRecorderTest {
         assertEquals(0, recorder.snapshot().capped)
     }
 
+    @Test fun failureCategoriesAreBoundedAndDoNotAffectCancellation() {
+        val recorder = ImageLoadRecorder()
+        recorder.begin().finish(ImageLoadResult.FAILED, ImageFailureCategory.TIMEOUT)
+        recorder.begin().finish(ImageLoadResult.FAILED, ImageFailureCategory.HTTP)
+        recorder.begin().finish(ImageLoadResult.FAILED, ImageFailureCategory.DECODE)
+        recorder.begin().finish(ImageLoadResult.FAILED)
+        recorder.begin().finish(ImageLoadResult.CANCELLED, ImageFailureCategory.NETWORK)
+        val snapshot = recorder.snapshot()
+        assertEquals(4L, snapshot.failed)
+        assertEquals(1L, snapshot.cancelled)
+        assertEquals(1L, snapshot.failures.timeout)
+        assertEquals(1L, snapshot.failures.http)
+        assertEquals(1L, snapshot.failures.decode)
+        assertEquals(1L, snapshot.failures.other)
+        assertEquals(0L, snapshot.failures.network)
+    }
+
     @Test fun concurrentImageCompletionCannotLoseCountsOrLeavePhantomPendingRequests() {
         val recorder = ImageLoadRecorder()
         val pool = Executors.newFixedThreadPool(8)

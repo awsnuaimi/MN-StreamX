@@ -117,7 +117,6 @@ internal class PlayerPlaybackSession(
         val selected = channel
         val request = ++generation
         val mediaId = "${selected.id}:$request"
-        val startedAt = System.nanoTime()
         var firstFrameRecorded = false
         fun isCurrent() = started && generation == request && player === created &&
             created.currentMediaItem?.mediaId == mediaId
@@ -125,8 +124,8 @@ internal class PlayerPlaybackSession(
             override fun onRenderedFirstFrame() {
                 if (!isCurrent() || firstFrameRecorded) return
                 firstFrameRecorded = true
-                health?.firstFrame()
-                LoadTimings.recordSince(LoadTimings.Stage.FIRST_FRAME, startedAt)
+                // FIRST_FRAME and the live-health summary now share one selection clock.
+                health?.firstFrame()?.let { LoadTimings.recordMillis(LoadTimings.Stage.FIRST_FRAME, it) }
                 onStarted(selected, mediaId)
             }
             override fun onPlaybackStateChanged(playbackState: Int) {

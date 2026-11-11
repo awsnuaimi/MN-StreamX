@@ -10,13 +10,18 @@ class DiagnosticReportTest {
     @Test fun includesOnlyNumericLivePlaybackHealthWithoutStreamIdentifiers() {
         val live = mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthSummary(
             durationMs = 900_000, firstFrameMs = 2_500, bufferingEvents = 3, bufferingMs = 17_000,
-            longestBufferMs = 9_000, recoveryAttempts = 2, playerErrors = 1, finished = true)
+            longestBufferMs = 9_000, recoveryAttempts = 2, playerErrors = 1, finished = true,
+            startupBufferingEvents = 1, startupBufferingMs = 2_000,
+            rebufferingEvents = 2, rebufferingMs = 15_000, longestRebufferMs = 9_000)
         val report = DiagnosticReport.build(diagnosticSnapshot().copy(liveHealth = listOf(live)),
             DiagnosticSource.XTREAM, null, emptyList(), emptyList(), HomeLanguage.GERMAN)
         assertTrue(report.contains("Live-TV-Wiedergabezustand"))
         assertTrue(report.contains("firstFrame=2500 ms"))
         assertTrue(report.contains("maxBuffer=9000 ms"))
         assertTrue(report.contains("retries=2"))
+        assertTrue(report.contains("startupBuffered=2000 ms"))
+        assertTrue(report.contains("rebuffers=2"))
+        assertTrue(report.contains("rebuffered=15000 ms"))
     }
     @Test fun reportsWhitelistDataInsteadOfAttemptingToMaskArbitraryExceptionOrProviderText() {
         val secrets = listOf("private-user-42","secret-password-99","private-host.invalid","token-X9Y8Z7","AA:BB:CC:DD:EE:FF")

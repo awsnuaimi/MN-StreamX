@@ -37,6 +37,8 @@ internal class ImageMetricListener(recorder: ImageLoadRecorder) : EventListener 
             DataSource.MEMORY -> ImageLoadResult.LOCAL
         })
     }
-    override fun onError(request: ImageRequest, result: ErrorResult) { token.finish(ImageLoadResult.FAILED) }
+    override fun onError(request: ImageRequest, result: ErrorResult) {
+        token.finish(ImageLoadResult.FAILED, ImageFailureClassifier.classify(result.throwable))
+    }
     override fun onCancel(request: ImageRequest) { token.finish(ImageLoadResult.CANCELLED) }
 }

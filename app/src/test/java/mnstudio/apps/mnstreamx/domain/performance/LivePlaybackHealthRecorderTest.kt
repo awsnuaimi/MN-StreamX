@@ -71,6 +71,44 @@ class LivePlaybackHealthRecorderTest {
         assertEquals(250L, summary.firstFrameMs)
     }
 
+    @Test fun distinguishesStartupBufferFromRebufferAndRecordsFirstFrameOnlyOnce() {
+        var clock = 0L
+        val session = LivePlaybackHealthRecorder { clock }.begin()
+        session.buffering()
+        clock = 400
+        session.bufferEnded()
+        clock = 510
+        assertEquals(510L, session.firstFrame())
+        clock = 700
+        assertNull(session.firstFrame()) // A later reconnect must not duplicate FIRST_FRAME.
+        session.buffering(); session.buffering()
+        clock = 900
+        val pending = session.snapshot()
+        assertEquals(1, pending.startupBufferingEvents)
+        assertEquals(400L, pending.startupBufferingMs)
+        assertEquals(1, pending.rebufferingEvents)
+        assertEquals(200L, pending.rebufferingMs)
+        session.bufferEnded()
+        session.finish()
+        val done = session.snapshot()
+        assertEquals(2, done.bufferingEvents)
+        assertEquals(600L, done.bufferingMs)
+        assertEquals(200L, done.longestRebufferMs)
+        assertEquals(510L, done.firstFrameMs)
+    }
+
+    @Test fun aBufferThatBeginsBeforeFirstFrameStaysClassifiedAsStartup() {
+        var clock = 0L
+        val session = LivePlaybackHealthRecorder { clock }.begin()
+        session.buffering()
+        clock = 100
+        assertEquals(100L, session.firstFrame())
+        clock = 120
+        session.bufferEnded()
+        assertEquals(120L, session.snapshot().startupBufferingMs)
+        assertEquals(0L, session.snapshot().rebufferingMs)
+    }
+
     @Test fun clockMovingBackwardNeverCreatesNegativeMeasurements() {
         var clock = 1000L
         val session = LivePlaybackHealthRecorder { clock }.begin()

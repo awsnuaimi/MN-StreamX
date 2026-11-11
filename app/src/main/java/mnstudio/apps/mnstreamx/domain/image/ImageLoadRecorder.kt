@@ -1,9 +1,12 @@
 package mnstudio.apps.mnstreamx.domain.image
 
+import java.util.ArrayDeque
+
 /** Constant-size recorder. Tokens belong to listeners; no global collection of requests is kept. */
 internal class ImageLoadRecorder(private val nanoTime: () -> Long = System::nanoTime) {
     private data class Sample(val ms: Long, val success: Boolean, val capped: Boolean)
     private val counts = LongArray(ImageLoadResult.entries.size)
+    private val failures = LongArray(ImageFailureCategory.entries.size)
     private val recent = ArrayDeque<Sample>()
     private var started = 0L
     private var inFlight = 0L
@@ -16,11 +19,12 @@ internal class ImageLoadRecorder(private val nanoTime: () -> Long = System::nano
 
     inner class Request internal constructor(private val start: Long) {
         private var finished = false
-        fun finish(result: ImageLoadResult) = synchronized(this@ImageLoadRecorder) {
+        fun finish(result: ImageLoadResult, reason: ImageFailureCategory = ImageFailureCategory.OTHER) = synchronized(this@ImageLoadRecorder) {
             if (!finished) {
                 finished = true
                 inFlight = (inFlight - 1).coerceAtLeast(0)
                 counts[result.ordinal] = increment(counts[result.ordinal])
+                if (result == ImageLoadResult.FAILED) failures[reason.ordinal] = increment(failures[reason.ordinal])
                 val ms = (nanoTime() - start).coerceAtLeast(0) / 1_000_000
                 if (recent.size == WINDOW) recent.removeFirst()
                 recent.addLast(Sample(ms.coerceAtMost(MAX_MS), result != ImageLoadResult.FAILED &&
@@ -37,7 +41,11 @@ internal class ImageLoadRecorder(private val nanoTime: () -> Long = System::nano
             counts[ImageLoadResult.NETWORK.ordinal], counts[ImageLoadResult.LOCAL.ordinal],
             counts[ImageLoadResult.FAILED.ordinal], counts[ImageLoadResult.CANCELLED.ordinal],
             recent.size, recent.lastOrNull()?.ms, percentile(50), percentile(95), completed.lastOrNull(),
-            recent.count { it.capped })
+            recent.count { it.capped },
+            ImageFailureCounts(failures[ImageFailureCategory.TIMEOUT.ordinal],
+                failures[ImageFailureCategory.NETWORK.ordinal], failures[ImageFailureCategory.HTTP.ordinal],
+                failures[ImageFailureCategory.DECODE.ordinal], failures[ImageFailureCategory.MISSING_DATA.ordinal],
+                failures[ImageFailureCategory.OTHER.ordinal]))
     }
 
     private fun increment(value: Long) = if (value == Long.MAX_VALUE) value else value + 1

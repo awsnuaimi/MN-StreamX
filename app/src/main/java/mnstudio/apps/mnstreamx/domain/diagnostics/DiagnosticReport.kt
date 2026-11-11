@@ -32,12 +32,20 @@ object DiagnosticReport {
                 appendLine(text.text("قياسات جلسة التطبيق فقط؛ ليست دليلًا على سبب انقطاع البث.",
                     "Process-local measurements; not proof of a stream outage cause.",
                     "Messwerte dieser App-Sitzung; keine Aussage zur Ursache eines Streamausfalls."))
+                appendLine(text.text("startupBuffer = التخزين المؤقت عند بدء القناة؛ rebuffer = التوقف بعد أول إطار. FIRST_FRAME العام يساوي أول إطار لكل اختيار، وليس لكل محاولة اتصال.",
+                    "startupBuffer means initial loading; rebuffer means interruptions after first frame. FIRST_FRAME is recorded once per selection, not reconnect.",
+                    "startupBuffer bedeutet anfängliches Laden; rebuffer sind Unterbrechungen nach dem ersten Bild. FIRST_FRAME wird einmal je Auswahl gemessen, nicht je Neuverbindung."))
                 snapshot.liveHealth.take(8).forEachIndexed { index, item ->
                     val firstFrame = item.firstFrameMs?.coerceIn(0, 604_800_000)?.toString() ?: "-"
                     appendLine("#${index + 1} | duration=${item.durationMs.coerceIn(0, 604_800_000)} ms" +
                         " | firstFrame=$firstFrame ms | buffers=${item.bufferingEvents.coerceIn(0, 1_000_000)}" +
                         " | buffered=${item.bufferingMs.coerceIn(0, 604_800_000)} ms" +
                         " | maxBuffer=${item.longestBufferMs.coerceIn(0, 604_800_000)} ms" +
+                        " | startupBuffers=${item.startupBufferingEvents.coerceIn(0, 1_000_000)}" +
+                        " | startupBuffered=${item.startupBufferingMs.coerceIn(0, 604_800_000)} ms" +
+                        " | rebuffers=${item.rebufferingEvents.coerceIn(0, 1_000_000)}" +
+                        " | rebuffered=${item.rebufferingMs.coerceIn(0, 604_800_000)} ms" +
+                        " | maxRebuffer=${item.longestRebufferMs.coerceIn(0, 604_800_000)} ms" +
                         " | retries=${item.recoveryAttempts.coerceIn(0, 1_000_000)}" +
                         " | errors=${item.playerErrors.coerceIn(0, 1_000_000)} | finished=${item.finished}")
                 }

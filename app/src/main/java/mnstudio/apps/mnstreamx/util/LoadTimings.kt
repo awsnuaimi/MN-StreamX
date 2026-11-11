@@ -22,6 +22,10 @@ internal object LoadTimings {
     fun homeDrawn(ticket: Long?) { activity.finish(ticket) }
     fun cancelActivity(ticket: Long?) { activity.finish(ticket,PerformanceOutcome.CANCELLED) }
 
+    fun recordMillis(stage: Stage, durationMs: Long) {
+        PerformanceJournal.recorder.recordMillis(stage.metric, durationMs)
+    }
+
     fun recordSince(stage: Stage, startNanos: Long) {
         PerformanceJournal.recorder.recordSince(stage.metric,startNanos)
     }
