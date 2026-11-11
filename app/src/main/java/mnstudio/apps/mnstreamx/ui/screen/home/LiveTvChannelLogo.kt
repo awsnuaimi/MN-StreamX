@@ -33,6 +33,7 @@ internal fun LiveTvChannelLogo(row: LiveChannelRow, preferred: String?, colors: 
     var candidate by remember(urls) { mutableIntStateOf(0) }
     var loaded by remember(urls, candidate) { mutableStateOf(false) }
     val url = urls.getOrNull(candidate)
+    val requestIndex = candidate
     val context = LocalContext.current
     val request = remember(context, url) {
         url?.let { ImageRequest.Builder(context).data(it).size(256, 128).crossfade(false).build() }
@@ -51,7 +52,19 @@ internal fun LiveTvChannelLogo(row: LiveChannelRow, preferred: String?, colors: 
             AsyncImage(request, contentDescription = null, contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize().padding(2.dp)
                     .testTag(if (loaded) "live-logo-loaded-${row.key}" else "live-logo-loading-${row.key}"),
-                onSuccess = { loaded = true }, onError = { candidate++ })
+                onSuccess = {
+                    if (LiveTvLogoFallbackPolicy.acceptsSuccess(candidate, requestIndex)) {
+                        loaded = true
+                    }
+                },
+                onError = {
+                    candidate = LiveTvLogoFallbackPolicy.nextIndex(
+                        activeIndex = candidate,
+                        callbackIndex = requestIndex,
+                        candidateCount = urls.size,
+                        alreadyLoaded = loaded,
+                    )
+                })
         }
     }
 }
