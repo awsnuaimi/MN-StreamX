@@ -4,13 +4,13 @@
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-  echo 'Usage: profile_gradle.sh <verify|release> <gradle-task> [other-tasks...]' >&2
+  echo 'Usage: profile_gradle.sh <verify|manifest|release> <gradle-task> [other-tasks...]' >&2
   exit 2
 fi
 phase="$1"
 shift
 case "$phase" in
-  verify|release) ;;
+  verify|manifest|release) ;;
   *) echo "Unknown build phase: $phase" >&2; exit 2 ;;
 esac
 

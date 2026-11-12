@@ -48,6 +48,12 @@ class GradleProfileScriptTest(unittest.TestCase):
         self.assertRegex(r['metrics'], r'verify\t\d+\t17')
         self.assertIn('exit code: **17**', r['summary'])
 
+    def test_manifest_phase(self):
+        r = self._execute(phase='manifest')
+        self.assertEqual(0, r['result'].returncode)
+        self.assertRegex(r['metrics'], r'manifest\t\d+\t0')
+        self.assertIn('exit code: **0**', r['summary'])
+
     def test_release_phase(self):
         r = self._execute(phase='release')
         self.assertEqual(0, r['result'].returncode)
