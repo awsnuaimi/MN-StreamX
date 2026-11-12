@@ -159,6 +159,8 @@ jobs:
           name: MN-StreamX-ci-diagnostics
           path: |
             build/ci-metrics/gradle-steps.tsv
+            build/ci-metrics/gradle-task-timeline.tsv
+            build/ci-metrics/gradle-timeline-summary.txt
             **/build/reports/profile/*.html
             app/build/test-results/testDebugUnitTest/*.xml
             app/build/reports/tests/testDebugUnitTest/**

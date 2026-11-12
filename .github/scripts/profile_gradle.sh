@@ -22,12 +22,28 @@ fi
 
 started="$(date +%s)"
 set +e
-gradle --no-daemon --profile --console=plain "$@"
+if [[ "$phase" == 'release' ]]; then
+  # Record true start/end boundaries to distinguish long work from overlapping tasks.
+  # This diagnostic listener uses Gradle 8.7's task graph API and is incompatible
+  # with configuration cache; disable configuration cache for this invocation.
+  MN_STREAMX_GRADLE_PHASE=release gradle --no-daemon --no-configuration-cache \
+    --profile --console=plain \
+    --init-script .github/scripts/gradle_task_timeline.init.gradle "$@"
+else
+  gradle --no-daemon --profile --console=plain "$@"
+fi
 result=$?
 set -e
 seconds=$(( $(date +%s) - started ))
 printf '%s\t%s\t%s\n' "$phase" "$seconds" "$result" >> "$metrics"
 echo "Gradle phase ${phase}: ${seconds}s (exit ${result})"
+if [[ "$phase" == 'release' && -f build/ci-metrics/gradle-task-timeline.tsv ]]; then
+  if ! python .github/scripts/timeline_report.py \
+    build/ci-metrics/gradle-task-timeline.tsv \
+    --output build/ci-metrics/gradle-timeline-summary.txt; then
+    echo '::warning::Gradle task timeline summary could not be generated.'
+  fi
+fi
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     printf '### Gradle %s\n\n' "$phase"

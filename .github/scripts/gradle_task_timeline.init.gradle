@@ -1,0 +1,38 @@
+// Temporary CI diagnostic for Gradle 8.7. Records task boundaries only.
+// No inputs, signing values, arguments, environment values, or output paths are logged.
+// Configuration Cache is intentionally disabled for the invocation using this script.
+import java.util.concurrent.ConcurrentHashMap
+
+final def startedNanos = new ConcurrentHashMap<String, Long>()
+final def startedEpoch = new ConcurrentHashMap<String, Long>()
+final def outputLock = new Object()
+
+gradle.projectsLoaded {
+    final File output = new File(gradle.rootProject.projectDir,
+        'build/ci-metrics/gradle-task-timeline.tsv')
+    output.parentFile.mkdirs()
+    synchronized (outputLock) {
+        if (!output.exists() || output.length() == 0L) {
+            output.setText('phase\ttask\tstart_epoch_ms\tend_epoch_ms\telapsed_ms\tstatus\n', 'UTF-8')
+        }
+    }
+    final String phase = System.getenv('MN_STREAMX_GRADLE_PHASE') ?: 'release'
+    gradle.taskGraph.beforeTask { task ->
+        startedNanos.put(task.path, System.nanoTime())
+        startedEpoch.put(task.path, System.currentTimeMillis())
+    }
+    gradle.taskGraph.afterTask { task, state ->
+        final long endNanos = System.nanoTime()
+        final long endEpoch = System.currentTimeMillis()
+        final Long startNanos = startedNanos.remove(task.path)
+        final Long startMs = startedEpoch.remove(task.path)
+        if (startNanos != null && startMs != null) {
+            final long elapsed = Math.max(0L, (endNanos - startNanos) / 1000000L)
+            final String status = state.failure != null ? 'FAILED' :
+                (state.skipped ? 'SKIPPED' : 'COMPLETED')
+            synchronized (outputLock) {
+                output.append("${phase}\t${task.path}\t${startMs}\t${endEpoch}\t${elapsed}\t${status}\n", 'UTF-8')
+            }
+        }
+    }
+}
