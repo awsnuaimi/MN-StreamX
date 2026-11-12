@@ -56,7 +56,7 @@ jobs:
         run: python tools/finish_namespace_migration.py --apply
 
       - name: Unit tests, lint, and device benchmark compilation
-        run: gradle --no-daemon testDebugUnitTest lintDebug :app:compileBenchmarkAndroidTestKotlin
+        run: bash .github/scripts/profile_gradle.sh verify testDebugUnitTest lintDebug :app:compileBenchmarkAndroidTestKotlin
 
       - name: Build and verify signed update APK
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -96,7 +96,7 @@ jobs:
             echo "::error::The repository signing certificate differs from the Termux certificate. Check MN_STREAMX_KEYSTORE_BASE64."
             exit 1
           fi
-          gradle --no-daemon assembleRelease
+          bash .github/scripts/profile_gradle.sh release assembleRelease
 
           sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           signer_path="$(printf '%s\n' "$sdk_root"/build-tools/*/apksigner | sort -V | tail -n 1)"
@@ -150,6 +150,21 @@ jobs:
           done
           printf '\nVersion: %s | Version code: %s | Certificate SHA-256: `%s`\n' \
             "$version_name" "$version_code" "$expected_cert" >> "$GITHUB_STEP_SUMMARY"
+
+      # Keep profiles and failing test reports even if validation or signing fails.
+      - name: Upload Gradle performance and test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: MN-StreamX-ci-diagnostics
+          path: |
+            build/ci-metrics/gradle-steps.tsv
+            **/build/reports/profile/*.html
+            app/build/test-results/testDebugUnitTest/*.xml
+            app/build/reports/tests/testDebugUnitTest/**
+            app/build/reports/lint-results-debug.*
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload signed update APK
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
