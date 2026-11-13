@@ -115,9 +115,9 @@ def render(profiles, measures):
         lines.append('No Gradle HTML profiles found.')
     lines += [
         'Interpretation:',
-        '* Isolated manifest wall time is measured independently of native compilation.',
+        '* Release uses a single Gradle invocation (no manifest preflight).',
         '* Release wall time includes any tasks still needed after the preflight.',
-        '* A cached manifest may show UP-TO-DATE in the second invocation.',
+        '* A manifest task duration in the Release profile is not a standalone CPU time measurement.',
         '* Profile task durations can overlap; do NOT add them to find wall time.',
         '* A long task duration alone cannot identify CPU usage or blocked work.',
         '* This is not a before/after speedup claim: compare multiple runner builds.',

@@ -149,10 +149,8 @@ jobs:
             echo "::error::The repository signing certificate differs from the Termux certificate. Check MN_STREAMX_KEYSTORE_BASE64."
             exit 1
           fi
-          # Isolate AGP's release manifest task from native CMake compilation.
-          # This is a measured, reversible preflight; the signed APK is still
-          # produced and verified by the same assembleRelease invocation.
-          bash .github/scripts/profile_gradle.sh manifest :app:processReleaseManifestForPackage
+          # v244 established that the manifest task itself takes milliseconds.
+          # Avoid an extra Gradle invocation/daemon; retain the verified Release build.
           bash .github/scripts/profile_gradle.sh release assembleRelease
 
           sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
@@ -212,18 +210,20 @@ jobs:
         if: ${{ always() && steps.native_cache.outputs.enabled == 'true' }}
         continue-on-error: true
         shell: bash
+        env:
+          MNX_CCACHE_RESTORE_HIT: ${{ steps.ccache_restore.outputs.cache-hit }}
+          MNX_CCACHE_MATCHED_KEY: ${{ steps.ccache_restore.outputs.cache-matched-key }}
         run: |
+          set -euo pipefail
           mkdir -p build/ci-metrics
           ccache --show-stats | tee build/ci-metrics/native-ccache-stats.txt
-          {
-            echo '### Native C/C++ compiler cache'
-            echo
-            echo 'Stats are also available in the `MN-StreamX-ci-diagnostics` artifact.'
-            echo
-            echo '```text'
-            ccache --show-stats
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          python .github/scripts/native_cache_summary.py \
+            --stats build/ci-metrics/native-ccache-stats.txt \
+            --output build/ci-metrics/native-cache-summary.txt \
+            --restore-hit "$MNX_CCACHE_RESTORE_HIT" \
+            --matched-key "$MNX_CCACHE_MATCHED_KEY" \
+            --enabled "${MN_STREAMX_ENABLE_CCACHE:-0}" \
+            --step-summary "$GITHUB_STEP_SUMMARY"
 
       - name: Save native compiler cache
         if: ${{ success() && github.ref == 'refs/heads/main' && steps.native_cache.outputs.enabled == 'true' && steps.ccache_restore.outputs.cache-hit != 'true' }}
@@ -235,7 +235,7 @@ jobs:
 
       # Parse Gradle's own HTML profiles; never add an init script to Gradle.
       # Analysis failures must not block a verified signed APK or hide test logs.
-      - name: Summarize Release and Manifest timing
+      - name: Summarize Gradle timing
         if: ${{ always() }}
         continue-on-error: true
         run: |
@@ -254,6 +254,7 @@ jobs:
             build/ci-metrics/gradle-steps.tsv
             build/ci-metrics/gradle-task-summary.txt
             build/ci-metrics/native-ccache-stats.txt
+            build/ci-metrics/native-cache-summary.txt
             **/build/reports/profile/*.html
             app/build/test-results/testDebugUnitTest/*.xml
             app/build/reports/tests/testDebugUnitTest/**
