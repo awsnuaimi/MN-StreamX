@@ -1,17 +1,23 @@
 package mnstudio.apps.mnstreamx.ui.component.player
 
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.ExoPlayer
 import mnstudio.apps.mnstreamx.domain.model.Channel
 import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryPhase
 import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryState
+import mnstudio.apps.mnstreamx.player.PlaybackDiagnostics
 import mnstudio.apps.mnstreamx.player.controller.PlayerController
-import mnstudio.apps.mnstreamx.player.recovery.*
+import mnstudio.apps.mnstreamx.player.recovery.LiveRecoveryController
+import mnstudio.apps.mnstreamx.player.recovery.LiveRecoveryErrors
+import mnstudio.apps.mnstreamx.player.recovery.PlaybackConnection
 import mnstudio.apps.mnstreamx.util.LoadTimings
 import mnstudio.apps.mnstreamx.domain.performance.PerformanceOutcome
 import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthJournal
@@ -19,9 +25,11 @@ import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import java.io.EOFException
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class PlayerPlaybackSession(
@@ -31,6 +39,7 @@ internal class PlayerPlaybackSession(
     private val network: Flow<PlaybackConnection>,
     private val onError: (Channel, String?) -> Unit,
     private val onBuffering: (Channel, Boolean) -> Unit,
+    private val isSelected: (Channel) -> Boolean,
     private val onStarted: (Channel, String) -> Unit = { _, _ -> },
     private val onRecovery: (Channel, LiveRecoveryState) -> Unit = { _, _ -> }
 ) {
@@ -42,19 +51,29 @@ internal class PlayerPlaybackSession(
     private var started = false
     private var listener: Player.Listener? = null
     private var networkJob: Job? = null
+    private var progressJob: Job? = null
     private var savedPosition = 0L
     private var wasLive = true
     private var shouldPlay = true
     private var health: LivePlaybackHealthSession? = null
-    private val recovery = LiveRecoveryController(scope,
+    private val recovery = LiveRecoveryController(
+        scope = scope,
         onState = { state ->
-            if (state.phase == LiveRecoveryPhase.WAITING_NETWORK || state.phase == LiveRecoveryPhase.EXHAUSTED)
+            if (state.phase == LiveRecoveryPhase.WAITING_NETWORK) {
+                health?.bufferEnded()
                 retireAttempt()
+                onBuffering(channel, false)
+            }
             onRecovery(channel, state)
-        }, retry = ::retrySelection,
-        onTimeout = { if (started) failed(PlaybackException("Live reconnect timeout", null,
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)) },
-        canRetry = { started && player?.playWhenReady == true })
+        },
+        retry = ::retrySelection,
+        onTimeout = {
+            failed(PlaybackException("Live playback stalled", null,
+                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
+        },
+        canRetry = { started && isSelected(channel) && player?.playWhenReady == true },
+        nowMs = SystemClock::elapsedRealtime
+    )
 
     private var captionAudio: mnstudio.apps.mnstreamx.player.caption.CaptionAudioTap? = null
     fun configureCaptionAudio(tap: mnstudio.apps.mnstreamx.player.caption.CaptionAudioTap?) {
@@ -86,11 +105,12 @@ internal class PlayerPlaybackSession(
         if (started) playSelection(resume = false)
     }
 
-    fun cancelRecovery() = recovery.close()
+    fun cancelRecovery() {
+        recovery.close()
+        stopProgressMonitor()
+    }
 
     private fun retrySelection() {
-        if (!started) return
-        if (player?.playWhenReady != true) { recovery.paused(); return }
         health?.retry()
         playSelection(resume = false, automatic = true)
     }
@@ -99,14 +119,10 @@ internal class PlayerPlaybackSession(
         if (started) return
         started = true
         recovery.reset()
-        networkJob = scope.launch {
-            network.collect { value ->
-                recovery.networkChanged(value)
-                if (value != PlaybackConnection.OFFLINE && player?.isPlaying == true) recovery.playing(true)
-            }
-        }
         controller.initialize()
         player = checkNotNull(controller.player)
+        recovery.networkChanged(PlaybackConnection.UNKNOWN)
+        networkJob = scope.launch { network.collect(recovery::networkChanged) }
         playSelection(resume = true)
     }
 
@@ -114,51 +130,115 @@ internal class PlayerPlaybackSession(
         val created = player ?: return
         if (health == null) health = LivePlaybackHealthJournal.begin()
         listener?.let(created::removeListener)
+        listener = null
+        stopProgressMonitor()
         val selected = channel
         val request = ++generation
+        val playWhenReady = !resume || shouldPlay
+        if (!automatic) onError(selected, null)
+        created.playWhenReady = playWhenReady
+        if (playWhenReady && recovery.waitIfOffline()) {
+            created.stop()
+            return
+        }
         val mediaId = "${selected.id}:$request"
+        val startedAt = System.nanoTime()
         var firstFrameRecorded = false
-        fun isCurrent() = started && generation == request && player === created &&
+        var firstProgressReported = false
+        fun isCurrent() = started && generation == request && player === created && isSelected(selected) &&
             created.currentMediaItem?.mediaId == mediaId
         listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 if (!isCurrent() || firstFrameRecorded) return
                 firstFrameRecorded = true
-                // FIRST_FRAME and the live-health summary now share one selection clock.
-                health?.firstFrame()?.let { LoadTimings.recordMillis(LoadTimings.Stage.FIRST_FRAME, it) }
+                health?.firstFrame()
+                LoadTimings.recordSince(LoadTimings.Stage.FIRST_FRAME, startedAt)
                 onStarted(selected, mediaId)
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (!isCurrent()) return
-                onBuffering(selected, playbackState == Player.STATE_BUFFERING)
-                if (playbackState == Player.STATE_BUFFERING && created.playWhenReady) health?.buffering()
-                else health?.bufferEnded()
-                if (playbackState == Player.STATE_READY) { recovery.ready(); onError(selected, null) }
-                else if (playbackState == Player.STATE_BUFFERING && created.playWhenReady) recovery.buffering()
-            }
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isCurrent()) recovery.playing(isPlaying)
-            }
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (!isCurrent()) return
-                if (!playWhenReady) {
-                    health?.bufferEnded()
-                    recovery.paused()
-                } else if (created.playbackState == Player.STATE_BUFFERING) {
-                    health?.buffering()
+                val buffering = playbackState == Player.STATE_BUFFERING
+                onBuffering(selected, buffering && created.playWhenReady)
+                if (buffering && created.playWhenReady) health?.buffering() else health?.bufferEnded()
+                if (playbackState == Player.STATE_ENDED && created.playWhenReady) {
+                    streamEnded()
+                } else if (buffering) {
+                    recovery.awaitingPlayback()
                 }
             }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (!isCurrent()) return
+                stopProgressMonitor()
+                if (!isPlaying) {
+                    recovery.awaitingPlayback()
+                    return
+                }
+
+                progressJob = scope.launch {
+                    var previousPosition = created.currentPosition
+                    var previousVideoCounters: DecoderCounters? = null
+                    var previousRenderedFrames = 0
+                    while (isCurrent() && created.isPlaying) {
+                        delay(PROGRESS_SAMPLE_MS)
+                        if (!isCurrent() || !created.isPlaying) break
+                        val position = created.currentPosition
+                        val tracks = created.currentTracks
+                        val videoSelected = tracks.isTypeSelected(C.TRACK_TYPE_VIDEO)
+                        val videoCounters = if (videoSelected) created.videoDecoderCounters else null
+                        videoCounters?.ensureUpdated()
+                        val renderedFrames = videoCounters?.renderedOutputBufferCount ?: 0
+                        val previousFrames = if (videoCounters === previousVideoCounters) previousRenderedFrames else 0
+                        val videoAdvanced = firstFrameRecorded && renderedFrames > previousFrames
+                        val outputAdvanced = if (videoSelected) videoAdvanced else tracks.isTypeSelected(C.TRACK_TYPE_AUDIO)
+                        val hasProgress = position > previousPosition && outputAdvanced
+                        if (hasProgress) {
+                            recovery.playbackAdvanced()
+                            if (!firstProgressReported) {
+                                firstProgressReported = true
+                                onError(selected, null)
+                            }
+                        } else {
+                            recovery.awaitingPlayback()
+                        }
+                        previousPosition = position
+                        previousVideoCounters = videoCounters
+                        previousRenderedFrames = renderedFrames
+                    }
+                }
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!isCurrent()) return
+                if (playWhenReady) {
+                    if (created.playbackState == Player.STATE_ENDED) {
+                        streamEnded()
+                    } else {
+                        if (created.playbackState == Player.STATE_BUFFERING) {
+                            onBuffering(selected, true)
+                            health?.buffering()
+                        }
+                        recovery.awaitingPlayback()
+                    }
+                } else {
+                    onBuffering(selected, false)
+                    health?.bufferEnded()
+                    recovery.paused()
+                }
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 if (isCurrent()) failed(error)
             }
         }.also(created::addListener)
-        if (!automatic) onError(selected, null)
-        onBuffering(selected, true)
-        if (!resume || shouldPlay) health?.buffering()
+        onBuffering(selected, playWhenReady)
+        if (playWhenReady) health?.buffering()
         try {
-            controller.playUrl(selected.streamUrl, mediaId, selected.name)
-            if (resume && !wasLive && savedPosition > 0L) created.seekTo(savedPosition)
-            created.playWhenReady = if (resume) shouldPlay else true
+            controller.playUrl(selected.streamUrl, mediaId, selected.name, playWhenReady)
+            if (isCurrent()) {
+                if (resume && !wasLive && savedPosition > 0L) created.seekTo(savedPosition)
+                if (created.playWhenReady) recovery.awaitingPlayback()
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (error: RuntimeException) {
@@ -166,23 +246,35 @@ internal class PlayerPlaybackSession(
         }
     }
 
+    private fun streamEnded() {
+        failed(PlaybackException("Live stream ended", EOFException(), PlaybackException.ERROR_CODE_IO_UNSPECIFIED))
+    }
+
     private fun failed(error: PlaybackException) {
         val created = player ?: return
-        if (!started) return
+        if (!started || !isSelected(channel)) return
         val wantsPlayback = created.playWhenReady
+        val decision = LiveRecoveryErrors.classify(error)
         health?.error()
         retireAttempt(PerformanceOutcome.FAILED)
-        mnstudio.apps.mnstreamx.player.PlaybackDiagnostics.record(error)
+        PlaybackDiagnostics.record(error)
         onBuffering(channel, false)
         onError(channel, error.errorCodeName)
-        recovery.error(wantsPlayback && LiveRecoveryErrors.retryable(error))
+        recovery.error(wantsPlayback && decision.retryable, decision.retryAfterMs)
+    }
+
+    private fun stopProgressMonitor() {
+        progressJob?.cancel()
+        progressJob = null
     }
 
     private fun retireAttempt(outcome: PerformanceOutcome = PerformanceOutcome.CANCELLED) {
+        stopProgressMonitor()
         controller.cancelStartup(outcome)
         val created = player ?: return
         val previous = listener ?: return
-        generation++; listener = null
+        generation++
+        listener = null
         created.removeListener(previous)
         created.stop()
     }
@@ -191,7 +283,7 @@ internal class PlayerPlaybackSession(
         health?.finish(); health = null
         started = false; generation++
         networkJob?.cancel(); networkJob = null
-        recovery.close()
+        cancelRecovery()
         player?.let { current ->
             shouldPlay = current.playWhenReady
             savedPosition = current.currentPosition
@@ -200,5 +292,9 @@ internal class PlayerPlaybackSession(
         }
         listener = null; player = null
         controller.release()
+    }
+
+    private companion object {
+        const val PROGRESS_SAMPLE_MS = 1_000L
     }
 }

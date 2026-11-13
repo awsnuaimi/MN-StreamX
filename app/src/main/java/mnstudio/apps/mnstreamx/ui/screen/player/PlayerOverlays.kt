@@ -47,7 +47,7 @@ fun PlayerInfoOverlay(
 
 @Composable
 fun PlayerErrorOverlay(
-    error: String, canRetry: Boolean, hasChannels: Boolean, focus: FocusRequester,
+    error: String?, canRetry: Boolean, hasChannels: Boolean, focus: FocusRequester,
     onRetry: () -> Unit, onChannels: () -> Unit, onBack: () -> Unit,
     recovery: LiveRecoveryState = LiveRecoveryState()
 ) {
@@ -61,15 +61,16 @@ fun PlayerErrorOverlay(
                 when (recovery.phase) {
                     LiveRecoveryPhase.WAITING_NETWORK -> Text(stringResource(R.string.live_recovery_waiting_network))
                     LiveRecoveryPhase.SCHEDULED -> Text(stringResource(R.string.live_recovery_scheduled,
-                        recovery.attempt, recovery.maxAttempts))
+                        recovery.attempt))
                     LiveRecoveryPhase.CONNECTING -> Text(stringResource(R.string.live_recovery_connecting,
-                        recovery.attempt, recovery.maxAttempts))
-                    LiveRecoveryPhase.EXHAUSTED -> Text(stringResource(R.string.live_recovery_exhausted))
+                        recovery.attempt))
                     else -> Unit
                 }
                 if (recovery.isRecovering) LinearProgressIndicator(Modifier.fillMaxWidth())
-                Regex("ERROR_CODE_[A-Z0-9_]+").find(error)?.value?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall)
+                if (!recovery.isRecovering && error != null) {
+                    Regex("ERROR_CODE_[A-Z0-9_]+").find(error)?.value?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (canRetry) AppButton(stringResource(R.string.player_retry), onRetry, Modifier.focusRequester(focus))

@@ -62,6 +62,7 @@ fun PlayerSurface(
     val reportCaptionBinding by rememberUpdatedState(onCaptionBinding)
     val reportRecovery by rememberUpdatedState(onRecovery)
     val currentChannel by rememberUpdatedState(channel)
+    fun isSelected(selected: Channel) = selected.id == currentChannel.id && selected.streamUrl == currentChannel.streamUrl
     val scope = rememberCoroutineScope()
     val network = remember(context) { AndroidPlaybackNetwork(context).observe() }
     val captureEnabled = remember(context) {
@@ -73,12 +74,13 @@ fun PlayerSurface(
     val generatedAudio = captionSettings.mode == CaptionMode.GENERATED
     val session = remember(context) {
         PlayerPlaybackSession(PlayerController(context), channel, scope, network,
+            isSelected = ::isSelected,
             onError = { selected, error ->
-                if (selected.id == currentChannel.id && selected.streamUrl == currentChannel.streamUrl)
+                if (isSelected(selected))
                     reportError(selected.id, error)
             },
             onBuffering = { selected, loading ->
-                if (selected.id == currentChannel.id && selected.streamUrl == currentChannel.streamUrl)
+                if (isSelected(selected))
                     reportBuffering(selected.id, loading)
             },
             onStarted = { selected, mediaId ->
@@ -87,7 +89,7 @@ fun PlayerSurface(
                 }
                 reportStarted(selected)
             }, onRecovery = { selected, state ->
-                if (selected.id == currentChannel.id && selected.streamUrl == currentChannel.streamUrl)
+                if (isSelected(selected))
                     reportRecovery(selected.id, state)
             })
     }

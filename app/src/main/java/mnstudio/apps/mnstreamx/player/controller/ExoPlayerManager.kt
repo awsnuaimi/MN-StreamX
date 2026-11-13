@@ -48,7 +48,7 @@ class ExoPlayerManager(context: Context) {
         }
     }
 
-    fun play(url: String, mediaId: String = "", title: String? = null) {
+    fun play(url: String, mediaId: String = "", title: String? = null, autoPlay: Boolean = true) {
         initialize()
         cancelStartup()
         captionAudio?.sourceLanguage(null)
@@ -84,9 +84,9 @@ class ExoPlayerManager(context: Context) {
                     if (owns(eventTime)) current.close(PerformanceOutcome.FAILED)
                 }
             }.also(::addAnalyticsListener)
+            playWhenReady = autoPlay
             setMediaSource(LiveMediaSourceFactory.create(appContext,current).createMediaSource(item))
             prepare()
-            play()
         }
     }
 
