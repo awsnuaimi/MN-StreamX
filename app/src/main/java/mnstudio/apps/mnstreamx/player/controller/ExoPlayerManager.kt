@@ -14,7 +14,6 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import mnstudio.apps.mnstreamx.domain.performance.LiveStartupTrace
 import mnstudio.apps.mnstreamx.domain.performance.PerformanceOutcome
@@ -33,16 +32,9 @@ class ExoPlayerManager(context: Context) {
 
     fun initialize() {
         if (player != null) return
-        val buffering = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(LivePlaybackTuning.MIN_BUFFER_MS, LivePlaybackTuning.MAX_BUFFER_MS,
-                LivePlaybackTuning.START_BUFFER_MS, LivePlaybackTuning.REBUFFER_MS)
-            .setTargetBufferBytes(LivePlaybackTuning.TARGET_BUFFER_BYTES)
-            .setPrioritizeTimeOverSizeThresholds(false)
-            .setBackBuffer(0, false)
-            .build()
         val builder = captionAudio?.let { ExoPlayer.Builder(appContext, CaptionRenderers(appContext, it)) }
             ?: ExoPlayer.Builder(appContext)
-        player = builder.setLoadControl(buffering).build().apply {
+        player = builder.setLoadControl(LiveLoadControl()).build().apply {
             setAudioAttributes(AudioAttributes.DEFAULT, true)
             setHandleAudioBecomingNoisy(true)
         }
