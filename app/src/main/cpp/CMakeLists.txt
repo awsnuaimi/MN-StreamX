@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(mnx_captions LANGUAGES C CXX)
+# Opt-in in CI only; keeps local Android builds unchanged and works for
+# all targets created by Whisper/Bergamot/Marian subdirectories.
+include(${CMAKE_CURRENT_SOURCE_DIR}/NativeCompilerCache.cmake)
 set(CMAKE_CXX_STANDARD 17)
 set_property(GLOBAL PROPERTY JOB_POOLS mnx_compile=2 mnx_heavy=1 mnx_link=1)
 set(CMAKE_JOB_POOL_COMPILE mnx_compile)

@@ -22,6 +22,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CCACHE_DIR: ${{ runner.temp }}/mnx-native-ccache
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPILERCHECK: content
+      CCACHE_BASEDIR: ${{ github.workspace }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,6 +41,53 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+
+      # ccache is separate from Gradle's user-home cache.  It stores only
+      # compiled C/C++ objects, not signing keys, APKs, or downloaded sources.
+      - name: Prepare optional native compiler cache
+        id: native_cache
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v ccache >/dev/null 2>&1; then
+            # A failed optional package installation must never block APK builds.
+            if ! (sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ccache); then
+              echo '::warning::Unable to install ccache. Native compilation will continue normally.'
+            fi
+          fi
+          if command -v ccache >/dev/null 2>&1; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+            echo 'MN_STREAMX_ENABLE_CCACHE=1' >> "$GITHUB_ENV"
+            ccache --version
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::Native build cache unavailable; standard CMake build remains enabled.'
+          fi
+
+      - name: Restore native C/C++ compiler cache
+        if: steps.native_cache.outputs.enabled == 'true'
+        id: ccache_restore
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/mnx-native-ccache
+          # Code-dependent key changes only when native inputs or AGP options change.
+          # Restore older snapshots first; ccache validates all compiler inputs itself.
+          key: mnx-ccache-v1-${{ runner.os }}-ndk27.2.12479018-${{ hashFiles('app/src/main/cpp/**', 'app/build.gradle') }}
+          restore-keys: |
+            mnx-ccache-v1-${{ runner.os }}-ndk27.2.12479018-
+
+      - name: Initialize native cache measurements
+        if: steps.native_cache.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$CCACHE_DIR"
+          if ! ccache --max-size "$CCACHE_MAXSIZE" || ! ccache --zero-stats; then
+            echo '::warning::ccache initialization failed. Falling back to normal CMake compilation.'
+            echo 'MN_STREAMX_ENABLE_CCACHE=0' >> "$GITHUB_ENV"
+          fi
 
       - name: Test update publishing rules
         run: python -m unittest discover -s .github/scripts -p 'test_*.py'
@@ -155,6 +207,31 @@ jobs:
           printf '\nVersion: %s | Version code: %s | Certificate SHA-256: `%s`\n' \
             "$version_name" "$version_code" "$expected_cert" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Record native compiler cache statistics
+        if: ${{ always() && steps.native_cache.outputs.enabled == 'true' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p build/ci-metrics
+          ccache --show-stats | tee build/ci-metrics/native-ccache-stats.txt
+          {
+            echo '### Native C/C++ compiler cache'
+            echo
+            echo 'Stats are also available in the `MN-StreamX-ci-diagnostics` artifact.'
+            echo
+            echo '```text'
+            ccache --show-stats
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save native compiler cache
+        if: ${{ success() && github.ref == 'refs/heads/main' && steps.native_cache.outputs.enabled == 'true' && steps.ccache_restore.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/mnx-native-ccache
+          key: mnx-ccache-v1-${{ runner.os }}-ndk27.2.12479018-${{ hashFiles('app/src/main/cpp/**', 'app/build.gradle') }}
+
       # Parse Gradle's own HTML profiles; never add an init script to Gradle.
       # Analysis failures must not block a verified signed APK or hide test logs.
       - name: Summarize Release and Manifest timing
@@ -175,6 +252,7 @@ jobs:
           path: |
             build/ci-metrics/gradle-steps.tsv
             build/ci-metrics/gradle-task-summary.txt
+            build/ci-metrics/native-ccache-stats.txt
             **/build/reports/profile/*.html
             app/build/test-results/testDebugUnitTest/*.xml
             app/build/reports/tests/testDebugUnitTest/**
