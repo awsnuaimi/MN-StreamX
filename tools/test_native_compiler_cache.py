@@ -60,6 +60,15 @@ class NativeCompilerCacheTest(unittest.TestCase):
     def test_launcher_does_not_run_when_opted_out(self):
         self.assertEqual(self._configure_and_build(enabled=False), [])
 
+    def test_job_env_resolves_runner_temp_only_after_runner_starts(self):
+        workflow = WORKFLOW.read_text()
+        job_env = workflow.split('    env:', 1)[1].split('    steps:', 1)[0]
+        self.assertNotIn('${{ runner.', job_env)
+        self.assertNotIn('CCACHE_DIR:', job_env)
+        self.assertIn('echo "CCACHE_DIR=$RUNNER_TEMP/mnx-native-ccache" >> "$GITHUB_ENV"', workflow)
+        self.assertIn('path: ${{ runner.temp }}/mnx-native-ccache', workflow)
+        self.assertIn('mkdir -p "$CCACHE_DIR"', workflow)
+
     def test_workflow_preserves_signing_and_gradle_cache(self):
         text = WORKFLOW.read_text()
         self.assertIn('gradle/actions/setup-gradle@v4', text)

@@ -23,7 +23,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      CCACHE_DIR: ${{ runner.temp }}/mnx-native-ccache
       CCACHE_MAXSIZE: 500M
       CCACHE_COMPILERCHECK: content
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -50,6 +49,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # runner.temp is not available in jobs.build.env. Resolve it on runner.
+          echo "CCACHE_DIR=$RUNNER_TEMP/mnx-native-ccache" >> "$GITHUB_ENV"
           if ! command -v ccache >/dev/null 2>&1; then
             # A failed optional package installation must never block APK builds.
             if ! (sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ccache); then
