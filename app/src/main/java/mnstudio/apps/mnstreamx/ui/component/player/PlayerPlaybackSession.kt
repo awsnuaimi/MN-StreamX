@@ -121,7 +121,7 @@ internal class PlayerPlaybackSession(
         recovery.reset()
         controller.initialize()
         player = checkNotNull(controller.player)
-        recovery.networkChanged(PlaybackConnection.UNKNOWN)
+        recovery.networkChanged(PlaybackConnection.Unknown)
         networkJob = scope.launch { network.collect(recovery::networkChanged) }
         playSelection(resume = true)
     }

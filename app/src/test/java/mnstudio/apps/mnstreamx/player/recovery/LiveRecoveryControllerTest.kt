@@ -9,6 +9,9 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveRecoveryControllerTest {
+    private val wifi = PlaybackConnection.Online(1L, validated = true)
+    private val ethernet = PlaybackConnection.Online(2L, validated = true)
+
     private class Harness(scope: CoroutineScope, nowMs: () -> Long) {
         var attempts = 0
         var timeouts = 0
@@ -16,7 +19,8 @@ class LiveRecoveryControllerTest {
         val controller: LiveRecoveryController
         init {
             controller = LiveRecoveryController(scope, {}, { attempts++ }, {
-                timeouts++; timeout()
+                timeouts++
+                timeout()
             }, canRetry = { allowed }, nowMs = nowMs)
             controller.reset()
         }
@@ -45,11 +49,11 @@ class LiveRecoveryControllerTest {
 
     @Test fun waitingForTheNetworkDoesNotCountAsAnAttempt() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
-        h.controller.networkChanged(PlaybackConnection.OFFLINE); h.controller.error(true)
+        h.controller.networkChanged(PlaybackConnection.Offline); h.controller.error(true)
         advanceTimeBy(120_000); runCurrent()
         assertEquals(0, h.attempts); assertEquals(0, h.controller.state.attempt)
         assertEquals(LiveRecoveryPhase.WAITING_NETWORK, h.controller.state.phase)
-        h.controller.networkChanged(PlaybackConnection.ONLINE)
+        h.controller.networkChanged(wifi)
         advanceTimeBy(1_000); runCurrent(); assertEquals(1, h.attempts)
         h.controller.close()
     }
@@ -57,9 +61,9 @@ class LiveRecoveryControllerTest {
     @Test fun losingTheNetworkDuringBackoffCancelsTheOldTimer() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
         h.controller.error(true); advanceTimeBy(500); runCurrent()
-        h.controller.networkChanged(PlaybackConnection.OFFLINE)
+        h.controller.networkChanged(PlaybackConnection.Offline)
         advanceTimeBy(10_000); runCurrent(); assertEquals(0, h.attempts)
-        h.controller.networkChanged(PlaybackConnection.ONLINE)
+        h.controller.networkChanged(wifi)
         advanceTimeBy(1_000); runCurrent(); assertEquals(1, h.attempts)
         h.controller.close()
     }
@@ -79,7 +83,7 @@ class LiveRecoveryControllerTest {
     @Test fun closingTheSessionRejectsLateErrorsAndNetworkEvents() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
         h.controller.error(true); h.controller.close()
-        h.controller.networkChanged(PlaybackConnection.ONLINE); h.controller.error(true)
+        h.controller.networkChanged(wifi); h.controller.error(true)
         advanceTimeBy(100_000); runCurrent()
         assertEquals(0, h.attempts); assertEquals(0, h.timeouts)
         assertEquals(LiveRecoveryPhase.NONE, h.controller.state.phase)
@@ -88,8 +92,8 @@ class LiveRecoveryControllerTest {
     @Test fun aPermanentFailureIsNotRetriedWhenTheNetworkReturns() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
         h.controller.error(false)
-        h.controller.networkChanged(PlaybackConnection.OFFLINE)
-        h.controller.networkChanged(PlaybackConnection.ONLINE)
+        h.controller.networkChanged(PlaybackConnection.Offline)
+        h.controller.networkChanged(wifi)
         advanceTimeBy(100_000); runCurrent()
         assertEquals(0, h.attempts); assertEquals(LiveRecoveryPhase.FAILED, h.controller.state.phase)
         h.controller.close()
@@ -135,18 +139,19 @@ class LiveRecoveryControllerTest {
     @Test fun aNetworkLossDuringReconnectionCancelsTheConnectionWatchdog() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
         h.controller.error(true); advanceTimeBy(1_000); runCurrent()
-        h.controller.networkChanged(PlaybackConnection.OFFLINE)
+        h.controller.networkChanged(PlaybackConnection.Offline)
         advanceTimeBy(30_000); runCurrent(); assertEquals(0, h.timeouts)
-        h.controller.networkChanged(PlaybackConnection.ONLINE)
-        advanceTimeBy(3_000); runCurrent(); assertEquals(2, h.attempts)
+        h.controller.networkChanged(wifi)
+        advanceTimeBy(999); runCurrent(); assertEquals(1, h.attempts)
+        advanceTimeBy(1); runCurrent(); assertEquals(2, h.attempts)
         h.controller.close()
     }
 
     @Test fun pausingCancelsAutomaticPlaybackEvenAfterANetworkChange() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
         h.controller.error(true); h.controller.paused()
-        h.controller.networkChanged(PlaybackConnection.OFFLINE)
-        h.controller.networkChanged(PlaybackConnection.ONLINE)
+        h.controller.networkChanged(PlaybackConnection.Offline)
+        h.controller.networkChanged(wifi)
         advanceTimeBy(100_000); runCurrent(); assertEquals(0, h.attempts)
         h.controller.close()
     }
@@ -175,13 +180,13 @@ class LiveRecoveryControllerTest {
 
     @Test fun firstStartupWhileOfflineWaitsForTheNetwork() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
-        h.controller.networkChanged(PlaybackConnection.OFFLINE)
+        h.controller.networkChanged(PlaybackConnection.Offline)
         assertTrue(h.controller.waitIfOffline())
         advanceTimeBy(90_000); runCurrent()
         assertEquals(LiveRecoveryPhase.WAITING_NETWORK, h.controller.state.phase)
         assertEquals(0, h.timeouts)
         assertEquals(0, h.attempts)
-        h.controller.networkChanged(PlaybackConnection.ONLINE)
+        h.controller.networkChanged(wifi)
         advanceTimeBy(1_000); runCurrent()
         assertEquals(1, h.attempts)
         h.controller.close()
@@ -191,9 +196,9 @@ class LiveRecoveryControllerTest {
         val h = Harness(this) { testScheduler.currentTime }
         h.controller.error(true, retryAfterMs = 60_000)
         advanceTimeBy(10_000); runCurrent()
-        h.controller.networkChanged(PlaybackConnection.OFFLINE)
+        h.controller.networkChanged(PlaybackConnection.Offline)
         advanceTimeBy(10_000); runCurrent()
-        h.controller.networkChanged(PlaybackConnection.ONLINE)
+        h.controller.networkChanged(wifi)
         advanceTimeBy(39_999); runCurrent()
         assertEquals(0, h.attempts)
         advanceTimeBy(1); runCurrent()
@@ -201,9 +206,116 @@ class LiveRecoveryControllerTest {
         h.controller.close()
     }
 
+    @Test fun aDefaultNetworkHandoverExpeditesAnAlreadyScheduledRetry() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(wifi)
+        h.controller.error(true); advanceTimeBy(1_000); runCurrent()
+        h.controller.error(true)
+        h.controller.networkChanged(ethernet)
+        advanceTimeBy(999); runCurrent(); assertEquals(1, h.attempts)
+        advanceTimeBy(1); runCurrent(); assertEquals(2, h.attempts)
+        advanceTimeBy(2_000); runCurrent(); assertEquals(2, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun oneNetworkChangeDoesNotAccelerateEverySubsequentFailure() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(wifi)
+        h.controller.error(true); advanceTimeBy(1_000); runCurrent()
+        h.controller.error(true)
+        h.controller.networkChanged(ethernet)
+        advanceTimeBy(1_000); runCurrent(); assertEquals(2, h.attempts)
+        h.controller.error(true)
+        advanceTimeBy(6_999); runCurrent(); assertEquals(2, h.attempts)
+        advanceTimeBy(1); runCurrent(); assertEquals(3, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun internetValidationOnTheSameNetworkExpeditesPendingRecovery() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(wifi.copy(validated = false))
+        h.controller.error(true); advanceTimeBy(1_000); runCurrent()
+        h.controller.error(true)
+        h.controller.networkChanged(wifi)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(2, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun rapidNetworkUpdatesDoNotPostponeTheEarlierRetry() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(wifi)
+        h.controller.error(true)
+        advanceTimeBy(500)
+        h.controller.networkChanged(ethernet)
+        advanceTimeBy(400)
+        h.controller.networkChanged(wifi)
+        advanceTimeBy(100); runCurrent()
+        assertEquals(1, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun aHandoverShortensAnInFlightAttemptOnlyWhenProgressDoesNotReturn() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(wifi)
+        h.controller.error(true); advanceTimeBy(1_000); runCurrent()
+        h.controller.networkChanged(ethernet)
+        advanceTimeBy(7_999); runCurrent(); assertEquals(0, h.timeouts)
+        advanceTimeBy(1); runCurrent(); assertEquals(1, h.timeouts)
+        advanceTimeBy(1_000); runCurrent(); assertEquals(2, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun aStallSoonAfterHandoverGetsAShorterWatchdog() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(wifi)
+        h.controller.networkChanged(ethernet)
+        advanceTimeBy(3_000); runCurrent(); assertEquals(0, h.timeouts)
+        h.controller.awaitingPlayback()
+        advanceTimeBy(7_999); runCurrent(); assertEquals(0, h.timeouts)
+        advanceTimeBy(1); runCurrent(); assertEquals(1, h.timeouts)
+        h.controller.close()
+    }
+
+    @Test fun anUnrelatedLaterStallUsesTheRegularTimeout() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(wifi)
+        h.controller.networkChanged(ethernet)
+        advanceTimeBy(15_000)
+        h.controller.awaitingPlayback()
+        advanceTimeBy(29_999); runCurrent(); assertEquals(0, h.timeouts)
+        advanceTimeBy(1); runCurrent(); assertEquals(1, h.timeouts)
+        h.controller.close()
+    }
+
+    @Test fun progressAfterHandoverCancelsTheShorterStallWatchdog() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(wifi)
+        h.controller.awaitingPlayback()
+        h.controller.networkChanged(ethernet)
+        advanceTimeBy(2_000); runCurrent()
+        h.controller.playbackAdvanced()
+        h.controller.networkChanged(wifi)
+        advanceTimeBy(40_000); runCurrent()
+        assertEquals(0, h.timeouts)
+        assertEquals(0, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun aHandoverCannotSkipAnActiveServerCooldown() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(wifi)
+        h.controller.error(true, retryAfterMs = 45_000)
+        advanceTimeBy(5_000)
+        h.controller.networkChanged(ethernet)
+        advanceTimeBy(39_999); runCurrent(); assertEquals(0, h.attempts)
+        advanceTimeBy(1); runCurrent(); assertEquals(1, h.attempts)
+        h.controller.close()
+    }
+
     @Test fun selectingAnotherChannelPreservesKnownOfflineState() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
-        h.controller.networkChanged(PlaybackConnection.OFFLINE)
+        h.controller.networkChanged(PlaybackConnection.Offline)
         h.controller.reset(); h.controller.error(true)
         advanceTimeBy(100_000); runCurrent(); assertEquals(0, h.attempts)
         assertEquals(LiveRecoveryPhase.WAITING_NETWORK, h.controller.state.phase)
@@ -216,8 +328,8 @@ class LiveRecoveryControllerTest {
         advanceTimeBy(1_000); runCurrent()
         assertEquals(0, h.attempts); assertEquals(0, h.controller.state.attempt)
         assertEquals(LiveRecoveryPhase.NONE, h.controller.state.phase)
-        h.controller.networkChanged(PlaybackConnection.OFFLINE)
-        h.controller.networkChanged(PlaybackConnection.ONLINE)
+        h.controller.networkChanged(PlaybackConnection.Offline)
+        h.controller.networkChanged(wifi)
         advanceTimeBy(100_000); runCurrent(); assertEquals(0, h.attempts)
         h.controller.close()
     }

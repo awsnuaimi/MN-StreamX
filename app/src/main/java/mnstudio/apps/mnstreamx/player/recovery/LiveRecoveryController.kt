@@ -7,7 +7,11 @@ import kotlinx.coroutines.launch
 import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryPhase
 import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryState
 
-internal enum class PlaybackConnection { UNKNOWN, ONLINE, OFFLINE }
+internal sealed interface PlaybackConnection {
+    data object Unknown : PlaybackConnection
+    data object Offline : PlaybackConnection
+    data class Online(val networkHandle: Long, val validated: Boolean = false) : PlaybackConnection
+}
 
 /** All events run on the player application thread. Only one retry or watchdog is pending. */
 internal class LiveRecoveryController(
@@ -19,10 +23,13 @@ internal class LiveRecoveryController(
     private val nowMs: () -> Long
 ) {
     private var active = false
-    private var connection = PlaybackConnection.UNKNOWN
+    private var connection: PlaybackConnection = PlaybackConnection.Unknown
     private var attempts = 0
     private var retryNotBeforeMs = 0L
+    private var networkChangedAtMs: Long? = null
+    private var expediteNextRetry = false
     private var timer: Job? = null
+    private var timerDeadlineMs = 0L
     private var stablePlayback: Job? = null
     var state = LiveRecoveryState()
         private set
@@ -32,6 +39,8 @@ internal class LiveRecoveryController(
         active = true
         attempts = 0
         retryNotBeforeMs = 0
+        networkChangedAtMs = null
+        expediteNextRetry = false
         publish(LiveRecoveryPhase.NONE)
     }
 
@@ -51,7 +60,7 @@ internal class LiveRecoveryController(
         cancelTimers()
         if (retryable && canRetry()) {
             retryNotBeforeMs = nowMs() + retryAfterMs
-            schedule()
+            schedule(expedited = expediteNextRetry && recentlyChangedNetwork())
         } else if (retryable) {
             paused()
         } else {
@@ -60,23 +69,46 @@ internal class LiveRecoveryController(
     }
 
     fun networkChanged(value: PlaybackConnection) {
-        if (value == connection) return
+        val previous = connection
+        if (value == previous) return
         connection = value
         if (!active || !canRetry()) return
-        if (value == PlaybackConnection.OFFLINE) {
-            stablePlayback?.cancel()
-            stablePlayback = null
-            if (state.isRecovering || timer != null) {
-                cancelTimers()
-                publish(LiveRecoveryPhase.WAITING_NETWORK)
+
+        when (value) {
+            PlaybackConnection.Offline -> {
+                stablePlayback?.cancel()
+                stablePlayback = null
+                if (state.isRecovering || timer != null) {
+                    cancelTimers()
+                    publish(LiveRecoveryPhase.WAITING_NETWORK)
+                }
             }
-        } else if (state.phase == LiveRecoveryPhase.WAITING_NETWORK) {
-            schedule()
+            is PlaybackConnection.Online -> {
+                val usableChange = previous == PlaybackConnection.Offline ||
+                    (previous is PlaybackConnection.Online && (previous.networkHandle != value.networkHandle ||
+                        (!previous.validated && value.validated)))
+                if (usableChange || state.phase == LiveRecoveryPhase.WAITING_NETWORK) {
+                    networkChangedAtMs = nowMs()
+                    expediteNextRetry = true
+                    onUsableNetworkChange()
+                }
+            }
+            PlaybackConnection.Unknown -> Unit
+        }
+    }
+
+    private fun onUsableNetworkChange() {
+        when (state.phase) {
+            LiveRecoveryPhase.WAITING_NETWORK, LiveRecoveryPhase.SCHEDULED -> schedule(expedited = true)
+            LiveRecoveryPhase.CONNECTING, LiveRecoveryPhase.NONE -> {
+                if (timer != null) watchForProgress(NETWORK_HANDOVER_TIMEOUT_MS)
+            }
+            else -> Unit
         }
     }
 
     fun waitIfOffline(): Boolean {
-        if (!active || !canRetry() || connection != PlaybackConnection.OFFLINE) return false
+        if (!active || !canRetry() || connection != PlaybackConnection.Offline) return false
         cancelTimers()
         publish(LiveRecoveryPhase.WAITING_NETWORK)
         return true
@@ -87,7 +119,10 @@ internal class LiveRecoveryController(
         stablePlayback?.cancel()
         stablePlayback = null
         when (state.phase) {
-            LiveRecoveryPhase.NONE -> if (!waitIfOffline() && timer == null) watchForProgress(STALL_TIMEOUT_MS)
+            LiveRecoveryPhase.NONE -> if (!waitIfOffline() && timer == null) {
+                val timeoutMs = if (recentlyChangedNetwork()) NETWORK_HANDOVER_TIMEOUT_MS else STALL_TIMEOUT_MS
+                watchForProgress(timeoutMs)
+            }
             LiveRecoveryPhase.CONNECTING -> if (timer == null) watchForProgress(CONNECT_TIMEOUT_MS)
             else -> Unit
         }
@@ -97,10 +132,9 @@ internal class LiveRecoveryController(
     fun playbackAdvanced() {
         if (!active || !canRetry() ||
             (state.phase != LiveRecoveryPhase.NONE && state.phase != LiveRecoveryPhase.CONNECTING)) return
-        timer?.cancel()
-        timer = null
+        cancelTimer()
         publish(LiveRecoveryPhase.NONE)
-        if (attempts > 0 && stablePlayback == null && connection != PlaybackConnection.OFFLINE) {
+        if (attempts > 0 && stablePlayback == null && connection != PlaybackConnection.Offline) {
             stablePlayback = scope.launch {
                 delay(STABLE_PLAYBACK_MS)
                 stablePlayback = null
@@ -111,39 +145,52 @@ internal class LiveRecoveryController(
         }
     }
 
-    private fun schedule() {
-        if (connection == PlaybackConnection.OFFLINE) {
+    private fun schedule(expedited: Boolean) {
+        if (connection == PlaybackConnection.Offline) {
             publish(LiveRecoveryPhase.WAITING_NETWORK)
             return
         }
         val nextAttempt = if (attempts == Int.MAX_VALUE) attempts else attempts + 1
-        val backoff = RETRY_DELAYS_MS[attempts.coerceAtMost(RETRY_DELAYS_MS.lastIndex)]
+        val backoff = if (expedited) NETWORK_RETRY_DELAY_MS else
+            RETRY_DELAYS_MS[attempts.coerceAtMost(RETRY_DELAYS_MS.lastIndex)]
+        val deadlineMs = maxOf(nowMs() + backoff, retryNotBeforeMs)
         publish(LiveRecoveryPhase.SCHEDULED, nextAttempt)
-        timer = scope.launch {
-            delay(maxOf(backoff, retryNotBeforeMs - nowMs()))
-            timer = null
-            if (!canRetry()) {
-                paused()
-                return@launch
-            }
+        runAt(deadlineMs) {
             attempts = nextAttempt
+            expediteNextRetry = false
             publish(LiveRecoveryPhase.CONNECTING)
             watchForProgress(CONNECT_TIMEOUT_MS)
             retry()
         }
     }
 
+    private fun recentlyChangedNetwork(): Boolean {
+        val changedAt = networkChangedAtMs ?: return false
+        return nowMs() - changedAt < NETWORK_HANDOVER_WINDOW_MS
+    }
+
     private fun watchForProgress(timeoutMs: Long) {
+        runAt(nowMs() + timeoutMs, onTimeout)
+    }
+
+    private fun runAt(deadlineMs: Long, action: () -> Unit) {
+        if (timer != null && timerDeadlineMs <= deadlineMs) return
+        cancelTimer()
+        timerDeadlineMs = deadlineMs
         timer = scope.launch {
-            delay(timeoutMs)
+            delay((deadlineMs - nowMs()).coerceAtLeast(1L))
             timer = null
-            if (canRetry()) onTimeout() else paused()
+            if (canRetry()) action() else paused()
         }
     }
 
-    private fun cancelTimers() {
+    private fun cancelTimer() {
         timer?.cancel()
         timer = null
+    }
+
+    private fun cancelTimers() {
+        cancelTimer()
         stablePlayback?.cancel()
         stablePlayback = null
     }
@@ -160,6 +207,9 @@ internal class LiveRecoveryController(
         const val CONNECT_TIMEOUT_MS = 20_000L
         const val STALL_TIMEOUT_MS = 30_000L
         const val STABLE_PLAYBACK_MS = 15_000L
+        private const val NETWORK_HANDOVER_TIMEOUT_MS = 8_000L
+        private const val NETWORK_HANDOVER_WINDOW_MS = 15_000L
+        private const val NETWORK_RETRY_DELAY_MS = 1_000L
         private val RETRY_DELAYS_MS = longArrayOf(1_000L, 3_000L, 7_000L, 15_000L, 30_000L)
     }
 }

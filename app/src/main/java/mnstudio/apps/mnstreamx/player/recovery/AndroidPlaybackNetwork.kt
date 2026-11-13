@@ -3,6 +3,7 @@ package mnstudio.apps.mnstreamx.player.recovery
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import kotlinx.coroutines.Dispatchers
@@ -12,40 +13,78 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 
-/** A callback exists only while its player session is STARTED. No connectivity probes. */
+/** Tracks the system default network only while the live player is started. */
 internal class AndroidPlaybackNetwork(context: Context) {
     private val manager = context.applicationContext.getSystemService(ConnectivityManager::class.java)
 
     fun observe(): Flow<PlaybackConnection> = callbackFlow {
         val service = manager
-        if (service == null) { trySend(PlaybackConnection.UNKNOWN); close(); return@callbackFlow }
-        var current: Network? = null
-        var isBlocked = false
-        fun emitState() {
-            trySend(if (current != null && !isBlocked) PlaybackConnection.ONLINE else PlaybackConnection.OFFLINE)
+        if (service == null) {
+            trySend(PlaybackConnection.Unknown)
+            close()
+            return@callbackFlow
         }
+
+        var current: Network? = null
+        var blocked: Boolean? = null
+        var validated = false
+
+        fun publish(network: Network) {
+            when (blocked) {
+                true -> trySend(PlaybackConnection.Offline)
+                false -> trySend(PlaybackConnection.Online(network.networkHandle, validated))
+                null -> Unit
+            }
+        }
+
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                current = network; isBlocked = false; emitState()
+                current = network
+                blocked = null
+                validated = false
             }
-            override fun onBlockedStatusChanged(network: Network, blocked: Boolean) {
+
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
                 if (network != current) return
-                isBlocked = blocked; emitState()
+                validated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                publish(network)
             }
+
+            override fun onBlockedStatusChanged(network: Network, isBlocked: Boolean) {
+                if (network != current) return
+                blocked = isBlocked
+                publish(network)
+            }
+
             override fun onLost(network: Network) {
                 if (network != current) return
-                current = null; isBlocked = false; emitState()
+                current = null
+                blocked = null
+                validated = false
+                trySend(PlaybackConnection.Offline)
             }
         }
+
         try {
             service.registerDefaultNetworkCallback(callback, Handler(Looper.getMainLooper()))
         } catch (_: RuntimeException) {
-            trySend(PlaybackConnection.UNKNOWN); close(); return@callbackFlow
+            trySend(PlaybackConnection.Unknown)
+            close()
+            return@callbackFlow
         }
+
         try {
-            current = service.activeNetwork
-            emitState()
-        } catch (_: RuntimeException) { trySend(PlaybackConnection.UNKNOWN) }
-        awaitClose { try { service.unregisterNetworkCallback(callback) } catch (_: RuntimeException) { } }
+            if (service.activeNetwork == null) trySend(PlaybackConnection.Offline)
+        } catch (_: RuntimeException) {
+            trySend(PlaybackConnection.Unknown)
+        }
+
+        awaitClose {
+            try {
+                service.unregisterNetworkCallback(callback)
+            } catch (_: RuntimeException) {
+                // The system may already have removed the callback.
+            }
+        }
     }.distinctUntilChanged().flowOn(Dispatchers.Main.immediate)
 }
