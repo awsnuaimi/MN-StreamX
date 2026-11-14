@@ -11,8 +11,13 @@ class PlayerController(context: Context) {
 
     fun configureCaptionAudio(tap: mnstudio.apps.mnstreamx.player.caption.CaptionAudioTap?) = manager.configureCaptionAudio(tap)
     fun initialize() = manager.initialize()
-    fun playUrl(url: String, mediaId: String = "", title: String? = null, playWhenReady: Boolean = true) =
-        manager.play(url, mediaId, title, playWhenReady)
+    fun playUrl(
+        url: String,
+        mediaId: String = "",
+        title: String? = null,
+        playWhenReady: Boolean = true,
+        onHttpOpen: () -> Unit = {}
+    ) = manager.play(url, mediaId, title, playWhenReady, onHttpOpen)
     fun pause() = manager.pause()
     fun resume() = manager.resume()
     fun stop() = manager.stop()

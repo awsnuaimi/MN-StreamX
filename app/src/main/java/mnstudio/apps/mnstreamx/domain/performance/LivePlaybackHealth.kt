@@ -1,6 +1,7 @@
 package mnstudio.apps.mnstreamx.domain.performance
 
 import java.util.ArrayDeque
+import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryPhase
 
 /** Non-identifying, process-local live TV telemetry. No URLs or channel IDs are retained. */
 data class LivePlaybackHealthSummary(
@@ -12,11 +13,21 @@ data class LivePlaybackHealthSummary(
     val recoveryAttempts: Int,
     val playerErrors: Int,
     val finished: Boolean,
-    val startupBufferingEvents: Int = 0,
-    val startupBufferingMs: Long = 0,
-    val rebufferingEvents: Int = 0,
-    val rebufferingMs: Long = 0,
-    val longestRebufferMs: Long = 0
+    val interruptionCount: Int = 0,
+    val interruptions: List<LivePlaybackInterruption> = emptyList()
+)
+
+enum class LivePlaybackInterruptionOutcome { ACTIVE, RECOVERED, FAILED, STOPPED }
+
+data class LivePlaybackInterruption(
+    val durationMs: Long,
+    val networkWaitMs: Long,
+    val retryAfterWaitMs: Long,
+    val retryDelayMs: Long,
+    val loadingMs: Long,
+    val attempts: Int,
+    val outcome: LivePlaybackInterruptionOutcome,
+    val connectingMs: Long = 0L
 )
 
 /** Tracks one selected channel across its automatic reconnect attempts. No timers or jobs. */
@@ -27,26 +38,22 @@ internal class LivePlaybackHealthSession(
     private var endedAt: Long? = null
     private var firstFrameAt: Long? = null
     private var bufferingSince: Long? = null
-    private var bufferingIsStartup = false
     private var bufferingEvents = 0
     private var bufferingMs = 0L
     private var longestBufferMs = 0L
-    private var startupBufferingEvents = 0
-    private var startupBufferingMs = 0L
-    private var rebufferingEvents = 0
-    private var rebufferingMs = 0L
-    private var longestRebufferMs = 0L
     private var recoveryAttempts = 0
     private var playerErrors = 0
+    private var playbackConfirmed = false
+    private var interruptionCount = 0
+    private var interruption: Interruption? = null
+    private val recentInterruptions = ArrayDeque<LivePlaybackInterruption>()
 
     @Synchronized fun buffering() {
         if (endedAt != null || bufferingSince != null) return
-        bufferingSince = nowMs()
-        bufferingIsStartup = firstFrameAt == null
+        val at = nowMs()
+        bufferingSince = at
         if (bufferingEvents < Int.MAX_VALUE) bufferingEvents++
-        if (bufferingIsStartup) {
-            if (startupBufferingEvents < Int.MAX_VALUE) startupBufferingEvents++
-        } else if (rebufferingEvents < Int.MAX_VALUE) rebufferingEvents++
+        startInterruption(at)
     }
 
     @Synchronized fun bufferEnded() {
@@ -54,36 +61,79 @@ internal class LivePlaybackHealthSession(
         closeBuffer(nowMs())
     }
 
-    /** Returns the selection-to-first-frame latency once; retries cannot create false 0 ms samples. */
-    @Synchronized fun firstFrame(): Long? {
-        if (endedAt != null || firstFrameAt != null) return null
-        val at = nowMs()
-        firstFrameAt = at
-        return elapsed(startedAt, at)
+    @Synchronized fun firstFrame() {
+        if (endedAt != null || firstFrameAt != null) return
+        firstFrameAt = nowMs()
     }
 
     @Synchronized fun retry() {
-        if (endedAt == null && recoveryAttempts < Int.MAX_VALUE) recoveryAttempts++
+        if (endedAt != null) return
+        if (recoveryAttempts < Int.MAX_VALUE) recoveryAttempts++
+        interruption?.let { if (it.attempts < Int.MAX_VALUE) it.attempts++ }
     }
 
-    @Synchronized fun error() {
+    @Synchronized fun error(retryAfterMs: Long = 0L, playbackAllowed: Boolean = true) {
         if (endedAt != null) return
         if (playerErrors < Int.MAX_VALUE) playerErrors++
-        closeBuffer(nowMs())
+        val at = nowMs()
+        closeBuffer(at)
+        if (playbackAllowed) startInterruption(at)
+        interruption?.let {
+            it.advanceTo(at)
+            it.retryNotBeforeMs = at + retryAfterMs.coerceIn(0L, MAX_DURATION_MS)
+        }
+    }
+
+    @Synchronized fun recoveryChanged(phase: LiveRecoveryPhase) {
+        if (endedAt != null || !playbackConfirmed) return
+        val at = nowMs()
+        if (phase == LiveRecoveryPhase.WAITING_NETWORK) startInterruption(at)
+        interruption?.let {
+            it.advanceTo(at)
+            it.phase = phase
+            if (phase == LiveRecoveryPhase.CONNECTING) it.httpOpen = false
+        }
+        if (phase == LiveRecoveryPhase.FAILED) {
+            recordInterruption(at, LivePlaybackInterruptionOutcome.FAILED)
+        }
+    }
+
+    @Synchronized fun httpOpened() {
+        val current = interruption ?: return
+        if (current.phase != LiveRecoveryPhase.CONNECTING || current.httpOpen) return
+        current.advanceTo(nowMs())
+        current.httpOpen = true
+    }
+
+    @Synchronized fun playbackStalled() {
+        if (endedAt == null && playbackConfirmed && interruption == null) startInterruption(nowMs())
+    }
+
+    @Synchronized fun playbackAdvanced() {
+        if (endedAt != null || (playbackConfirmed && interruption == null)) return
+        playbackConfirmed = true
+        recordInterruption(nowMs(), LivePlaybackInterruptionOutcome.RECOVERED)
+    }
+
+    @Synchronized fun playbackSuspended() {
+        if (endedAt != null) return
+        val at = nowMs()
+        closeBuffer(at)
+        recordInterruption(at, LivePlaybackInterruptionOutcome.STOPPED)
+        playbackConfirmed = false
     }
 
     @Synchronized fun finish() {
         if (endedAt != null) return
         val at = nowMs()
         closeBuffer(at)
+        recordInterruption(at, LivePlaybackInterruptionOutcome.STOPPED)
         endedAt = at
     }
 
     @Synchronized fun snapshot(): LivePlaybackHealthSummary {
         val end = endedAt ?: nowMs()
         val pending = bufferingSince?.let { elapsed(it, end) } ?: 0L
-        val pendingStartup = if (bufferingIsStartup) pending else 0L
-        val pendingRebuffer = if (bufferingIsStartup) 0L else pending
         return LivePlaybackHealthSummary(
             durationMs = elapsed(startedAt, end),
             firstFrameMs = firstFrameAt?.let { elapsed(startedAt, it) },
@@ -93,36 +143,92 @@ internal class LivePlaybackHealthSession(
             recoveryAttempts = recoveryAttempts,
             playerErrors = playerErrors,
             finished = endedAt != null,
-            startupBufferingEvents = startupBufferingEvents,
-            startupBufferingMs = saturatedAdd(startupBufferingMs, pendingStartup),
-            rebufferingEvents = rebufferingEvents,
-            rebufferingMs = saturatedAdd(rebufferingMs, pendingRebuffer),
-            longestRebufferMs = maxOf(longestRebufferMs, pendingRebuffer)
+            interruptionCount = interruptionCount,
+            interruptions = buildList {
+                interruption?.let { add(it.snapshot(end, LivePlaybackInterruptionOutcome.ACTIVE)) }
+                addAll(recentInterruptions.take(MAX_INTERRUPTION_DETAILS - size))
+            }
         )
+    }
+
+    private fun startInterruption(at: Long) {
+        if (!playbackConfirmed || interruption != null) return
+        interruption = Interruption(at)
+        if (interruptionCount < Int.MAX_VALUE) interruptionCount++
+    }
+
+    private fun recordInterruption(at: Long, outcome: LivePlaybackInterruptionOutcome) {
+        val current = interruption ?: return
+        interruption = null
+        recentInterruptions.addFirst(current.snapshot(at, outcome))
+        if (recentInterruptions.size > MAX_INTERRUPTION_DETAILS) recentInterruptions.removeLast()
     }
 
     private fun closeBuffer(at: Long) {
         val start = bufferingSince ?: return
         val duration = elapsed(start, at)
-        bufferingMs = saturatedAdd(bufferingMs, duration)
-        if (bufferingIsStartup) startupBufferingMs = saturatedAdd(startupBufferingMs, duration)
-        else {
-            rebufferingMs = saturatedAdd(rebufferingMs, duration)
-            longestRebufferMs = maxOf(longestRebufferMs, duration)
-        }
+        bufferingMs = (bufferingMs + duration).coerceAtMost(MAX_DURATION_MS)
         longestBufferMs = maxOf(longestBufferMs, duration)
         bufferingSince = null
-        bufferingIsStartup = false
     }
-
-    private fun saturatedAdd(left: Long, right: Long) = (left + right).coerceAtMost(MAX_DURATION_MS)
 
     private fun elapsed(start: Long, end: Long) = (end - start).coerceIn(0L, MAX_DURATION_MS)
 
-    companion object { const val MAX_DURATION_MS = 7L * 24 * 60 * 60 * 1000 }
+    private class Interruption(private val startedAt: Long) {
+        var phase = LiveRecoveryPhase.NONE
+        var retryNotBeforeMs = 0L
+        var attempts = 0
+        var httpOpen = false
+        private var updatedAt = startedAt
+        private var networkWaitMs = 0L
+        private var retryAfterWaitMs = 0L
+        private var retryDelayMs = 0L
+        private var loadingMs = 0L
+        private var connectingMs = 0L
+
+        fun advanceTo(at: Long) {
+            val end = at.coerceIn(updatedAt, startedAt + MAX_DURATION_MS)
+            val duration = end - updatedAt
+            when (phase) {
+                LiveRecoveryPhase.WAITING_NETWORK -> networkWaitMs += duration
+                LiveRecoveryPhase.SCHEDULED -> {
+                    val serverDelay = (retryNotBeforeMs - updatedAt).coerceIn(0L, duration)
+                    retryAfterWaitMs += serverDelay
+                    retryDelayMs += duration - serverDelay
+                }
+                LiveRecoveryPhase.CONNECTING -> if (httpOpen) loadingMs += duration else connectingMs += duration
+                else -> loadingMs += duration
+            }
+            updatedAt = end
+        }
+
+        fun snapshot(at: Long, outcome: LivePlaybackInterruptionOutcome): LivePlaybackInterruption {
+            val end = at.coerceIn(updatedAt, startedAt + MAX_DURATION_MS)
+            val pending = end - updatedAt
+            val network = if (phase == LiveRecoveryPhase.WAITING_NETWORK) pending else 0L
+            val waiting = if (phase == LiveRecoveryPhase.SCHEDULED) pending else 0L
+            val server = (retryNotBeforeMs - updatedAt).coerceIn(0L, waiting)
+            val connecting = if (phase == LiveRecoveryPhase.CONNECTING && !httpOpen) pending else 0L
+            return LivePlaybackInterruption(
+                end - startedAt,
+                networkWaitMs + network,
+                retryAfterWaitMs + server,
+                retryDelayMs + waiting - server,
+                loadingMs + pending - network - waiting - connecting,
+                attempts,
+                outcome,
+                connectingMs + connecting
+            )
+        }
+    }
+
+    companion object {
+        const val MAX_DURATION_MS = 7L * 24 * 60 * 60 * 1000
+        const val MAX_INTERRUPTION_DETAILS = 6
+    }
 }
 
-/** Fixed eight-session window; playback callbacks only update primitive counters. */
+/** Fixed eight-session window with bounded interruption history per session. */
 internal class LivePlaybackHealthRecorder(private val nowMs: () -> Long = { System.nanoTime() / 1_000_000 }) {
     private val sessions = ArrayDeque<LivePlaybackHealthSession>()
 

@@ -41,11 +41,17 @@ class ExoPlayerManager(context: Context) {
         }
     }
 
-    fun play(url: String, mediaId: String = "", title: String? = null, autoPlay: Boolean = true) {
+    fun play(
+        url: String,
+        mediaId: String = "",
+        title: String? = null,
+        autoPlay: Boolean = true,
+        onHttpOpen: () -> Unit = {}
+    ) {
         initialize()
         retireAttempt()
         captionAudio?.sourceLanguage(null)
-        val current = LiveStartupTrace().also { trace = it }
+        val current = LiveStartupTrace(onHttpOpen = onHttpOpen).also { trace = it }
         val attemptRequests = LivePlaybackRequests().also { requests = it }
         val uri = Uri.parse(url)
         val output = if (uri.isHierarchical) uri.getQueryParameter("output")?.lowercase(Locale.ROOT) else null

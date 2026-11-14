@@ -1,5 +1,6 @@
 package mnstudio.apps.mnstreamx.domain.performance
 
+import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryPhase
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -71,42 +72,108 @@ class LivePlaybackHealthRecorderTest {
         assertEquals(250L, summary.firstFrameMs)
     }
 
-    @Test fun distinguishesStartupBufferFromRebufferAndRecordsFirstFrameOnlyOnce() {
-        var clock = 0L
+    @Test fun initialLoadingIsExcludedAndRepeatedAttemptsBelongToOneInterruption() {
+        var clock = 100L
         val session = LivePlaybackHealthRecorder { clock }.begin()
         session.buffering()
-        clock = 400
+        session.error()
+        session.retry()
+        assertEquals(0, session.snapshot().interruptionCount)
+        clock = 200
+        session.playbackAdvanced()
+
+        clock = 1_000
+        session.buffering()
+        clock = 1_400
+        session.error(retryAfterMs = 5_000L)
+        session.recoveryChanged(LiveRecoveryPhase.WAITING_NETWORK)
+        clock = 3_400
+        session.recoveryChanged(LiveRecoveryPhase.SCHEDULED)
+        clock = 6_900
+        session.recoveryChanged(LiveRecoveryPhase.CONNECTING)
+        session.retry()
+        clock = 7_400
+        session.httpOpened()
+        clock = 7_900
+        session.error()
+        session.recoveryChanged(LiveRecoveryPhase.SCHEDULED)
+        clock = 8_900
+        session.recoveryChanged(LiveRecoveryPhase.CONNECTING)
+        session.retry()
+        clock = 9_300
+        session.httpOpened()
         session.bufferEnded()
-        clock = 510
-        assertEquals(510L, session.firstFrame())
-        clock = 700
-        assertNull(session.firstFrame()) // A later reconnect must not duplicate FIRST_FRAME.
-        session.buffering(); session.buffering()
-        clock = 900
-        val pending = session.snapshot()
-        assertEquals(1, pending.startupBufferingEvents)
-        assertEquals(400L, pending.startupBufferingMs)
-        assertEquals(1, pending.rebufferingEvents)
-        assertEquals(200L, pending.rebufferingMs)
-        session.bufferEnded()
-        session.finish()
-        val done = session.snapshot()
-        assertEquals(2, done.bufferingEvents)
-        assertEquals(600L, done.bufferingMs)
-        assertEquals(200L, done.longestRebufferMs)
-        assertEquals(510L, done.firstFrameMs)
+        assertEquals(LivePlaybackInterruptionOutcome.ACTIVE, session.snapshot().interruptions.single().outcome)
+        clock = 9_400
+        session.playbackAdvanced()
+        session.recoveryChanged(LiveRecoveryPhase.NONE)
+
+        val summary = session.snapshot()
+        assertEquals(1, summary.interruptionCount)
+        assertEquals(
+            LivePlaybackInterruption(8_400L, 2_000L, 3_000L, 1_500L, 1_000L, 2, LivePlaybackInterruptionOutcome.RECOVERED, connectingMs = 900L),
+            summary.interruptions.single()
+        )
+        assertEquals(3, summary.recoveryAttempts)
     }
 
-    @Test fun aBufferThatBeginsBeforeFirstFrameStaysClassifiedAsStartup() {
+    @Test fun playbackProgressClosesAnInPlaceStallWithoutAnyReconnect() {
         var clock = 0L
         val session = LivePlaybackHealthRecorder { clock }.begin()
+        session.playbackAdvanced()
+        session.playbackStalled()
+        clock = 400
+        session.playbackStalled()
         session.buffering()
-        clock = 100
-        assertEquals(100L, session.firstFrame())
-        clock = 120
         session.bufferEnded()
-        assertEquals(120L, session.snapshot().startupBufferingMs)
-        assertEquals(0L, session.snapshot().rebufferingMs)
+        clock = 900
+        assertEquals(LivePlaybackInterruptionOutcome.ACTIVE, session.snapshot().interruptions.single().outcome)
+        session.playbackAdvanced()
+        assertEquals(
+            LivePlaybackInterruption(900L, 0L, 0L, 0L, 900L, 0, LivePlaybackInterruptionOutcome.RECOVERED),
+            session.snapshot().interruptions.single()
+        )
+    }
+
+    @Test fun pausesAndFailuresCloseAnInterruptionWithoutClaimingRecovery() {
+        var clock = 0L
+        val session = LivePlaybackHealthRecorder { clock }.begin()
+        session.playbackAdvanced()
+        session.buffering()
+        clock = 200
+        session.playbackSuspended()
+        clock = 2_000
+        session.error(playbackAllowed = false)
+        session.buffering()
+        session.bufferEnded()
+        assertEquals(1, session.snapshot().interruptionCount)
+        val stopped = session.snapshot().interruptions.single()
+        assertEquals(200L, stopped.durationMs)
+        assertEquals(LivePlaybackInterruptionOutcome.STOPPED, stopped.outcome)
+
+        session.playbackAdvanced()
+        session.error()
+        session.recoveryChanged(LiveRecoveryPhase.FAILED)
+        assertEquals(LivePlaybackInterruptionOutcome.FAILED, session.snapshot().interruptions.first().outcome)
+    }
+
+    @Test fun onlyRecentDetailsAreRetainedWhileTheTotalKeepsGrowing() {
+        var clock = 0L
+        val session = LivePlaybackHealthRecorder { clock }.begin()
+        session.playbackAdvanced()
+        repeat(10) { index ->
+            session.playbackStalled()
+            clock += index + 1L
+            session.playbackAdvanced()
+        }
+        session.playbackStalled()
+        clock += 20
+        val summary = session.snapshot()
+        assertEquals(11, summary.interruptionCount)
+        assertEquals(listOf(20L, 10L, 9L, 8L, 7L, 6L), summary.interruptions.map { it.durationMs })
+        assertEquals(LivePlaybackInterruptionOutcome.ACTIVE, summary.interruptions.first().outcome)
+        session.finish()
+        assertEquals(LivePlaybackInterruptionOutcome.STOPPED, session.snapshot().interruptions.first().outcome)
     }
 
     @Test fun clockMovingBackwardNeverCreatesNegativeMeasurements() {

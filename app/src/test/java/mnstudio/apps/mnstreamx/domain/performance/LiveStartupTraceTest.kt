@@ -29,6 +29,23 @@ class LiveStartupTraceTest {
             assertTrue(rows.values.all { it.samples == 1 })
         }
     }
+    @Test fun httpOpenCallbackRunsOnceAndOnlyForTheCurrentAttempt() {
+        val recorder = PerformanceRecorder { 0 }
+        var callbacks = 0
+        val cancelled = LiveStartupTrace(recorder) { callbacks++ }
+        cancelled.close()
+        cancelled.reached(PerformanceStage.LIVE_HTTP_OPEN)
+        assertEquals(0, callbacks)
+
+        val current = LiveStartupTrace(recorder) { callbacks++ }
+        current.reached(PerformanceStage.LIVE_TRACKS_READY)
+        assertEquals(0, callbacks)
+        current.reached(PerformanceStage.LIVE_HTTP_OPEN)
+        current.reached(PerformanceStage.LIVE_HTTP_OPEN)
+        current.reached(PerformanceStage.LIVE_FIRST_BYTE)
+        assertEquals(1, callbacks)
+    }
+
     @Test fun callbacksFromTheOldChannelCannotCompleteTheNewChannel() {
         val recorder = PerformanceRecorder { 0 }
         val old = LiveStartupTrace(recorder);old.close()

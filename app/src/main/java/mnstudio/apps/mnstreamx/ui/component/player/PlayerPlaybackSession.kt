@@ -60,6 +60,7 @@ internal class PlayerPlaybackSession(
     private val recovery = LiveRecoveryController(
         scope = scope,
         onState = { state ->
+            health?.recoveryChanged(state.phase)
             if (state.phase == LiveRecoveryPhase.WAITING_NETWORK) {
                 health?.bufferEnded()
                 retireAttempt()
@@ -106,14 +107,12 @@ internal class PlayerPlaybackSession(
     }
 
     fun cancelRecovery() {
+        health?.playbackSuspended()
         recovery.close()
         stopProgressMonitor()
     }
 
-    private fun retrySelection() {
-        health?.retry()
-        playSelection(resume = false, automatic = true)
-    }
+    private fun retrySelection() = playSelection(resume = false, automatic = true)
 
     fun start() {
         if (started) return
@@ -126,12 +125,13 @@ internal class PlayerPlaybackSession(
                 if (!events.containsAny(Player.EVENT_PLAY_WHEN_READY_CHANGED,
                         Player.EVENT_PLAYBACK_SUPPRESSION_REASON_CHANGED)) return
                 if (!started || this@PlayerPlaybackSession.player !== player || !isSelected(channel)) return
-                recovery.playbackPermissionChanged()
                 if (!player.canPlayLive()) {
+                    health?.playbackSuspended()
+                    recovery.playbackPermissionChanged()
                     onBuffering(channel, false)
-                    health?.bufferEnded()
                     return
                 }
+                recovery.playbackPermissionChanged()
                 if (listener == null) return
                 if (player.playbackState == Player.STATE_ENDED) {
                     streamEnded()
@@ -153,7 +153,8 @@ internal class PlayerPlaybackSession(
     private fun playSelection(resume: Boolean, automatic: Boolean = false) {
         val created = player ?: return
         if (!isSelected(channel)) return
-        if (health == null) health = LivePlaybackHealthJournal.begin()
+        val measurement = health ?: LivePlaybackHealthJournal.begin().also { health = it }
+        if (automatic) measurement.retry()
         listener?.let(created::removeListener)
         listener = null
         stopProgressMonitor()
@@ -220,18 +221,30 @@ internal class PlayerPlaybackSession(
                         val outputAdvanced = if (videoSelected) videoAdvanced else tracks.isTypeSelected(C.TRACK_TYPE_AUDIO)
                         val hasProgress = position > previousPosition && outputAdvanced
                         if (hasProgress) {
+                            health?.playbackAdvanced()
                             recovery.playbackAdvanced()
                             if (!firstProgressReported) {
                                 firstProgressReported = true
                                 onError(selected, null)
                             }
                         } else {
+                            health?.playbackStalled()
                             recovery.awaitingPlayback()
                         }
                         previousPosition = position
                         previousVideoCounters = videoCounters
                         previousRenderedFrames = renderedFrames
                     }
+                }
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int
+            ) {
+                if (isCurrent() && reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    measurement.playbackSuspended()
                 }
             }
 
@@ -243,7 +256,11 @@ internal class PlayerPlaybackSession(
         onBuffering(selected, showBuffering)
         if (showBuffering) health?.buffering()
         try {
-            controller.playUrl(selected.streamUrl, mediaId, selected.name, playWhenReady)
+            controller.playUrl(selected.streamUrl, mediaId, selected.name, playWhenReady) {
+                if (automatic) scope.launch {
+                    if (isCurrent()) measurement.httpOpened()
+                }
+            }
             if (isCurrent()) {
                 if (resume && !wasLive && savedPosition > 0L) created.seekTo(savedPosition)
                 if (created.canPlayLive()) recovery.awaitingPlayback()
@@ -262,7 +279,7 @@ internal class PlayerPlaybackSession(
     private fun failed(error: PlaybackException) {
         if (player == null || !started || !isSelected(channel)) return
         val decision = LiveRecoveryErrors.classify(error)
-        health?.error()
+        health?.error(decision.retryAfterMs, player?.canPlayLive() == true)
         retireAttempt(PerformanceOutcome.FAILED)
         PlaybackDiagnostics.record(error)
         onBuffering(channel, false)

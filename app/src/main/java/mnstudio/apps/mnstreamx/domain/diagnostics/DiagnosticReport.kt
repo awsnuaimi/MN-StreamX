@@ -3,6 +3,8 @@ package mnstudio.apps.mnstreamx.domain.diagnostics
 import mnstudio.apps.mnstreamx.domain.model.HomeLanguage
 import mnstudio.apps.mnstreamx.domain.caption.CaptionDiagnosticJournal
 import java.time.Instant
+import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthRecorder
+import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthSession
 import mnstudio.apps.mnstreamx.domain.performance.PerformanceReport
 
 object DiagnosticReport {
@@ -32,22 +34,30 @@ object DiagnosticReport {
                 appendLine(text.text("قياسات جلسة التطبيق فقط؛ ليست دليلًا على سبب انقطاع البث.",
                     "Process-local measurements; not proof of a stream outage cause.",
                     "Messwerte dieser App-Sitzung; keine Aussage zur Ursache eines Streamausfalls."))
-                appendLine(text.text("startupBuffer = التخزين المؤقت عند بدء القناة؛ rebuffer = التوقف بعد أول إطار. FIRST_FRAME العام يساوي أول إطار لكل اختيار، وليس لكل محاولة اتصال.",
-                    "startupBuffer means initial loading; rebuffer means interruptions after first frame. FIRST_FRAME is recorded once per selection, not reconnect.",
-                    "startupBuffer bedeutet anfängliches Laden; rebuffer sind Unterbrechungen nach dem ersten Bild. FIRST_FRAME wird einmal je Auswahl gemessen, nicht je Neuverbindung."))
-                snapshot.liveHealth.take(8).forEachIndexed { index, item ->
+                appendLine(text.text(
+                    "التوقّفات بعد بدء التشغيل، والأحدث أولاً. عند تداخل انقطاع الشبكة مع مهلة الخادم، يُحتسب الوقت ضمن انتظار الشبكة. ينتهي فتح الاتصال عند أول استجابة HTTP ناجحة.",
+                    "Interruptions after playback begins, newest first. Network wait takes priority over overlapping server cooldown. Connecting ends at the first successful HTTP response.",
+                    "Unterbrechungen nach Wiedergabebeginn, neueste zuerst. Bei gleichzeitiger Netz- und Server-Wartezeit zählt die Netzwartezeit. Der Verbindungsaufbau endet mit der ersten erfolgreichen HTTP-Antwort."
+                ))
+                snapshot.liveHealth.take(LivePlaybackHealthRecorder.LIMIT).forEachIndexed { index, item ->
                     val firstFrame = item.firstFrameMs?.coerceIn(0, 604_800_000)?.toString() ?: "-"
                     appendLine("#${index + 1} | duration=${item.durationMs.coerceIn(0, 604_800_000)} ms" +
                         " | firstFrame=$firstFrame ms | buffers=${item.bufferingEvents.coerceIn(0, 1_000_000)}" +
                         " | buffered=${item.bufferingMs.coerceIn(0, 604_800_000)} ms" +
                         " | maxBuffer=${item.longestBufferMs.coerceIn(0, 604_800_000)} ms" +
-                        " | startupBuffers=${item.startupBufferingEvents.coerceIn(0, 1_000_000)}" +
-                        " | startupBuffered=${item.startupBufferingMs.coerceIn(0, 604_800_000)} ms" +
-                        " | rebuffers=${item.rebufferingEvents.coerceIn(0, 1_000_000)}" +
-                        " | rebuffered=${item.rebufferingMs.coerceIn(0, 604_800_000)} ms" +
-                        " | maxRebuffer=${item.longestRebufferMs.coerceIn(0, 604_800_000)} ms" +
                         " | retries=${item.recoveryAttempts.coerceIn(0, 1_000_000)}" +
-                        " | errors=${item.playerErrors.coerceIn(0, 1_000_000)} | finished=${item.finished}")
+                        " | errors=${item.playerErrors.coerceIn(0, 1_000_000)} | finished=${item.finished}" +
+                        " | interruptions=${item.interruptionCount.coerceIn(0, 1_000_000)}")
+                    item.interruptions.take(LivePlaybackHealthSession.MAX_INTERRUPTION_DETAILS).forEachIndexed { number, incident ->
+                        appendLine("  ${number + 1}. ${incident.outcome.name}" +
+                            " | gap=${incident.durationMs.reportDuration()} ms" +
+                            " | networkWait=${incident.networkWaitMs.reportDuration()} ms" +
+                            " | retryAfterWait=${incident.retryAfterWaitMs.reportDuration()} ms" +
+                            " | retryDelay=${incident.retryDelayMs.reportDuration()} ms" +
+                            " | connecting=${incident.connectingMs.reportDuration()} ms" +
+                            " | loading=${incident.loadingMs.reportDuration()} ms" +
+                            " | attempts=${incident.attempts.coerceIn(0, 1_000_000)}")
+                    }
                 }
                 appendLine()
             }
@@ -76,4 +86,6 @@ object DiagnosticReport {
         require(result.toByteArray(Charsets.UTF_8).size <= MAX_BYTES)
         return result
     }
+
+    private fun Long.reportDuration(): Long = coerceIn(0L, LivePlaybackHealthSession.MAX_DURATION_MS)
 }
