@@ -127,6 +127,8 @@ internal class LiveRecoveryController(
         cancelTimers()
         retryPending = true
         publish(LiveRecoveryPhase.WAITING_NETWORK)
+        // A missing default-network callback must not leave a live channel waiting forever.
+        scheduleRetry(maxOf(OFFLINE_RETRY_DELAY_MS, retryBackoffMs()))
     }
 
     fun awaitingPlayback() {
@@ -148,6 +150,10 @@ internal class LiveRecoveryController(
         if (!active || !canRetry() ||
             (state.phase != LiveRecoveryPhase.NONE && state.phase != LiveRecoveryPhase.CONNECTING)) return
         cancelTimer()
+        // Playback progress supersedes an offline report if Android missed the return event.
+        if (state.phase == LiveRecoveryPhase.CONNECTING && connection == PlaybackConnection.Offline) {
+            connection = PlaybackConnection.Unknown
+        }
         publish(LiveRecoveryPhase.NONE)
         if (attempts > 0 && stablePlayback == null && connection != PlaybackConnection.Offline) {
             stablePlayback = scope.launch {
@@ -165,13 +171,19 @@ internal class LiveRecoveryController(
             waitForNetwork()
             return
         }
-        val nextAttempt = if (attempts == Int.MAX_VALUE) attempts else attempts + 1
-        val backoff = if (expedited) NETWORK_RETRY_DELAY_MS else
-            RETRY_DELAYS_MS[attempts.coerceAtMost(RETRY_DELAYS_MS.lastIndex)]
-        val deadlineMs = maxOf(nowMs() + backoff, retryNotBeforeMs)
+        val nextAttempt = nextAttemptNumber()
         publish(LiveRecoveryPhase.SCHEDULED, nextAttempt)
+        scheduleRetry(if (expedited) NETWORK_RETRY_DELAY_MS else retryBackoffMs())
+    }
+
+    private fun nextAttemptNumber(): Int = attempts + if (attempts == Int.MAX_VALUE) 0 else 1
+
+    private fun retryBackoffMs(): Long = RETRY_DELAYS_MS[attempts.coerceAtMost(RETRY_DELAYS_MS.lastIndex)]
+
+    private fun scheduleRetry(backoffMs: Long) {
+        val deadlineMs = maxOf(nowMs() + backoffMs, retryNotBeforeMs)
         runAt(deadlineMs) {
-            attempts = nextAttempt
+            attempts = nextAttemptNumber()
             retryPending = false
             expediteNextRetry = false
             publish(LiveRecoveryPhase.CONNECTING)
@@ -226,6 +238,7 @@ internal class LiveRecoveryController(
         private const val NETWORK_HANDOVER_TIMEOUT_MS = 8_000L
         private const val NETWORK_HANDOVER_WINDOW_MS = 15_000L
         private const val NETWORK_RETRY_DELAY_MS = 1_000L
+        private const val OFFLINE_RETRY_DELAY_MS = 15_000L
         private val RETRY_DELAYS_MS = longArrayOf(1_000L, 3_000L, 7_000L, 15_000L, 30_000L)
     }
 }

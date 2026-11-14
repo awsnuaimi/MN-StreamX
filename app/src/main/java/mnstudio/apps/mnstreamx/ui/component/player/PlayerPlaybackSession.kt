@@ -162,7 +162,8 @@ internal class PlayerPlaybackSession(
         val playWhenReady = !resume || shouldPlay
         if (!automatic) onError(selected, null)
         created.playWhenReady = playWhenReady
-        if (playWhenReady && recovery.waitIfOffline()) {
+        // Automatic attempts are timed by recovery, including its fallback while marked offline.
+        if (!automatic && playWhenReady && recovery.waitIfOffline()) {
             created.stop()
             return
         }

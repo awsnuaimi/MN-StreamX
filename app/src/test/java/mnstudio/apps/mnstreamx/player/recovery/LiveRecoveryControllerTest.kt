@@ -50,12 +50,73 @@ class LiveRecoveryControllerTest {
     @Test fun waitingForTheNetworkDoesNotCountAsAnAttempt() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
         h.controller.networkChanged(PlaybackConnection.Offline); h.controller.error(true)
-        advanceTimeBy(120_000); runCurrent()
+        advanceTimeBy(10_000); runCurrent()
         assertEquals(0, h.attempts); assertEquals(0, h.controller.state.attempt)
         assertEquals(LiveRecoveryPhase.WAITING_NETWORK, h.controller.state.phase)
         h.controller.networkChanged(wifi)
         advanceTimeBy(1_000); runCurrent(); assertEquals(1, h.attempts)
         h.controller.close()
+    }
+
+    @Test fun aMissingNetworkReturnCallbackCannotBlockRepeatedConnectionAttempts() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(PlaybackConnection.Offline)
+        h.controller.error(true)
+        repeat(4) {
+            advanceTimeBy(14_999)
+            runCurrent()
+            assertEquals(it, h.attempts)
+            assertEquals(LiveRecoveryPhase.WAITING_NETWORK, h.controller.state.phase)
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(it + 1, h.attempts)
+            assertEquals(LiveRecoveryPhase.CONNECTING, h.controller.state.phase)
+            if (it < 3) h.controller.error(true)
+        }
+        advanceTimeBy(20_000)
+        runCurrent()
+        assertEquals(1, h.timeouts)
+        advanceTimeBy(29_999)
+        runCurrent()
+        assertEquals(4, h.attempts)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(5, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun aSuccessfulFallbackClearsTheStaleOfflineSignal() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.networkChanged(PlaybackConnection.Offline)
+        h.controller.error(true)
+        advanceTimeBy(15_000)
+        runCurrent()
+        assertEquals(1, h.attempts)
+        h.controller.playbackAdvanced()
+        h.controller.awaitingPlayback()
+        assertEquals(LiveRecoveryPhase.NONE, h.controller.state.phase)
+        advanceTimeBy(30_000)
+        runCurrent()
+        assertEquals(1, h.timeouts)
+        assertEquals(LiveRecoveryPhase.SCHEDULED, h.controller.state.phase)
+        h.controller.close()
+    }
+
+    @Test fun aFallbackCannotBypassTheServerCooldownAndStopsWhenTheSessionCloses() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.error(true, retryAfterMs = 60_000)
+        h.controller.networkChanged(PlaybackConnection.Offline)
+        advanceTimeBy(59_999)
+        runCurrent()
+        assertEquals(0, h.attempts)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, h.attempts)
+        h.controller.error(true)
+        h.controller.close()
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals(1, h.attempts)
     }
 
     @Test fun losingTheNetworkDuringBackoffCancelsTheOldTimer() = runTest {
@@ -140,7 +201,7 @@ class LiveRecoveryControllerTest {
         val h = Harness(this) { testScheduler.currentTime }
         h.controller.error(true); advanceTimeBy(1_000); runCurrent()
         h.controller.networkChanged(PlaybackConnection.Offline)
-        advanceTimeBy(30_000); runCurrent(); assertEquals(0, h.timeouts)
+        advanceTimeBy(14_000); runCurrent(); assertEquals(0, h.timeouts)
         h.controller.networkChanged(wifi)
         advanceTimeBy(999); runCurrent(); assertEquals(1, h.attempts)
         advanceTimeBy(1); runCurrent(); assertEquals(2, h.attempts)
@@ -254,7 +315,7 @@ class LiveRecoveryControllerTest {
         val h = Harness(this) { testScheduler.currentTime }
         h.controller.networkChanged(PlaybackConnection.Offline)
         assertTrue(h.controller.waitIfOffline())
-        advanceTimeBy(90_000); runCurrent()
+        advanceTimeBy(14_000); runCurrent()
         assertEquals(LiveRecoveryPhase.WAITING_NETWORK, h.controller.state.phase)
         assertEquals(0, h.timeouts)
         assertEquals(0, h.attempts)
@@ -389,7 +450,7 @@ class LiveRecoveryControllerTest {
         val h = Harness(this) { testScheduler.currentTime }
         h.controller.networkChanged(PlaybackConnection.Offline)
         h.controller.reset(); h.controller.error(true)
-        advanceTimeBy(100_000); runCurrent(); assertEquals(0, h.attempts)
+        advanceTimeBy(14_999); runCurrent(); assertEquals(0, h.attempts)
         assertEquals(LiveRecoveryPhase.WAITING_NETWORK, h.controller.state.phase)
         h.controller.close()
     }
