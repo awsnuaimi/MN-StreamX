@@ -28,7 +28,10 @@ internal object LiveRecoveryErrors {
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
             PlaybackException.ERROR_CODE_TIMEOUT,
-            PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> true
+            PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
+            // A restarted live source can briefly serve an incomplete playlist or media segment.
+            PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED -> true
             PlaybackException.ERROR_CODE_IO_UNSPECIFIED -> causes.any { it is IOException }
             else -> false
         }

@@ -2,6 +2,7 @@ package mnstudio.apps.mnstreamx.player.recovery
 
 import android.app.Application
 import androidx.media3.common.C
+import androidx.media3.common.ParserException
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
@@ -86,6 +87,20 @@ class LiveRecoveryErrorsTest {
         assertFalse(retryable(error(PlaybackException.ERROR_CODE_DECODER_INIT_FAILED)))
         assertFalse(retryable(error(PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED)))
         assertFalse(retryable(error(PlaybackException.ERROR_CODE_UNSPECIFIED)))
+    }
+
+    @Test fun liveManifestAndContainerParsingErrorsCanRecoverAfterTheSourceReturns() {
+        val manifest = ParserException.createForMalformedManifest("Synthetic", null)
+        val container = ParserException.createForMalformedContainer("Synthetic", EOFException())
+        assertTrue(retryable(error(PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED, manifest)))
+        assertTrue(retryable(error(PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED, container)))
+    }
+
+    @Test fun unsupportedManifestAndContainerFeaturesStillNeedExplicitUserAction() {
+        val manifest = ParserException.createForManifestWithUnsupportedFeature("Synthetic", null)
+        val container = ParserException.createForUnsupportedContainerFeature("Synthetic")
+        assertFalse(retryable(error(PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED, manifest)))
+        assertFalse(retryable(error(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, container)))
     }
 
     @Test fun interruptedIoCanRecoverButAnUnspecifiedFailureWithoutAnIoCauseCannot() {
