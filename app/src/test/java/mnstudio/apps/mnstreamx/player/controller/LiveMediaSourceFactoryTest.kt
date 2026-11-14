@@ -22,8 +22,13 @@ import java.util.concurrent.*
 @androidx.annotation.OptIn(UnstableApi::class)
 class LiveMediaSourceFactoryTest {
     private val context get() = RuntimeEnvironment.getApplication()
-    private fun read(server: MockWebServer, path: String, trace: LiveStartupTrace): String {
-        val source = LiveMediaSourceFactory.dataSource(context,trace).createDataSource()
+    private fun read(
+        server: MockWebServer,
+        path: String,
+        trace: LiveStartupTrace,
+        requests: LivePlaybackRequests = LivePlaybackRequests()
+    ): String {
+        val source = LiveMediaSourceFactory.dataSource(context, trace, requests).createDataSource()
         try {
             source.open(DataSpec(Uri.parse(server.url(path).toString())))
             val bytes = ByteArray(64);val output = java.io.ByteArrayOutputStream()
@@ -93,6 +98,106 @@ class LiveMediaSourceFactoryTest {
         } finally {
             call.cancel();api.dispatcher.maxRequestsPerHost = previousLimit
             executor.shutdownNow();server.shutdown()
+        }
+    }
+
+    @Test fun retiredPlaybackInterruptsAnOpenResponseBodyWithoutTouchingTheNewAttempt() {
+        val executor = Executors.newSingleThreadExecutor()
+        val opened = CountDownLatch(1)
+        val retired = LivePlaybackRequests()
+        val current = LivePlaybackRequests()
+        try {
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setBody("ab").throttleBody(1, 4, TimeUnit.SECONDS))
+                val transfer = executor.submit(Callable {
+                    val source = LiveMediaSourceFactory.dataSource(context, LiveStartupTrace(), retired).createDataSource()
+                    try {
+                        source.open(DataSpec(Uri.parse(server.url("/old").toString())))
+                        val bytes = ByteArray(1)
+                        assertEquals(1, source.read(bytes, 0, 1))
+                        opened.countDown()
+                        source.read(bytes, 0, 1)
+                    } finally {
+                        source.close()
+                    }
+                })
+                assertTrue("The old response should have started delivering its body", opened.await(5, TimeUnit.SECONDS))
+
+                retired.cancel()
+                retired.cancel()
+                assertTrue(assertThrows(ExecutionException::class.java) {
+                    transfer.get(3, TimeUnit.SECONDS)
+                }.cause is IOException)
+
+                server.enqueue(MockResponse().setBody("new live stream"))
+                assertEquals("new live stream", read(server, "/new", LiveStartupTrace(), current))
+                assertEquals("/old", server.takeRequest(1, TimeUnit.SECONDS)?.path)
+                assertEquals("/new", server.takeRequest(1, TimeUnit.SECONDS)?.path)
+            }
+        } finally {
+            retired.cancel()
+            current.cancel()
+            executor.shutdownNow()
+        }
+    }
+
+    @Test fun retiringTheSourceCancelsCallsWaitingForHeadersButLeavesTheApiCallActive() {
+        val executor = Executors.newSingleThreadExecutor()
+        val requests = LivePlaybackRequests()
+        try {
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+                val apiCall = HttpClient.create().newCall(Request.Builder().url(server.url("/api-held")).build())
+                apiCall.enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) = Unit
+                    override fun onResponse(call: Call, response: Response) { response.close() }
+                })
+                try {
+                    assertEquals("/api-held", server.takeRequest(5, TimeUnit.SECONDS)?.path)
+                    server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+                    val old = executor.submit(Callable { read(server, "/live-held", LiveStartupTrace(), requests) })
+                    assertEquals("/live-held", server.takeRequest(5, TimeUnit.SECONDS)?.path)
+                    requests.cancel()
+                    assertTrue(assertThrows(ExecutionException::class.java) {
+                        old.get(3, TimeUnit.SECONDS)
+                    }.cause is IOException)
+                    assertFalse(apiCall.isCanceled())
+                } finally {
+                    apiCall.cancel()
+                }
+            }
+        } finally {
+            requests.cancel()
+            executor.shutdownNow()
+        }
+    }
+
+    @Test fun aLoaderFromARetiredSourceCannotOpenAnotherHttpConnection() {
+        MockWebServer().use { server ->
+            val requests = LivePlaybackRequests()
+            val prepared = requests.client.newCall(Request.Builder().url(server.url("/prepared")).build())
+            requests.cancel()
+
+            assertThrows(IOException::class.java) { prepared.execute().close() }
+            assertThrows(IOException::class.java) { read(server, "/late", LiveStartupTrace(), requests) }
+            assertTrue(prepared.isCanceled())
+            assertEquals(0, server.requestCount)
+        }
+    }
+
+    @Test fun retiringTheSourceLeavesItsCompletedCallsAndIdleConnectionsAlone() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("first"))
+            val requests = LivePlaybackRequests()
+            val finished = requests.client.newCall(Request.Builder().url(server.url("/first")).build())
+            finished.execute().use { assertEquals("first", it.body?.string()) }
+            requests.cancel()
+            assertFalse(finished.isCanceled())
+
+            server.enqueue(MockResponse().setBody("second"))
+            assertEquals("second", read(server, "/second", LiveStartupTrace()))
+            assertEquals(0, server.takeRequest(1, TimeUnit.SECONDS)?.sequenceNumber)
+            assertEquals(1, server.takeRequest(1, TimeUnit.SECONDS)?.sequenceNumber)
         }
     }
 

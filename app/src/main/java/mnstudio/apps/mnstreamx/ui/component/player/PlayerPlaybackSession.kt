@@ -270,13 +270,15 @@ internal class PlayerPlaybackSession(
 
     private fun retireAttempt(outcome: PerformanceOutcome = PerformanceOutcome.CANCELLED) {
         stopProgressMonitor()
-        controller.cancelStartup(outcome)
-        val created = player ?: return
-        val previous = listener ?: return
-        generation++
-        listener = null
-        created.removeListener(previous)
-        created.stop()
+        val created = player
+        val previous = listener
+        if (previous != null) {
+            generation++
+            listener = null
+            created?.removeListener(previous)
+        }
+        controller.retireAttempt(outcome)
+        if (previous != null) created?.stop()
     }
 
     fun stop() {

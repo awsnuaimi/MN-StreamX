@@ -25,6 +25,7 @@ class ExoPlayerManager(context: Context) {
     private val appContext = context.applicationContext
     private var captionAudio: CaptionAudioTap? = null
     private var trace: LiveStartupTrace? = null
+    private var requests: LivePlaybackRequests? = null
     private var analytics: AnalyticsListener? = null
     fun configureCaptionAudio(tap: CaptionAudioTap?) { captionAudio = tap }
     var player: ExoPlayer? = null
@@ -42,9 +43,10 @@ class ExoPlayerManager(context: Context) {
 
     fun play(url: String, mediaId: String = "", title: String? = null, autoPlay: Boolean = true) {
         initialize()
-        cancelStartup()
+        retireAttempt()
         captionAudio?.sourceLanguage(null)
         val current = LiveStartupTrace().also { trace = it }
+        val attemptRequests = LivePlaybackRequests().also { requests = it }
         val uri = Uri.parse(url)
         val output = if (uri.isHierarchical) uri.getQueryParameter("output")?.lowercase(Locale.ROOT) else null
         val item = MediaItem.Builder().setUri(uri).setMediaId(mediaId).apply {
@@ -77,22 +79,26 @@ class ExoPlayerManager(context: Context) {
                 }
             }.also(::addAnalyticsListener)
             playWhenReady = autoPlay
-            setMediaSource(LiveMediaSourceFactory.create(appContext,current).createMediaSource(item))
+            setMediaSource(LiveMediaSourceFactory.create(appContext, current, attemptRequests).createMediaSource(item))
             prepare()
         }
     }
 
-    internal fun cancelStartup(outcome: PerformanceOutcome = PerformanceOutcome.CANCELLED) {
-        trace?.close(outcome);trace = null
+    internal fun retireAttempt(outcome: PerformanceOutcome = PerformanceOutcome.CANCELLED) {
+        trace?.close(outcome)
+        trace = null
+        val retired = requests
+        requests = null
+        retired?.cancel()
     }
 
     fun pause() { player?.pause() }
     fun resume() { player?.play() }
-    fun stop() { cancelStartup();player?.stop() }
+    fun stop() { retireAttempt();player?.stop() }
     fun isPlaying(): Boolean = player?.isPlaying == true
 
     fun release() {
-        cancelStartup()
+        retireAttempt()
         analytics?.let { player?.removeAnalyticsListener(it) };analytics = null
         player?.release()
         player = null

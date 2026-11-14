@@ -16,8 +16,8 @@ class PlayerController(context: Context) {
     fun pause() = manager.pause()
     fun resume() = manager.resume()
     fun stop() = manager.stop()
-    internal fun cancelStartup(outcome: mnstudio.apps.mnstreamx.domain.performance.PerformanceOutcome =
-        mnstudio.apps.mnstreamx.domain.performance.PerformanceOutcome.CANCELLED) = manager.cancelStartup(outcome)
+    internal fun retireAttempt(outcome: mnstudio.apps.mnstreamx.domain.performance.PerformanceOutcome =
+        mnstudio.apps.mnstreamx.domain.performance.PerformanceOutcome.CANCELLED) = manager.retireAttempt(outcome)
     fun release() = manager.release()
     fun isPlaying(): Boolean = manager.isPlaying()
 }

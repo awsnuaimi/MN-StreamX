@@ -17,8 +17,12 @@ import mnstudio.apps.mnstreamx.data.network.HttpClient
 import mnstudio.apps.mnstreamx.domain.performance.LiveStartupTrace
 import mnstudio.apps.mnstreamx.domain.performance.PerformanceStage
 import mnstudio.apps.mnstreamx.player.recovery.LiveRecoveryErrors
+import java.io.IOException
 import java.util.concurrent.TimeUnit
+import okhttp3.Call
 import okhttp3.Dispatcher
+import okhttp3.EventListener
+import okhttp3.OkHttpClient
 
 /** Live-only transport. Reuses the API connection pool without imposing its finite call timeout. */
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -33,8 +37,8 @@ internal object LiveMediaSourceFactory {
             .build()
     }
 
-    fun dataSource(context: Context, trace: LiveStartupTrace): DataSource.Factory {
-        val http = OkHttpDataSource.Factory(client)
+    fun dataSource(context: Context, trace: LiveStartupTrace, requests: LivePlaybackRequests): DataSource.Factory {
+        val http = OkHttpDataSource.Factory(requests.client)
             .setUserAgent(System.getProperty("http.agent") ?: Util.getUserAgent(context,"MN StreamX"))
         // The listener belongs to this media source, never to a mutable global current channel.
         return DefaultDataSource.Factory(context,http).setTransferListener(object : TransferListener {
@@ -49,8 +53,46 @@ internal object LiveMediaSourceFactory {
         })
     }
 
-    fun create(context: Context, trace: LiveStartupTrace) =
-        DefaultMediaSourceFactory(dataSource(context, trace)).setLoadErrorHandlingPolicy(LiveLoadErrorPolicy)
+    fun create(context: Context, trace: LiveStartupTrace, requests: LivePlaybackRequests) =
+        DefaultMediaSourceFactory(dataSource(context, trace, requests)).setLoadErrorHandlingPolicy(LiveLoadErrorPolicy)
+}
+
+/** Owns the HTTP calls of one media source through the end of their response bodies. */
+internal class LivePlaybackRequests(baseClient: OkHttpClient = LiveMediaSourceFactory.client) {
+    private val lock = Any()
+    private val activeCalls = mutableSetOf<Call>()
+    private var retired = false
+
+    val client = baseClient.newBuilder()
+        .eventListener(object : EventListener() {
+            override fun callStart(call: Call) {
+                val cancel = synchronized(lock) {
+                    if (retired) true else {
+                        activeCalls.add(call)
+                        false
+                    }
+                }
+                if (cancel) call.cancel()
+            }
+
+            override fun callEnd(call: Call) = remove(call)
+
+            override fun callFailed(call: Call, ioe: IOException) = remove(call)
+
+            private fun remove(call: Call) {
+                synchronized(lock) { activeCalls.remove(call) }
+            }
+        })
+        .build()
+
+    fun cancel() {
+        val calls = synchronized(lock) {
+            if (retired) return
+            retired = true
+            activeCalls.toList().also { activeCalls.clear() }
+        }
+        calls.forEach(Call::cancel)
+    }
 }
 
 /** Let the live session own server cooldowns while Media3 still handles ordinary segment retries. */
