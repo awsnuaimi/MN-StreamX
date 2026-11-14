@@ -7,6 +7,8 @@ internal object LivePlaybackTuning {
     const val START_BUFFER_MS = 500
     const val REBUFFER_MS = 3_000
     const val REPEATED_REBUFFER_MS = 5_000
+    const val FREQUENT_REBUFFER_MS = 8_000
     const val REBUFFER_REPEAT_WINDOW_MS = 60_000L
+    const val MAX_ADAPTIVE_WAIT_MS = 6_000L
     const val TARGET_BUFFER_BYTES = 24 * 1024 * 1024
 }
