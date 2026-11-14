@@ -25,6 +25,7 @@ internal class LiveRecoveryController(
     private var active = false
     private var connection: PlaybackConnection = PlaybackConnection.Unknown
     private var attempts = 0
+    private var retryPending = false
     private var retryNotBeforeMs = 0L
     private var networkChangedAtMs: Long? = null
     private var expediteNextRetry = false
@@ -38,6 +39,7 @@ internal class LiveRecoveryController(
         cancelTimers()
         active = true
         attempts = 0
+        retryPending = false
         retryNotBeforeMs = 0
         networkChangedAtMs = null
         expediteNextRetry = false
@@ -46,26 +48,35 @@ internal class LiveRecoveryController(
 
     fun close() {
         active = false
+        retryPending = false
         cancelTimers()
         publish(LiveRecoveryPhase.NONE)
     }
 
-    fun paused() {
-        cancelTimers()
-        if (state.phase != LiveRecoveryPhase.FAILED) publish(LiveRecoveryPhase.NONE)
+    fun playbackPermissionChanged() {
+        if (!active) return
+        if (!canRetry()) {
+            suspendRecovery()
+        } else if (retryPending && timer == null) {
+            schedule(expedited = expediteNextRetry && recentlyChangedNetwork())
+        }
     }
 
     fun error(retryable: Boolean, retryAfterMs: Long = 0L) {
         if (!active) return
         cancelTimers()
-        if (retryable && canRetry()) {
+        retryPending = retryable
+        if (retryable) {
             retryNotBeforeMs = nowMs() + retryAfterMs
-            schedule(expedited = expediteNextRetry && recentlyChangedNetwork())
-        } else if (retryable) {
-            paused()
+            playbackPermissionChanged()
         } else {
             publish(LiveRecoveryPhase.FAILED)
         }
+    }
+
+    private fun suspendRecovery() {
+        cancelTimers()
+        if (state.phase != LiveRecoveryPhase.FAILED) publish(LiveRecoveryPhase.NONE)
     }
 
     fun networkChanged(value: PlaybackConnection) {
@@ -79,8 +90,7 @@ internal class LiveRecoveryController(
                 stablePlayback?.cancel()
                 stablePlayback = null
                 if (state.isRecovering || timer != null) {
-                    cancelTimers()
-                    publish(LiveRecoveryPhase.WAITING_NETWORK)
+                    waitForNetwork()
                 }
             }
             is PlaybackConnection.Online -> {
@@ -109,9 +119,14 @@ internal class LiveRecoveryController(
 
     fun waitIfOffline(): Boolean {
         if (!active || !canRetry() || connection != PlaybackConnection.Offline) return false
-        cancelTimers()
-        publish(LiveRecoveryPhase.WAITING_NETWORK)
+        waitForNetwork()
         return true
+    }
+
+    private fun waitForNetwork() {
+        cancelTimers()
+        retryPending = true
+        publish(LiveRecoveryPhase.WAITING_NETWORK)
     }
 
     fun awaitingPlayback() {
@@ -147,7 +162,7 @@ internal class LiveRecoveryController(
 
     private fun schedule(expedited: Boolean) {
         if (connection == PlaybackConnection.Offline) {
-            publish(LiveRecoveryPhase.WAITING_NETWORK)
+            waitForNetwork()
             return
         }
         val nextAttempt = if (attempts == Int.MAX_VALUE) attempts else attempts + 1
@@ -157,6 +172,7 @@ internal class LiveRecoveryController(
         publish(LiveRecoveryPhase.SCHEDULED, nextAttempt)
         runAt(deadlineMs) {
             attempts = nextAttempt
+            retryPending = false
             expediteNextRetry = false
             publish(LiveRecoveryPhase.CONNECTING)
             watchForProgress(CONNECT_TIMEOUT_MS)
@@ -180,7 +196,7 @@ internal class LiveRecoveryController(
         timer = scope.launch {
             delay((deadlineMs - nowMs()).coerceAtLeast(1L))
             timer = null
-            if (canRetry()) action() else paused()
+            if (canRetry()) action() else suspendRecovery()
         }
     }
 

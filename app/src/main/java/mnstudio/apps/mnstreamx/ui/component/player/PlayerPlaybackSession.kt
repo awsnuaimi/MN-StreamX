@@ -50,6 +50,7 @@ internal class PlayerPlaybackSession(
     private var generation = 0L
     private var started = false
     private var listener: Player.Listener? = null
+    private var permissionListener: Player.Listener? = null
     private var networkJob: Job? = null
     private var progressJob: Job? = null
     private var savedPosition = 0L
@@ -71,7 +72,7 @@ internal class PlayerPlaybackSession(
             failed(PlaybackException("Live playback stalled", null,
                 PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
         },
-        canRetry = { started && isSelected(channel) && player?.playWhenReady == true },
+        canRetry = { started && isSelected(channel) && player?.canPlayLive() == true },
         nowMs = SystemClock::elapsedRealtime
     )
 
@@ -120,7 +121,31 @@ internal class PlayerPlaybackSession(
         started = true
         recovery.reset()
         controller.initialize()
-        player = checkNotNull(controller.player)
+        val current = checkNotNull(controller.player)
+        player = current
+        permissionListener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (!events.containsAny(Player.EVENT_PLAY_WHEN_READY_CHANGED,
+                        Player.EVENT_PLAYBACK_SUPPRESSION_REASON_CHANGED)) return
+                if (!started || this@PlayerPlaybackSession.player !== player || !isSelected(channel)) return
+                recovery.playbackPermissionChanged()
+                if (!player.canPlayLive()) {
+                    onBuffering(channel, false)
+                    health?.bufferEnded()
+                    return
+                }
+                if (listener == null) return
+                if (player.playbackState == Player.STATE_ENDED) {
+                    streamEnded()
+                } else if (!player.isPlaying) {
+                    if (player.playbackState == Player.STATE_BUFFERING) {
+                        onBuffering(channel, true)
+                        health?.buffering()
+                    }
+                    recovery.awaitingPlayback()
+                }
+            }
+        }.also(current::addListener)
         recovery.networkChanged(PlaybackConnection.Unknown)
         networkJob = scope.launch { network.collect(recovery::networkChanged) }
         playSelection(resume = true)
@@ -158,8 +183,9 @@ internal class PlayerPlaybackSession(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (!isCurrent()) return
                 val buffering = playbackState == Player.STATE_BUFFERING
-                onBuffering(selected, buffering && created.playWhenReady)
-                if (buffering && created.playWhenReady) health?.buffering() else health?.bufferEnded()
+                val showBuffering = buffering && created.canPlayLive()
+                onBuffering(selected, showBuffering)
+                if (showBuffering) health?.buffering() else health?.bufferEnded()
                 if (playbackState == Player.STATE_ENDED && created.playWhenReady) {
                     streamEnded()
                 } else if (buffering) {
@@ -208,36 +234,18 @@ internal class PlayerPlaybackSession(
                 }
             }
 
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (!isCurrent()) return
-                if (playWhenReady) {
-                    if (created.playbackState == Player.STATE_ENDED) {
-                        streamEnded()
-                    } else {
-                        if (created.playbackState == Player.STATE_BUFFERING) {
-                            onBuffering(selected, true)
-                            health?.buffering()
-                        }
-                        recovery.awaitingPlayback()
-                    }
-                } else {
-                    onBuffering(selected, false)
-                    health?.bufferEnded()
-                    recovery.paused()
-                }
-            }
-
             override fun onPlayerError(error: PlaybackException) {
                 if (isCurrent()) failed(error)
             }
         }.also(created::addListener)
-        onBuffering(selected, playWhenReady)
-        if (playWhenReady) health?.buffering()
+        val showBuffering = created.canPlayLive()
+        onBuffering(selected, showBuffering)
+        if (showBuffering) health?.buffering()
         try {
             controller.playUrl(selected.streamUrl, mediaId, selected.name, playWhenReady)
             if (isCurrent()) {
                 if (resume && !wasLive && savedPosition > 0L) created.seekTo(savedPosition)
-                if (created.playWhenReady) recovery.awaitingPlayback()
+                if (created.canPlayLive()) recovery.awaitingPlayback()
             }
         } catch (error: CancellationException) {
             throw error
@@ -251,16 +259,14 @@ internal class PlayerPlaybackSession(
     }
 
     private fun failed(error: PlaybackException) {
-        val created = player ?: return
-        if (!started || !isSelected(channel)) return
-        val wantsPlayback = created.playWhenReady
+        if (player == null || !started || !isSelected(channel)) return
         val decision = LiveRecoveryErrors.classify(error)
         health?.error()
         retireAttempt(PerformanceOutcome.FAILED)
         PlaybackDiagnostics.record(error)
         onBuffering(channel, false)
         onError(channel, error.errorCodeName)
-        recovery.error(wantsPlayback && decision.retryable, decision.retryAfterMs)
+        recovery.error(decision.retryable, decision.retryAfterMs)
     }
 
     private fun stopProgressMonitor() {
@@ -278,7 +284,12 @@ internal class PlayerPlaybackSession(
             created?.removeListener(previous)
         }
         controller.retireAttempt(outcome)
-        if (previous != null) created?.stop()
+        if (previous != null && created != null &&
+            created.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS
+        ) {
+            // ExoPlayer.stop() abandons the focus request, preventing the focus-gain callback.
+            created.stop()
+        }
     }
 
     fun stop() {
@@ -291,10 +302,15 @@ internal class PlayerPlaybackSession(
             savedPosition = current.currentPosition
             wasLive = current.currentTimeline.isEmpty || current.isCurrentMediaItemLive || !current.isCurrentMediaItemSeekable
             listener?.let(current::removeListener)
+            permissionListener?.let(current::removeListener)
         }
+        permissionListener = null
         listener = null; player = null
         controller.release()
     }
+
+    private fun Player.canPlayLive(): Boolean =
+        playWhenReady && playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
 
     private companion object {
         const val PROGRESS_SAMPLE_MS = 1_000L

@@ -149,10 +149,82 @@ class LiveRecoveryControllerTest {
 
     @Test fun pausingCancelsAutomaticPlaybackEvenAfterANetworkChange() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
-        h.controller.error(true); h.controller.paused()
+        h.controller.error(true)
+        h.allowed = false
+        h.controller.playbackPermissionChanged()
         h.controller.networkChanged(PlaybackConnection.Offline)
         h.controller.networkChanged(wifi)
         advanceTimeBy(100_000); runCurrent(); assertEquals(0, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun aSystemInterruptionStopsTheWatchdogUntilPlaybackCanResume() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.awaitingPlayback()
+        advanceTimeBy(5_000)
+        h.allowed = false
+        h.controller.playbackPermissionChanged()
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(0, h.timeouts)
+        assertEquals(0, h.attempts)
+
+        h.allowed = true
+        h.controller.playbackPermissionChanged()
+        h.controller.awaitingPlayback()
+        advanceTimeBy(29_999); runCurrent(); assertEquals(0, h.timeouts)
+        advanceTimeBy(1); runCurrent(); assertEquals(1, h.timeouts)
+        h.controller.close()
+    }
+
+    @Test fun aRealFailureDuringTheInterruptionResumesRecoveryWhenPlaybackIsAllowed() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.allowed = false
+        h.controller.error(true)
+        advanceTimeBy(60_000); runCurrent(); assertEquals(0, h.attempts)
+        h.controller.networkChanged(PlaybackConnection.Offline)
+        h.allowed = true
+        h.controller.playbackPermissionChanged()
+        assertEquals(LiveRecoveryPhase.WAITING_NETWORK, h.controller.state.phase)
+        h.controller.networkChanged(wifi)
+        advanceTimeBy(1_000); runCurrent(); assertEquals(1, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun anInterruptedScheduledRetryKeepsItsServerCooldown() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.error(true, retryAfterMs = 45_000)
+        advanceTimeBy(2_000)
+        h.allowed = false
+        h.controller.playbackPermissionChanged()
+        advanceTimeBy(3_000)
+        h.allowed = true
+        h.controller.playbackPermissionChanged()
+        advanceTimeBy(39_999); runCurrent(); assertEquals(0, h.attempts)
+        advanceTimeBy(1); runCurrent(); assertEquals(1, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun restoredPlaybackPermissionCannotRestartARetiredSelection() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.allowed = false
+        h.controller.error(true)
+        h.controller.reset()
+        h.allowed = true
+        h.controller.playbackPermissionChanged()
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(0, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun restoredPlaybackPermissionDoesNotRetryPermanentErrors() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.allowed = false
+        h.controller.error(false)
+        h.allowed = true
+        h.controller.playbackPermissionChanged()
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(0, h.attempts)
+        assertEquals(LiveRecoveryPhase.FAILED, h.controller.state.phase)
         h.controller.close()
     }
 
