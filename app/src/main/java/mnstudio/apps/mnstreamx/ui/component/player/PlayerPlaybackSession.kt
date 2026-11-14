@@ -98,11 +98,10 @@ internal class PlayerPlaybackSession(
 
     fun selectChannel(selected: Channel, retry: Int) {
         if (selected.id == channel.id && selected.streamUrl == channel.streamUrl && retry == retryToken) return
-        recovery.close()
+        recovery.reset()
         health?.finish(); health = null
         channel = selected; retryToken = retry
         savedPosition = 0L; wasLive = true; shouldPlay = true
-        recovery.reset()
         if (started) playSelection(resume = false)
     }
 
@@ -119,7 +118,6 @@ internal class PlayerPlaybackSession(
     fun start() {
         if (started) return
         started = true
-        recovery.reset()
         controller.initialize()
         val current = checkNotNull(controller.player)
         player = current
@@ -146,13 +144,15 @@ internal class PlayerPlaybackSession(
                 }
             }
         }.also(current::addListener)
-        recovery.networkChanged(PlaybackConnection.Unknown)
+        current.playWhenReady = shouldPlay
+        val recovering = recovery.resume()
         networkJob = scope.launch { network.collect(recovery::networkChanged) }
-        playSelection(resume = true)
+        if (!recovering) playSelection(resume = true)
     }
 
     private fun playSelection(resume: Boolean, automatic: Boolean = false) {
         val created = player ?: return
+        if (!isSelected(channel)) return
         if (health == null) health = LivePlaybackHealthJournal.begin()
         listener?.let(created::removeListener)
         listener = null
@@ -294,10 +294,12 @@ internal class PlayerPlaybackSession(
     }
 
     fun stop() {
+        if (!started) return
         health?.finish(); health = null
         started = false; generation++
         networkJob?.cancel(); networkJob = null
-        cancelRecovery()
+        recovery.suspendForBackground()
+        stopProgressMonitor()
         player?.let { current ->
             shouldPlay = current.playWhenReady
             savedPosition = current.currentPosition

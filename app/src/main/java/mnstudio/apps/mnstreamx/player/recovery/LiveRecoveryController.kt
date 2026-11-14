@@ -27,6 +27,7 @@ internal class LiveRecoveryController(
     private var attempts = 0
     private var retryPending = false
     private var retryNotBeforeMs = 0L
+    private var pendingRetryAtMs: Long? = null
     private var networkChangedAtMs: Long? = null
     private var expediteNextRetry = false
     private var timer: Job? = null
@@ -36,21 +37,41 @@ internal class LiveRecoveryController(
         private set
 
     fun reset() {
-        cancelTimers()
+        close()
         active = true
+    }
+
+    fun close() {
+        active = false
+        cancelTimers()
         attempts = 0
         retryPending = false
         retryNotBeforeMs = 0
+        pendingRetryAtMs = null
         networkChangedAtMs = null
         expediteNextRetry = false
         publish(LiveRecoveryPhase.NONE)
     }
 
-    fun close() {
+    fun suspendForBackground() {
+        connection = PlaybackConnection.Unknown
+        if (!active) return
         active = false
-        retryPending = false
+        if (state.phase == LiveRecoveryPhase.CONNECTING) {
+            // Releasing the player interrupts the active attempt before it can report progress.
+            retryPending = true
+            pendingRetryAtMs = nowMs()
+        }
         cancelTimers()
-        publish(LiveRecoveryPhase.NONE)
+        networkChangedAtMs = null
+        expediteNextRetry = false
+    }
+
+    /** Returns true when recovery still owns the source or a permanent error needs user action. */
+    fun resume(): Boolean {
+        active = true
+        playbackPermissionChanged()
+        return retryPending || state.phase == LiveRecoveryPhase.FAILED
     }
 
     fun playbackPermissionChanged() {
@@ -65,6 +86,7 @@ internal class LiveRecoveryController(
     fun error(retryable: Boolean, retryAfterMs: Long = 0L) {
         if (!active) return
         cancelTimers()
+        pendingRetryAtMs = null
         retryPending = retryable
         if (retryable) {
             retryNotBeforeMs = nowMs() + retryAfterMs
@@ -128,7 +150,7 @@ internal class LiveRecoveryController(
         retryPending = true
         publish(LiveRecoveryPhase.WAITING_NETWORK)
         // A missing default-network callback must not leave a live channel waiting forever.
-        scheduleRetry(maxOf(OFFLINE_RETRY_DELAY_MS, retryBackoffMs()))
+        scheduleRetryAt(nowMs() + maxOf(OFFLINE_RETRY_DELAY_MS, retryBackoffMs()))
     }
 
     fun awaitingPlayback() {
@@ -171,25 +193,34 @@ internal class LiveRecoveryController(
             waitForNetwork()
             return
         }
-        val nextAttempt = nextAttemptNumber()
-        publish(LiveRecoveryPhase.SCHEDULED, nextAttempt)
-        scheduleRetry(if (expedited) NETWORK_RETRY_DELAY_MS else retryBackoffMs())
+        val backoffMs = if (expedited) NETWORK_RETRY_DELAY_MS else retryBackoffMs()
+        val deadlineMs = nowMs() + backoffMs
+        val savedDeadlineMs = pendingRetryAtMs
+        val retryAt = if (expedited && savedDeadlineMs != null) {
+            minOf(deadlineMs, savedDeadlineMs)
+        } else {
+            savedDeadlineMs ?: deadlineMs
+        }
+        publish(LiveRecoveryPhase.SCHEDULED, nextAttemptNumber())
+        scheduleRetryAt(retryAt)
     }
 
     private fun nextAttemptNumber(): Int = attempts + if (attempts == Int.MAX_VALUE) 0 else 1
 
     private fun retryBackoffMs(): Long = RETRY_DELAYS_MS[attempts.coerceAtMost(RETRY_DELAYS_MS.lastIndex)]
 
-    private fun scheduleRetry(backoffMs: Long) {
-        val deadlineMs = maxOf(nowMs() + backoffMs, retryNotBeforeMs)
-        runAt(deadlineMs) {
+    private fun scheduleRetryAt(deadlineMs: Long) {
+        val retryAtMs = maxOf(deadlineMs, retryNotBeforeMs)
+        runAt(retryAtMs) {
             attempts = nextAttemptNumber()
             retryPending = false
+            pendingRetryAtMs = null
             expediteNextRetry = false
             publish(LiveRecoveryPhase.CONNECTING)
             watchForProgress(CONNECT_TIMEOUT_MS)
             retry()
         }
+        pendingRetryAtMs = timerDeadlineMs
     }
 
     private fun recentlyChangedNetwork(): Boolean {
