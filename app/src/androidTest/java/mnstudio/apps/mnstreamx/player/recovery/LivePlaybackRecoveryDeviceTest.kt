@@ -31,6 +31,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -41,8 +42,36 @@ class LivePlaybackRecoveryDeviceTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
 
     @Test
-    fun theSameChannelRendersAudioAndVideoAfterShortDropsAndSourceMaintenance() {
-        val source = SyntheticBroadcast(readBroadcast())
+    fun theSameChannelRendersAudioAndVideoAfterShortDropsAndSourceMaintenance() =
+        withPlayback { source, _, capture -> runScenario(source, capture) }
+
+    @Test
+    fun theSameChannelReconnectsWhenThePlayerLosesItsMediaAfterPlaybackWithoutAnError() =
+        withPlayback(SourceMode.RESTORED) { _, session, capture ->
+            val original = awaitOutput("audio and video before silent loss", emptySet(), 45_000, capture)
+            val confirmed = awaitSample("the session to confirm playback progress", 10_000, capture) {
+                it.playbackConfirmations >= 2 && it.hasAdvancedSince(original)
+            }
+            val originalId = checkNotNull(confirmed.mediaId)
+            val lossAt = onMain {
+                val player = checkNotNull(session.player)
+                assertEquals(originalId, player.currentMediaItem?.mediaId)
+                player.clearMediaItems()
+                assertNull("The player has lost the media item", player.currentMediaItem)
+                assertNull("No player error announced the loss", player.playerError)
+                assertTrue("Playback is still requested", player.playWhenReady)
+                SystemClock.elapsedRealtime()
+            }
+            val resumed = awaitOutput("audio and video after silent loss", setOf(originalId), 38_000, capture)
+            assertEquals("The watchdog should schedule the retry", 1, resumed.watchdogErrors)
+            Log.i(LOG_TAG, "silent_loss_to_av_ms=${resumed.observedAtMs - lossAt}")
+        }
+
+    private fun withPlayback(
+        initialMode: SourceMode = SourceMode.SHORT_BROADCAST,
+        run: (SyntheticBroadcast, PlayerPlaybackSession, () -> PlaybackSample) -> Unit
+    ) {
+        val source = SyntheticBroadcast(readBroadcast(), initialMode)
         MockWebServer().use { server ->
             server.dispatcher = source
             server.start(InetAddress.getByName("127.0.0.1"), 0)
@@ -56,7 +85,7 @@ class LivePlaybackRecoveryDeviceTest {
                     initialChannel = channel,
                     scope = scope,
                     network = MutableStateFlow(PlaybackConnection.Online(1, validated = true)),
-                    onError = { _, error -> if (error == HTTP_ERROR) probe.httpErrors++ },
+                    onError = { _, error -> probe.playbackErrorChanged(error) },
                     onBuffering = { _, buffering -> probe.bufferingChanged(buffering) },
                     isSelected = { it.id == channel.id && it.streamUrl == channel.streamUrl },
                     onRecovery = { _, state ->
@@ -77,7 +106,7 @@ class LivePlaybackRecoveryDeviceTest {
                             session.start()
                             checkNotNull(session.player).setVideoSurface(reader.surface)
                         }
-                        runScenario(source, capture)
+                        run(source, session, capture)
                     } finally {
                         try {
                             onMain {
@@ -192,8 +221,8 @@ class LivePlaybackRecoveryDeviceTest {
 
     private enum class SourceMode { SHORT_BROADCAST, MAINTENANCE, RESTORED }
 
-    private class SyntheticBroadcast(private val fullBroadcast: ByteArray) : Dispatcher() {
-        val mode = AtomicReference(SourceMode.SHORT_BROADCAST)
+    private class SyntheticBroadcast(private val fullBroadcast: ByteArray, initialMode: SourceMode) : Dispatcher() {
+        val mode = AtomicReference(initialMode)
         val rejected = AtomicInteger()
         // Packet-aligned prefix of the 16-second fixture with over four seconds of both tracks.
         private val shortBroadcast = fullBroadcast.copyOf(191 * 188)
@@ -217,8 +246,18 @@ class LivePlaybackRecoveryDeviceTest {
         var httpErrors = 0
         var phase = LiveRecoveryPhase.NONE
         var failed = false
+        private var playbackConfirmations = 0
+        private var watchdogErrors = 0
         private var buffering = false
         private var bufferingEvents = 0
+
+        fun playbackErrorChanged(error: String?) {
+            when (error) {
+                null -> playbackConfirmations++
+                HTTP_ERROR -> httpErrors++
+                WATCHDOG_ERROR -> watchdogErrors++
+            }
+        }
 
         fun bufferingChanged(value: Boolean) {
             if (value && !buffering) bufferingEvents++
@@ -234,6 +273,8 @@ class LivePlaybackRecoveryDeviceTest {
             renderedBuffers(player?.videoDecoderCounters),
             surfaceFrames.get(),
             httpErrors,
+            playbackConfirmations,
+            watchdogErrors,
             bufferingEvents,
             phase,
             failed
@@ -254,6 +295,8 @@ class LivePlaybackRecoveryDeviceTest {
         val videoBuffers: Int,
         val surfaceFrames: Int,
         val httpErrors: Int,
+        val playbackConfirmations: Int,
+        val watchdogErrors: Int,
         val bufferingEvents: Int,
         val phase: LiveRecoveryPhase,
         val failed: Boolean
@@ -267,6 +310,7 @@ class LivePlaybackRecoveryDeviceTest {
         const val CHANNEL_ID = "synthetic-live"
         const val PATH = "/broadcast.ts"
         const val HTTP_ERROR = "ERROR_CODE_IO_BAD_HTTP_STATUS"
+        const val WATCHDOG_ERROR = "ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT"
         const val LOG_TAG = "MNX.LiveRecoveryTest"
     }
 }

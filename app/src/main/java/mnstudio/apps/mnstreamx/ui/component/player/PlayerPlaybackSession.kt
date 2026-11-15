@@ -179,8 +179,55 @@ internal class PlayerPlaybackSession(
         val startedAt = System.nanoTime()
         var firstFrameRecorded = false
         var firstProgressReported = false
-        fun isCurrent() = started && generation == request && player === created && isSelected(selected) &&
-            created.currentMediaItem?.mediaId == mediaId
+        fun ownsAttempt() = started && generation == request && player === created && isSelected(selected)
+        fun isCurrent() = ownsAttempt() && created.currentMediaItem?.mediaId == mediaId
+
+        // The selected attempt may still need recovery after Media3 clears its current item.
+        fun observePlayback() = scope.launch {
+            var previousPosition = created.currentPosition
+            var previousVideoCounters: DecoderCounters? = null
+            var previousRenderedFrames = 0
+            while (true) {
+                delay(PROGRESS_SAMPLE_MS)
+                if (!ownsAttempt()) break
+                val position = created.currentPosition
+                val playbackAllowed = created.canPlayLive()
+                if (!playbackAllowed || created.currentMediaItem?.mediaId != mediaId || !created.isPlaying) {
+                    previousPosition = position
+                    previousVideoCounters = null
+                    previousRenderedFrames = 0
+                    if (playbackAllowed) {
+                        measurement.playbackStalled()
+                        recovery.awaitingPlayback()
+                    }
+                    continue
+                }
+
+                val tracks = created.currentTracks
+                val videoSelected = tracks.isTypeSelected(C.TRACK_TYPE_VIDEO)
+                val videoCounters = if (videoSelected) created.videoDecoderCounters else null
+                videoCounters?.ensureUpdated()
+                val renderedFrames = videoCounters?.renderedOutputBufferCount ?: 0
+                val previousFrames = if (videoCounters === previousVideoCounters) previousRenderedFrames else 0
+                val videoAdvanced = firstFrameRecorded && renderedFrames > previousFrames
+                val outputAdvanced = if (videoSelected) videoAdvanced else tracks.isTypeSelected(C.TRACK_TYPE_AUDIO)
+                if (position > previousPosition && outputAdvanced) {
+                    measurement.playbackAdvanced()
+                    recovery.playbackAdvanced()
+                    if (!firstProgressReported) {
+                        firstProgressReported = true
+                        onError(selected, null)
+                    }
+                } else {
+                    measurement.playbackStalled()
+                    recovery.awaitingPlayback()
+                }
+                previousPosition = position
+                previousVideoCounters = videoCounters
+                previousRenderedFrames = renderedFrames
+            }
+        }
+
         listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 if (!isCurrent() || firstFrameRecorded) return
@@ -203,46 +250,7 @@ internal class PlayerPlaybackSession(
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (!isCurrent()) return
-                stopProgressMonitor()
-                if (!isPlaying) {
-                    recovery.awaitingPlayback()
-                    return
-                }
-
-                progressJob = scope.launch {
-                    var previousPosition = created.currentPosition
-                    var previousVideoCounters: DecoderCounters? = null
-                    var previousRenderedFrames = 0
-                    while (isCurrent() && created.isPlaying) {
-                        delay(PROGRESS_SAMPLE_MS)
-                        if (!isCurrent() || !created.isPlaying) break
-                        val position = created.currentPosition
-                        val tracks = created.currentTracks
-                        val videoSelected = tracks.isTypeSelected(C.TRACK_TYPE_VIDEO)
-                        val videoCounters = if (videoSelected) created.videoDecoderCounters else null
-                        videoCounters?.ensureUpdated()
-                        val renderedFrames = videoCounters?.renderedOutputBufferCount ?: 0
-                        val previousFrames = if (videoCounters === previousVideoCounters) previousRenderedFrames else 0
-                        val videoAdvanced = firstFrameRecorded && renderedFrames > previousFrames
-                        val outputAdvanced = if (videoSelected) videoAdvanced else tracks.isTypeSelected(C.TRACK_TYPE_AUDIO)
-                        val hasProgress = position > previousPosition && outputAdvanced
-                        if (hasProgress) {
-                            health?.playbackAdvanced()
-                            recovery.playbackAdvanced()
-                            if (!firstProgressReported) {
-                                firstProgressReported = true
-                                onError(selected, null)
-                            }
-                        } else {
-                            health?.playbackStalled()
-                            recovery.awaitingPlayback()
-                        }
-                        previousPosition = position
-                        previousVideoCounters = videoCounters
-                        previousRenderedFrames = renderedFrames
-                    }
-                }
+                if (!isPlaying && isCurrent()) recovery.awaitingPlayback()
             }
 
             override fun onPositionDiscontinuity(
@@ -269,9 +277,10 @@ internal class PlayerPlaybackSession(
                     if (isCurrent()) measurement.httpOpened()
                 }
             }
-            if (isCurrent()) {
-                if (resume && !wasLive && savedPosition > 0L) created.seekTo(savedPosition)
+            if (ownsAttempt()) {
+                if (isCurrent() && resume && !wasLive && savedPosition > 0L) created.seekTo(savedPosition)
                 if (created.canPlayLive()) recovery.awaitingPlayback()
+                if (ownsAttempt()) progressJob = observePlayback()
             }
         } catch (error: CancellationException) {
             throw error
