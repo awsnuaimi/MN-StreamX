@@ -23,6 +23,7 @@ internal class LiveRecoveryController(
     private val nowMs: () -> Long
 ) {
     private var active = false
+    private var playbackEstablished = false
     private var connection: PlaybackConnection = PlaybackConnection.Unknown
     private var attempts = 0
     private var retryPending = false
@@ -43,6 +44,7 @@ internal class LiveRecoveryController(
 
     fun close() {
         active = false
+        playbackEstablished = false
         cancelTimers()
         attempts = 0
         retryPending = false
@@ -57,6 +59,7 @@ internal class LiveRecoveryController(
         connection = PlaybackConnection.Unknown
         if (!active) return
         active = false
+        playbackEstablished = false
         if (state.phase == LiveRecoveryPhase.CONNECTING) {
             // Releasing the player interrupts the active attempt before it can report progress.
             retryPending = true
@@ -159,7 +162,11 @@ internal class LiveRecoveryController(
         stablePlayback = null
         when (state.phase) {
             LiveRecoveryPhase.NONE -> if (!waitIfOffline() && timer == null) {
-                val timeoutMs = if (recentlyChangedNetwork()) NETWORK_HANDOVER_TIMEOUT_MS else STALL_TIMEOUT_MS
+                val timeoutMs = when {
+                    recentlyChangedNetwork() -> NETWORK_HANDOVER_TIMEOUT_MS
+                    playbackEstablished -> ESTABLISHED_STALL_TIMEOUT_MS
+                    else -> STALL_TIMEOUT_MS
+                }
                 watchForProgress(timeoutMs)
             }
             LiveRecoveryPhase.CONNECTING -> if (timer == null) watchForProgress(CONNECT_TIMEOUT_MS)
@@ -171,6 +178,7 @@ internal class LiveRecoveryController(
     fun playbackAdvanced() {
         if (!active || !canRetry() ||
             (state.phase != LiveRecoveryPhase.NONE && state.phase != LiveRecoveryPhase.CONNECTING)) return
+        playbackEstablished = true
         cancelTimer()
         // Playback progress supersedes an offline report if Android missed the return event.
         if (state.phase == LiveRecoveryPhase.CONNECTING && connection == PlaybackConnection.Offline) {
@@ -265,6 +273,7 @@ internal class LiveRecoveryController(
     companion object {
         const val CONNECT_TIMEOUT_MS = 20_000L
         const val STALL_TIMEOUT_MS = 30_000L
+        private const val ESTABLISHED_STALL_TIMEOUT_MS = 15_000L
         const val STABLE_PLAYBACK_MS = 15_000L
         private const val NETWORK_HANDOVER_TIMEOUT_MS = 8_000L
         private const val NETWORK_HANDOVER_WINDOW_MS = 15_000L

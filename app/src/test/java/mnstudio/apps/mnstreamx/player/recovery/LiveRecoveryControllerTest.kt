@@ -95,7 +95,7 @@ class LiveRecoveryControllerTest {
         h.controller.playbackAdvanced()
         h.controller.awaitingPlayback()
         assertEquals(LiveRecoveryPhase.NONE, h.controller.state.phase)
-        advanceTimeBy(30_000)
+        advanceTimeBy(15_000)
         runCurrent()
         assertEquals(1, h.timeouts)
         assertEquals(LiveRecoveryPhase.SCHEDULED, h.controller.state.phase)
@@ -300,14 +300,89 @@ class LiveRecoveryControllerTest {
         h.controller.close()
     }
 
-    @Test fun playbackProgressCancelsTheStallWatchdogAndASecondStallStartsANewOne() = runTest {
+    @Test fun anEstablishedStallStartsRecoveryAfterFifteenSecondsWithoutOutput() = runTest {
         val h = Harness(this) { testScheduler.currentTime }
-        h.controller.awaitingPlayback(); advanceTimeBy(29_999); runCurrent()
-        h.controller.playbackAdvanced(); advanceTimeBy(30_000); runCurrent()
+        h.controller.playbackAdvanced()
+        h.controller.awaitingPlayback()
+        advanceTimeBy(10_000)
+        runCurrent()
+        h.controller.awaitingPlayback()
+        advanceTimeBy(4_999)
+        runCurrent()
         assertEquals(0, h.timeouts)
-        h.controller.awaitingPlayback(); advanceTimeBy(30_000); runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
         assertEquals(1, h.timeouts)
         assertEquals(LiveRecoveryPhase.SCHEDULED, h.controller.state.phase)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(1, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun playbackProgressCancelsTheEstablishedStallWatchdog() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.awaitingPlayback()
+        advanceTimeBy(29_999)
+        runCurrent()
+        h.controller.playbackAdvanced()
+
+        h.controller.awaitingPlayback()
+        advanceTimeBy(14_999)
+        runCurrent()
+        h.controller.playbackAdvanced()
+        advanceTimeBy(30_000)
+        runCurrent()
+        assertEquals(0, h.timeouts)
+        assertEquals(0, h.attempts)
+        h.controller.close()
+    }
+
+    @Test fun switchingChannelsRestoresTheLongerStartupWatchdog() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.playbackAdvanced()
+        h.controller.awaitingPlayback()
+        h.controller.reset()
+        h.controller.awaitingPlayback()
+        advanceTimeBy(29_999)
+        runCurrent()
+        assertEquals(0, h.timeouts)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, h.timeouts)
+        h.controller.close()
+    }
+
+    @Test fun foregroundStartupAfterBackgroundKeepsTheLongerWatchdog() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.playbackAdvanced()
+        h.controller.awaitingPlayback()
+        h.controller.suspendForBackground()
+        assertFalse(h.controller.resume())
+        h.controller.awaitingPlayback()
+        advanceTimeBy(29_999)
+        runCurrent()
+        assertEquals(0, h.timeouts)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, h.timeouts)
+        h.controller.close()
+    }
+
+    @Test fun anAutomaticConnectionAttemptStillHasTwentySecondsToAdvance() = runTest {
+        val h = Harness(this) { testScheduler.currentTime }
+        h.controller.playbackAdvanced()
+        h.controller.error(true)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(1, h.attempts)
+        h.controller.awaitingPlayback()
+        advanceTimeBy(19_999)
+        runCurrent()
+        assertEquals(0, h.timeouts)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, h.timeouts)
         h.controller.close()
     }
 
