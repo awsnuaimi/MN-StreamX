@@ -86,7 +86,11 @@ def run(args):
     env["ANDROID_SERIAL"] = serial
     print(f"Target device: {serial}", flush=True)
     # Android Gradle Plugin retrieves instrumentation output into build/outputs/connected_android_test_additional_output.
-    command = [args.gradle, "--no-daemon", ":app:connectedBenchmarkAndroidTest"]
+    command = [
+        args.gradle, "--no-daemon", ":app:connectedBenchmarkAndroidTest",
+        "-Pandroid.testInstrumentationRunnerArguments.class="
+        "mnstudio.apps.mnstreamx.performance.VodPerformanceBenchmark",
+    ]
     source_dir = project_root / "app/build/outputs/connected_android_test_additional_output"
     # Remove old captures so a successful run cannot accidentally report stale results.
     from shutil import rmtree
