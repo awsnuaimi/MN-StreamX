@@ -95,7 +95,7 @@ internal class LivePlaybackRequests(baseClient: OkHttpClient = LiveMediaSourceFa
     }
 }
 
-/** Let the live session own server cooldowns while Media3 still handles ordinary segment retries. */
+/** Let the live session handle selected HTTP retries and server cooldowns. */
 @androidx.annotation.OptIn(UnstableApi::class)
 internal object LiveLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
@@ -109,6 +109,6 @@ internal object LiveLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
 
     private fun requiresSessionRecovery(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Boolean {
         val http = loadErrorInfo.exception as? HttpDataSource.InvalidResponseCodeException ?: return false
-        return http.responseCode == 429 || (http.responseCode == 503 && LiveRecoveryErrors.retryAfterMs(http) > 0)
+        return LiveRecoveryErrors.shouldDeferHttpRetry(http)
     }
 }

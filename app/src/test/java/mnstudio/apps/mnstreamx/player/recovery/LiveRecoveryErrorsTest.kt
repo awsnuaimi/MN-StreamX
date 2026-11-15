@@ -10,10 +10,16 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryPhase
 import mnstudio.apps.mnstreamx.player.controller.LiveLoadErrorPolicy
 import java.io.EOFException
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.time.Instant
@@ -47,7 +53,7 @@ class LiveRecoveryErrorsTest {
     }
 
     @Test fun onlySelectedTemporaryHttpStatusesAreRetried() {
-        listOf(404, 408, 429, 500, 502, 503, 504).forEach { assertTrue("HTTP $it", retryable(http(it))) }
+        listOf(404, 408, 429, 458, 500, 502, 503, 504).forEach { assertTrue("HTTP $it", retryable(http(it))) }
         listOf(400, 401, 403, 410, 501).forEach { assertFalse("HTTP $it", retryable(http(it))) }
     }
 
@@ -69,9 +75,16 @@ class LiveRecoveryErrorsTest {
         )
         val rateLimit = loadError(response(429))
         val cooldown = loadError(response(503, mapOf("Retry-After" to listOf("75"))))
+        val providerResponse = loadError(response(458))
+        val gatewayCooldown = loadError(response(502, mapOf("Retry-After" to listOf("120"))))
+        val forbidden = loadError(response(403, mapOf("Retry-After" to listOf("120"))))
         val temporary = loadError(response(503))
         assertEquals(C.TIME_UNSET, LiveLoadErrorPolicy.getRetryDelayMsFor(rateLimit))
         assertEquals(C.TIME_UNSET, LiveLoadErrorPolicy.getRetryDelayMsFor(cooldown))
+        assertEquals(C.TIME_UNSET, LiveLoadErrorPolicy.getRetryDelayMsFor(providerResponse))
+        assertEquals(C.TIME_UNSET, LiveLoadErrorPolicy.getRetryDelayMsFor(gatewayCooldown))
+        assertEquals(1_000L, LiveLoadErrorPolicy.getRetryDelayMsFor(forbidden))
+        assertNull(LiveLoadErrorPolicy.getFallbackSelectionFor(fallbackOptions, providerResponse))
         assertNull(LiveLoadErrorPolicy.getFallbackSelectionFor(fallbackOptions, cooldown))
         assertEquals(1_000L, LiveLoadErrorPolicy.getRetryDelayMsFor(temporary))
         assertNotNull(LiveLoadErrorPolicy.getFallbackSelectionFor(fallbackOptions, temporary))
@@ -87,6 +100,68 @@ class LiveRecoveryErrorsTest {
         assertFalse(retryable(error(PlaybackException.ERROR_CODE_DECODER_INIT_FAILED)))
         assertFalse(retryable(error(PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED)))
         assertFalse(retryable(error(PlaybackException.ERROR_CODE_UNSPECIFIED)))
+    }
+
+    @Test fun anUnspecifiedErrorRecoversOnlyWhenItContainsAKnownTransportFailure() {
+        val code = PlaybackException.ERROR_CODE_UNSPECIFIED
+        listOf(EOFException(), SocketException(), SocketTimeoutException(), UnknownHostException()).forEach {
+            assertTrue(retryable(error(code, IllegalStateException(it))))
+        }
+        listOf(IllegalStateException(), IOException(), SSLHandshakeException("Synthetic"), SecurityException()).forEach {
+            assertFalse(retryable(error(code, it)))
+        }
+    }
+
+    @Test fun theProviderResponseKeepsItsExplicitCooldown() {
+        val decision = LiveRecoveryErrors.classify(http(458, mapOf("Retry-After" to listOf("120"))))
+        assertTrue(decision.retryable)
+        assertEquals(120_000L, decision.retryAfterMs)
+        assertFalse(LiveRecoveryErrors.classify(http(403, mapOf("Retry-After" to listOf("120")))).retryable)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun aPreviouslyPlayingChannelKeepsTryingWithoutAServerCooldown() = runTest {
+        val outageEndsAt = 16 * 60_000L
+        val attempts = mutableListOf<Long>()
+        val response = http(458)
+        val decision = LiveRecoveryErrors.classify(response)
+        lateinit var recovery: LiveRecoveryController
+        recovery = LiveRecoveryController(
+            scope = this,
+            onState = {},
+            retry = {
+                attempts.add(testScheduler.currentTime)
+                if (testScheduler.currentTime < outageEndsAt) {
+                    recovery.error(decision.retryable, decision.retryAfterMs)
+                } else {
+                    recovery.playbackAdvanced()
+                }
+            },
+            onTimeout = { fail("Every simulated request returns before the watchdog") },
+            canRetry = { true },
+            nowMs = { testScheduler.currentTime }
+        )
+        recovery.reset()
+        try {
+            recovery.playbackAdvanced()
+            recovery.error(decision.retryable, decision.retryAfterMs)
+            advanceTimeBy(outageEndsAt)
+            runCurrent()
+            assertTrue(attempts.size > 30)
+            assertTrue(recovery.state.isRecovering)
+            assertTrue(attempts.zipWithNext().all { (a, b) -> b - a in 1_000L..30_000L })
+
+            advanceTimeBy(30_000)
+            runCurrent()
+            assertTrue(attempts.last() >= outageEndsAt)
+            assertEquals(LiveRecoveryPhase.NONE, recovery.state.phase)
+            val completedAttempts = attempts.size
+            advanceTimeBy(60_000)
+            runCurrent()
+            assertEquals(completedAttempts, attempts.size)
+        } finally {
+            recovery.close()
+        }
     }
 
     @Test fun liveManifestAndContainerParsingErrorsCanRecoverAfterTheSourceReturns() {
