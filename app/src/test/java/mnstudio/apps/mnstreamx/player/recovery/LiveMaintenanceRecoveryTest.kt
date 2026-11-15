@@ -4,6 +4,7 @@ import android.app.Application
 import android.media.AudioManager
 import android.os.Looper
 import android.os.SystemClock
+import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import java.time.Duration
 import java.util.concurrent.TimeUnit
@@ -22,6 +23,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okhttp3.mockwebserver.SocketPolicy
+import okio.Buffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -65,24 +67,7 @@ class LiveMaintenanceRecoveryTest {
             }
 
             val looper = shadowOf(Looper.getMainLooper())
-            val scope = CoroutineScope(Dispatchers.Main.immediate)
-            val application = RuntimeEnvironment.getApplication()
-            shadowOf(application.getSystemService(AudioManager::class.java))
-                .setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
-            val network = PlaybackConnection.Online(1, validated = true)
-            val errors = mutableListOf<String>()
-            val phases = mutableListOf<LiveRecoveryState>()
-            val session = PlayerPlaybackSession(
-                controller = PlayerController(application),
-                initialChannel = Channel("live", "Live channel", streamUrl = server.url("/live.m3u8").toString()),
-                scope = scope,
-                network = MutableStateFlow(network),
-                onError = { _, error -> if (error != null) errors.add(error) },
-                onBuffering = { _, _ -> },
-                isSelected = { true },
-                onRecovery = { _, state -> phases.add(state) }
-            )
-            try {
+            withLiveSession(server.url("/live.m3u8").toString()) { session, errors, phases ->
                 val startedAt = SystemClock.elapsedRealtime()
                 session.start()
                 repeat(failures) { index ->
@@ -106,12 +91,74 @@ class LiveMaintenanceRecoveryTest {
                 assertFalse(phases.any { it.phase == LiveRecoveryPhase.FAILED })
                 assertEquals(LiveRecoveryState(LiveRecoveryPhase.CONNECTING, failures), phases.last())
                 assertEquals("live", session.player?.currentMediaItem?.mediaId?.substringBefore(':'))
-            } finally {
-                try {
-                    session.stop()
-                } finally {
-                    scope.cancel()
+            }
+        }
+    }
+
+    @Test fun theThirdReconnectCanReturnAnUnreadableResponseWithoutEndingRecovery() {
+        MockWebServer().use { server ->
+            // The initial load and the first two reconnects receive the provider's error status.
+            repeat(3) { server.enqueue(MockResponse().setResponseCode(458)) }
+            server.enqueue(MockResponse().setHeader("Content-Type", "text/html").setBody("<html>Maintenance</html>"))
+            val sampleBytes = 16_000
+            val audio = Buffer().writeUtf8("RIFF").writeIntLe(36 + sampleBytes).writeUtf8("WAVE")
+                .writeUtf8("fmt ").writeIntLe(16).writeShortLe(1).writeShortLe(1)
+                .writeIntLe(8_000).writeIntLe(16_000).writeShortLe(2).writeShortLe(16)
+                .writeUtf8("data").writeIntLe(sampleBytes).write(ByteArray(sampleBytes))
+            server.enqueue(MockResponse().setHeader("Content-Type", "audio/wav").setBody(audio))
+
+            val looper = shadowOf(Looper.getMainLooper())
+            withLiveSession(server.url("/live.ts").toString()) { session, errors, phases ->
+                session.start()
+                listOf(1_000L, 3_000L, 7_000L).forEachIndexed { index, delayMs ->
+                    awaitPlayer("HTTP error ${index + 1}") { errors.size > index }
+                    assertEquals(LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, index + 1), phases.last())
+                    looper.idleFor(delayMs, TimeUnit.MILLISECONDS)
                 }
+
+                awaitPlayer("unreadable maintenance response") { errors.size == 4 }
+                assertEquals("ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED", errors.last())
+                assertEquals(LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, 4), phases.last())
+                assertEquals(4, server.requestCount)
+                looper.idleFor(15_000, TimeUnit.MILLISECONDS)
+
+                awaitPlayer("audio tracks from the restored channel") {
+                    session.player?.currentTracks?.isTypeSupported(C.TRACK_TYPE_AUDIO) == true
+                }
+                assertEquals(5, server.requestCount)
+                assertFalse(phases.any { it.phase == LiveRecoveryPhase.FAILED })
+                assertTrue(List(5) { server.takeRequest(0, TimeUnit.MILLISECONDS)?.path }.all { it == "/live.ts" })
+            }
+        }
+    }
+
+    private fun withLiveSession(
+        url: String,
+        run: (PlayerPlaybackSession, List<String>, List<LiveRecoveryState>) -> Unit
+    ) {
+        val scope = CoroutineScope(Dispatchers.Main.immediate)
+        val application = RuntimeEnvironment.getApplication()
+        shadowOf(application.getSystemService(AudioManager::class.java))
+            .setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        val errors = mutableListOf<String>()
+        val phases = mutableListOf<LiveRecoveryState>()
+        val session = PlayerPlaybackSession(
+            controller = PlayerController(application),
+            initialChannel = Channel("live", "Live channel", streamUrl = url),
+            scope = scope,
+            network = MutableStateFlow(PlaybackConnection.Online(1, validated = true)),
+            onError = { _, error -> if (error != null) errors.add(error) },
+            onBuffering = { _, _ -> },
+            isSelected = { true },
+            onRecovery = { _, state -> phases.add(state) }
+        )
+        try {
+            run(session, errors, phases)
+        } finally {
+            try {
+                session.stop()
+            } finally {
+                scope.cancel()
             }
         }
     }

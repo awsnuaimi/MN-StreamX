@@ -3,6 +3,8 @@ package mnstudio.apps.mnstreamx.player.recovery
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.ExoPlaybackException
+import androidx.media3.exoplayer.source.UnrecognizedInputFormatException
 import java.io.EOFException
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -21,7 +23,7 @@ internal object LiveRecoveryErrors {
     private const val PROVIDER_STATUS_458 = 458
     private val retryableHttpStatuses = setOf(404, 408, 429, PROVIDER_STATUS_458, 500, 502, 503, 504)
 
-    fun classify(error: PlaybackException): Decision {
+    fun classify(error: PlaybackException, hasPlayedOrRetried: Boolean = false): Decision {
         val causes = generateSequence<Throwable>(error) { it.cause }.take(12).toList()
         val http = causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull()
         if (http != null) {
@@ -39,10 +41,16 @@ internal object LiveRecoveryErrors {
             // A restarted live source can briefly serve an incomplete playlist or media segment.
             PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
             PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED -> true
+            // A maintenance page can arrive with HTTP 200 while the same live source restarts.
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ->
+                hasPlayedOrRetried && causes.any { it is UnrecognizedInputFormatException }
             PlaybackException.ERROR_CODE_IO_UNSPECIFIED -> causes.any { it is IOException }
-            PlaybackException.ERROR_CODE_UNSPECIFIED -> causes.any {
-                it is EOFException || it is SocketTimeoutException || it is SocketException || it is UnknownHostException
-            }
+            PlaybackException.ERROR_CODE_UNSPECIFIED ->
+                (hasPlayedOrRetried && error is ExoPlaybackException && error.type == ExoPlaybackException.TYPE_SOURCE) ||
+                    causes.any {
+                        it is EOFException || it is SocketTimeoutException || it is SocketException ||
+                            it is UnknownHostException
+                    }
             else -> false
         }
         return Decision(retryable)

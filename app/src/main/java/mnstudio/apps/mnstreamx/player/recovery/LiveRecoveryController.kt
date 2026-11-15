@@ -36,6 +36,7 @@ internal class LiveRecoveryController(
     private var stablePlayback: Job? = null
     var state = LiveRecoveryState()
         private set
+    val hasPlayedOrRetried: Boolean get() = playbackEstablished || attempts > 0
 
     fun reset() {
         close()

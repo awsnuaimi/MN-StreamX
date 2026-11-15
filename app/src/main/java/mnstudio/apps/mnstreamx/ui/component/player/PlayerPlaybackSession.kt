@@ -289,7 +289,7 @@ internal class PlayerPlaybackSession(
     private fun failed(error: PlaybackException, origin: LivePlaybackErrorOrigin = LivePlaybackErrorOrigin.PLAYER) {
         val current = player ?: return
         if (!started || !isSelected(channel)) return
-        val decision = LiveRecoveryErrors.classify(error)
+        val decision = LiveRecoveryErrors.classify(error, hasPlayedOrRetried = recovery.hasPlayedOrRetried)
         val errorOrigin = if (origin == LivePlaybackErrorOrigin.PLAYER &&
             error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
         ) LivePlaybackErrorOrigin.NETWORK_TIMEOUT else origin

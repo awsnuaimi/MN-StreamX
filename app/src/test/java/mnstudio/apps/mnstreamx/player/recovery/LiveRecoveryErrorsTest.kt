@@ -7,8 +7,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
+import androidx.media3.exoplayer.source.UnrecognizedInputFormatException
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
@@ -112,6 +114,20 @@ class LiveRecoveryErrorsTest {
         }
     }
 
+    @Test fun anUnspecifiedSourceErrorCanRecoverWhileAnUnexpectedPlayerFailureRemainsTerminal() {
+        val code = PlaybackException.ERROR_CODE_UNSPECIFIED
+        val malformedData = ParserException.createForMalformedDataOfUnknownType("Synthetic", null)
+        val sourceError = ExoPlaybackException.createForSource(malformedData, code)
+        assertFalse(retryable(sourceError))
+        assertTrue(LiveRecoveryErrors.classify(sourceError, hasPlayedOrRetried = true).retryable)
+
+        val unexpected = ExoPlaybackException.createForUnexpected(IllegalStateException("Synthetic"), code)
+        val certificate = ExoPlaybackException.createForSource(SSLHandshakeException("Synthetic"), code)
+        listOf(unexpected, certificate, http(401), http(403)).forEach {
+            assertFalse(LiveRecoveryErrors.classify(it, hasPlayedOrRetried = true).retryable)
+        }
+    }
+
     @Test fun theProviderResponseKeepsItsExplicitCooldown() {
         val decision = LiveRecoveryErrors.classify(http(458, mapOf("Retry-After" to listOf("120"))))
         assertTrue(decision.retryable)
@@ -124,19 +140,26 @@ class LiveRecoveryErrorsTest {
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    @Test fun aPreviouslyPlayingChannelKeepsTryingWithoutAServerCooldown() = runTest {
+    @Test fun aPreviouslyPlayingChannelKeepsTryingWhenTheSourceChangesErrorMidOutage() = runTest {
         val outageEndsAt = 16 * 60_000L
         val attempts = mutableListOf<Long>()
-        val response = http(458)
-        val decision = LiveRecoveryErrors.classify(response)
+        val unavailable = http(458)
+        val unreadable = ExoPlaybackException.createForSource(
+            ParserException.createForMalformedDataOfUnknownType("Synthetic", null),
+            PlaybackException.ERROR_CODE_UNSPECIFIED
+        )
         lateinit var recovery: LiveRecoveryController
+        fun reportFailure(error: PlaybackException) {
+            val decision = LiveRecoveryErrors.classify(error, hasPlayedOrRetried = recovery.hasPlayedOrRetried)
+            recovery.error(decision.retryable, decision.retryAfterMs)
+        }
         recovery = LiveRecoveryController(
             scope = this,
             onState = {},
             retry = {
                 attempts.add(testScheduler.currentTime)
                 if (testScheduler.currentTime < outageEndsAt) {
-                    recovery.error(decision.retryable, decision.retryAfterMs)
+                    reportFailure(if (attempts.size < 3) unavailable else unreadable)
                 } else {
                     recovery.playbackAdvanced()
                 }
@@ -148,7 +171,8 @@ class LiveRecoveryErrorsTest {
         recovery.reset()
         try {
             recovery.playbackAdvanced()
-            recovery.error(decision.retryable, decision.retryAfterMs)
+            assertTrue(recovery.hasPlayedOrRetried)
+            reportFailure(unavailable)
             advanceTimeBy(outageEndsAt)
             runCurrent()
             assertTrue(attempts.size > 30)
@@ -178,8 +202,21 @@ class LiveRecoveryErrorsTest {
     @Test fun unsupportedManifestAndContainerFeaturesStillNeedExplicitUserAction() {
         val manifest = ParserException.createForManifestWithUnsupportedFeature("Synthetic", null)
         val container = ParserException.createForUnsupportedContainerFeature("Synthetic")
-        assertFalse(retryable(error(PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED, manifest)))
-        assertFalse(retryable(error(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, container)))
+        assertFalse(LiveRecoveryErrors.classify(
+            error(PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED, manifest),
+            hasPlayedOrRetried = true
+        ).retryable)
+        assertFalse(LiveRecoveryErrors.classify(
+            error(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, container),
+            hasPlayedOrRetried = true
+        ).retryable)
+    }
+
+    @Test fun unrecognizedInputCanRecoverOnceTheSelectionHasPlayedOrRetried() {
+        val unrecognized = UnrecognizedInputFormatException("Synthetic", spec.uri, emptyList())
+        val error = error(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, unrecognized)
+        assertFalse(retryable(error))
+        assertTrue(LiveRecoveryErrors.classify(error, hasPlayedOrRetried = true).retryable)
     }
 
     @Test fun interruptedIoCanRecoverButAnUnspecifiedFailureWithoutAnIoCauseCannot() {
