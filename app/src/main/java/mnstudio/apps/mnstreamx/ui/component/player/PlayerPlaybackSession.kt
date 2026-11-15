@@ -14,6 +14,7 @@ import mnstudio.apps.mnstreamx.domain.model.Channel
 import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryPhase
 import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryState
 import mnstudio.apps.mnstreamx.player.PlaybackDiagnostics
+import mnstudio.apps.mnstreamx.player.controller.LiveBufferAttempt
 import mnstudio.apps.mnstreamx.player.controller.PlayerController
 import mnstudio.apps.mnstreamx.player.recovery.LiveRecoveryController
 import mnstudio.apps.mnstreamx.player.recovery.LiveRecoveryErrors
@@ -48,6 +49,7 @@ internal class PlayerPlaybackSession(
     var player by mutableStateOf<ExoPlayer?>(null)
         private set
     private var channel = initialChannel
+    private var bufferSelection = Any()
     private var retryToken = 0
     private var generation = 0L
     private var started = false
@@ -106,6 +108,7 @@ internal class PlayerPlaybackSession(
         recovery.reset()
         health?.finish(); health = null
         channel = selected; retryToken = retry
+        bufferSelection = Any()
         savedPosition = 0L; wasLive = true; shouldPlay = true
         if (started) playSelection(resume = false)
     }
@@ -260,7 +263,8 @@ internal class PlayerPlaybackSession(
         onBuffering(selected, showBuffering)
         if (showBuffering) health?.buffering()
         try {
-            controller.playUrl(selected.streamUrl, mediaId, selected.name, playWhenReady) {
+            val bufferAttempt = LiveBufferAttempt(bufferSelection, automatic && recovery.playbackEstablished)
+            controller.playUrl(selected.streamUrl, mediaId, selected.name, playWhenReady, bufferAttempt) {
                 if (automatic) scope.launch {
                     if (isCurrent()) measurement.httpOpened()
                 }

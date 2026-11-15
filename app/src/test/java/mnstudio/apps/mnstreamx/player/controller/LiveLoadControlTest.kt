@@ -10,6 +10,7 @@ import androidx.media3.exoplayer.analytics.PlayerId
 import androidx.media3.exoplayer.source.MediaSource.MediaPeriodId
 import androidx.media3.exoplayer.source.SinglePeriodTimeline
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -93,6 +94,87 @@ class LiveLoadControlTest {
         loadControl.onStopped(player)
         loadControl.onPrepared(player)
         assertTrue(loadControl.shouldStartPlayback(params(3_000, periodUid = nextPeriod)))
+    }
+
+    @Test fun automaticReconnectsKeepTheHistoryOfThatSelectionAcrossSourcePreparations() {
+        val selection = Any()
+        val opening = attemptTimeline(selection, afterInterruption = false)
+        assertTrue(loadControl.shouldStartPlayback(attemptParams(opening, 500)))
+        assertTrue(loadControl.shouldStartPlayback(attemptParams(opening, 3_000, rebuffering = true)))
+
+        clockMs = 10_000
+        val firstReconnect = prepareAttempt(selection, afterInterruption = true)
+        assertFalse(loadControl.shouldStartPlayback(attemptParams(firstReconnect, 4_999)))
+        assertTrue(loadControl.shouldStartPlayback(attemptParams(firstReconnect, 5_000)))
+
+        clockMs = 20_000
+        val nextReconnect = prepareAttempt(selection, afterInterruption = true)
+        assertFalse(loadControl.shouldStartPlayback(attemptParams(nextReconnect, 7_999)))
+        assertTrue(loadControl.shouldStartPlayback(attemptParams(nextReconnect, 8_000)))
+
+        clockMs = 25_000
+        val newSelection = Any()
+        val newChannel = prepareAttempt(newSelection, afterInterruption = false)
+        assertFalse(loadControl.shouldStartPlayback(attemptParams(newChannel, 499)))
+        assertTrue(loadControl.shouldStartPlayback(attemptParams(newChannel, 500)))
+        assertTrue(loadControl.shouldStartPlayback(attemptParams(newChannel, 3_000, rebuffering = true)))
+
+        clockMs = 25_000 + LivePlaybackTuning.REBUFFER_REPEAT_WINDOW_MS
+        val afterStablePlayback = prepareAttempt(newSelection, afterInterruption = true)
+        assertFalse(loadControl.shouldStartPlayback(attemptParams(afterStablePlayback, 499)))
+        assertTrue(loadControl.shouldStartPlayback(attemptParams(afterStablePlayback, 500)))
+    }
+
+    @Test fun loaderChecksDuringRecoveryStartupDoNotRestartTheBoundedWait() {
+        val selection = Any()
+        val isolated = prepareAttempt(selection, afterInterruption = true)
+        assertFalse(loadControl.shouldStartPlayback(attemptParams(isolated, 499)))
+        assertTrue(loadControl.shouldStartPlayback(attemptParams(isolated, 500)))
+
+        clockMs = 10_000
+        val repeated = prepareAttempt(selection, afterInterruption = true)
+        val partiallyBuffered = attemptParams(repeated, 1_000)
+        assertFalse(loadControl.shouldStartPlayback(partiallyBuffered))
+        clockMs = 15_999
+        assertTrue(loadControl.shouldContinueLoading(partiallyBuffered))
+        assertFalse(loadControl.shouldStartPlayback(partiallyBuffered))
+        clockMs = 16_000
+        assertTrue(loadControl.shouldContinueLoading(partiallyBuffered))
+        assertTrue(loadControl.shouldStartPlayback(partiallyBuffered))
+    }
+
+    @Test fun keepingTheCushionAvoidsAnotherFreezeInABurstyStream() {
+        fun freezesAfterReconnect(selection: Any, preserveHistory: Boolean): Int {
+            clockMs = 0
+            val isolated = prepareAttempt(selection, afterInterruption = true)
+            assertTrue(loadControl.shouldStartPlayback(attemptParams(isolated, 500)))
+            val key = if (preserveHistory) selection else Any()
+            val reconnect = prepareAttempt(key, afterInterruption = true)
+            val arrivalsMs = listOf(500L, 4_500L, 0L, 0L, 0L, 0L, 5_000L)
+            var bufferedMs = 0L
+            var playing = false
+            var freezes = 0
+            arrivalsMs.forEachIndexed { second, arrivalMs ->
+                clockMs = 10_000L + 1_000 * second
+                bufferedMs += arrivalMs
+                if (!playing) {
+                    playing = loadControl.shouldStartPlayback(
+                        attemptParams(reconnect, bufferedMs, rebuffering = freezes > 0)
+                    )
+                }
+                if (playing) {
+                    if (bufferedMs < 1_000) {
+                        freezes++
+                        playing = false
+                    }
+                    bufferedMs = (bufferedMs - 1_000).coerceAtLeast(0)
+                }
+            }
+            return freezes
+        }
+
+        assertEquals(1, freezesAfterReconnect(Any(), preserveHistory = false))
+        assertEquals(0, freezesAfterReconnect(Any(), preserveHistory = true))
     }
 
     @Test fun refreshedTimelinesForTheSameWindowKeepTheRebufferHistory() {
@@ -189,6 +271,21 @@ class LiveLoadControlTest {
         ).build()
         return SinglePeriodTimeline(durationMs * 1_000, true, true, true, null, item)
     }
+
+    private fun prepareAttempt(selection: Any, afterInterruption: Boolean): Timeline {
+        loadControl.onStopped(player)
+        loadControl.onPrepared(player)
+        return attemptTimeline(selection, afterInterruption)
+    }
+
+    private fun attemptTimeline(selection: Any, afterInterruption: Boolean): Timeline {
+        val item = MediaItem.Builder().setUri("https://unit.test/live")
+            .setTag(LiveBufferAttempt(selection, afterInterruption)).build()
+        return SinglePeriodTimeline(30_000_000L, true, true, true, null, item)
+    }
+
+    private fun attemptParams(timeline: Timeline, bufferedMs: Long, rebuffering: Boolean = false) =
+        params(bufferedMs, rebuffering, timeline.getUidOfPeriod(0), timeline = timeline)
 
     @Test fun highBitrateStreamsMayResumeAtTheExistingByteTarget() {
         val allocator = loadControl.allocator

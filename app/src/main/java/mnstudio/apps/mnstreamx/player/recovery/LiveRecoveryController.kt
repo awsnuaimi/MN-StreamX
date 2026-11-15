@@ -23,7 +23,8 @@ internal class LiveRecoveryController(
     private val nowMs: () -> Long
 ) {
     private var active = false
-    private var playbackEstablished = false
+    var playbackEstablished = false
+        private set
     private var connection: PlaybackConnection = PlaybackConnection.Unknown
     private var attempts = 0
     private var retryPending = false

@@ -18,6 +18,16 @@ class PlayerController(context: Context) {
         playWhenReady: Boolean = true,
         onHttpOpen: () -> Unit = {}
     ) = manager.play(url, mediaId, title, playWhenReady, onHttpOpen)
+
+    internal fun playUrl(
+        url: String,
+        mediaId: String,
+        title: String?,
+        playWhenReady: Boolean,
+        bufferAttempt: LiveBufferAttempt,
+        onHttpOpen: () -> Unit
+    ) = manager.play(url, mediaId, title, playWhenReady, bufferAttempt, onHttpOpen)
+
     fun pause() = manager.pause()
     fun resume() = manager.resume()
     fun stop() = manager.stop()

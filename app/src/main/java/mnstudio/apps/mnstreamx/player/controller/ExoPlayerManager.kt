@@ -47,6 +47,15 @@ class ExoPlayerManager(context: Context) {
         title: String? = null,
         autoPlay: Boolean = true,
         onHttpOpen: () -> Unit = {}
+    ) = play(url, mediaId, title, autoPlay, bufferAttempt = null, onHttpOpen = onHttpOpen)
+
+    internal fun play(
+        url: String,
+        mediaId: String,
+        title: String?,
+        autoPlay: Boolean,
+        bufferAttempt: LiveBufferAttempt?,
+        onHttpOpen: () -> Unit
     ) {
         initialize()
         retireAttempt()
@@ -58,6 +67,7 @@ class ExoPlayerManager(context: Context) {
         val item = MediaItem.Builder().setUri(uri).setMediaId(mediaId).apply {
             if (title != null) setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
             if (output == "m3u8" || output == "hls") setMimeType(MimeTypes.APPLICATION_M3U8)
+            if (bufferAttempt != null) setTag(bufferAttempt)
         }.build()
         player?.apply {
             analytics?.let(::removeAnalyticsListener)
