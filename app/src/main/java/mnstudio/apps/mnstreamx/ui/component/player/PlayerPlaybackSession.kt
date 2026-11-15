@@ -20,6 +20,8 @@ import mnstudio.apps.mnstreamx.player.recovery.LiveRecoveryErrors
 import mnstudio.apps.mnstreamx.player.recovery.PlaybackConnection
 import mnstudio.apps.mnstreamx.util.LoadTimings
 import mnstudio.apps.mnstreamx.domain.performance.PerformanceOutcome
+import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackError
+import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackErrorOrigin
 import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthJournal
 import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthSession
 import kotlinx.coroutines.CancellationException
@@ -70,8 +72,10 @@ internal class PlayerPlaybackSession(
         },
         retry = ::retrySelection,
         onTimeout = {
-            failed(PlaybackException("Live playback stalled", null,
-                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
+            failed(
+                PlaybackException("Live playback stalled", null, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT),
+                LivePlaybackErrorOrigin.WATCHDOG
+            )
         },
         canRetry = { started && isSelected(channel) && player?.canPlayLive() == true },
         nowMs = SystemClock::elapsedRealtime
@@ -268,18 +272,32 @@ internal class PlayerPlaybackSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: RuntimeException) {
-            failed(PlaybackException("Live player request failed", error, PlaybackException.ERROR_CODE_UNSPECIFIED))
+            failed(
+                PlaybackException("Live player request failed", error, PlaybackException.ERROR_CODE_UNSPECIFIED),
+                LivePlaybackErrorOrigin.PREPARE
+            )
         }
     }
 
     private fun streamEnded() {
-        failed(PlaybackException("Live stream ended", EOFException(), PlaybackException.ERROR_CODE_IO_UNSPECIFIED))
+        failed(
+            PlaybackException("Live stream ended", EOFException(), PlaybackException.ERROR_CODE_IO_UNSPECIFIED),
+            LivePlaybackErrorOrigin.SOURCE_ENDED
+        )
     }
 
-    private fun failed(error: PlaybackException) {
-        if (player == null || !started || !isSelected(channel)) return
+    private fun failed(error: PlaybackException, origin: LivePlaybackErrorOrigin = LivePlaybackErrorOrigin.PLAYER) {
+        val current = player ?: return
+        if (!started || !isSelected(channel)) return
         val decision = LiveRecoveryErrors.classify(error)
-        health?.error(decision.retryAfterMs, player?.canPlayLive() == true)
+        val errorOrigin = if (origin == LivePlaybackErrorOrigin.PLAYER &&
+            error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+        ) LivePlaybackErrorOrigin.NETWORK_TIMEOUT else origin
+        health?.error(
+            retryAfterMs = decision.retryAfterMs,
+            playbackAllowed = current.canPlayLive(),
+            details = LivePlaybackError(errorOrigin, error.errorCode, decision.httpStatus, decision.retryable)
+        )
         retireAttempt(PerformanceOutcome.FAILED)
         PlaybackDiagnostics.record(error)
         onBuffering(channel, false)

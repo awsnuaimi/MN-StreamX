@@ -16,7 +16,7 @@ import javax.net.ssl.SSLException
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal object LiveRecoveryErrors {
-    data class Decision(val retryable: Boolean, val retryAfterMs: Long = 0)
+    data class Decision(val retryable: Boolean, val retryAfterMs: Long = 0, val httpStatus: Int? = null)
 
     private const val PROVIDER_STATUS_458 = 458
     private val retryableHttpStatuses = setOf(404, 408, 429, PROVIDER_STATUS_458, 500, 502, 503, 504)
@@ -26,7 +26,7 @@ internal object LiveRecoveryErrors {
         val http = causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull()
         if (http != null) {
             val temporary = http.responseCode in retryableHttpStatuses
-            return Decision(temporary, if (temporary) retryAfterMs(http) else 0L)
+            return Decision(temporary, if (temporary) retryAfterMs(http) else 0L, http.responseCode)
         }
         if (causes.any { it is SSLException || it is SecurityException || it is FileNotFoundException }) {
             return Decision(false)

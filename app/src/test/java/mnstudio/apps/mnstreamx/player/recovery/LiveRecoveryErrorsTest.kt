@@ -116,7 +116,11 @@ class LiveRecoveryErrorsTest {
         val decision = LiveRecoveryErrors.classify(http(458, mapOf("Retry-After" to listOf("120"))))
         assertTrue(decision.retryable)
         assertEquals(120_000L, decision.retryAfterMs)
-        assertFalse(LiveRecoveryErrors.classify(http(403, mapOf("Retry-After" to listOf("120")))).retryable)
+        assertEquals(458, decision.httpStatus)
+        val forbidden = LiveRecoveryErrors.classify(http(403, mapOf("Retry-After" to listOf("120"))))
+        assertFalse(forbidden.retryable)
+        assertEquals(403, forbidden.httpStatus)
+        assertNull(LiveRecoveryErrors.classify(error(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)).httpStatus)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

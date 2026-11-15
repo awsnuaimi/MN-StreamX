@@ -19,6 +19,23 @@ data class LivePlaybackHealthSummary(
 
 enum class LivePlaybackInterruptionOutcome { ACTIVE, RECOVERED, FAILED, STOPPED }
 
+enum class LivePlaybackErrorOrigin { PLAYER, NETWORK_TIMEOUT, WATCHDOG, SOURCE_ENDED, PREPARE }
+enum class LivePlaybackErrorStage { PLAYBACK, BUFFERING, WAITING_NETWORK, WAITING_RETRY, CONNECTING, LOADING }
+
+data class LivePlaybackError(
+    val origin: LivePlaybackErrorOrigin,
+    val code: Int,
+    val httpStatus: Int?,
+    val retryable: Boolean
+)
+
+data class LivePlaybackInterruptionError(
+    val error: LivePlaybackError,
+    val offsetMs: Long,
+    val stage: LivePlaybackErrorStage,
+    val attempt: Int
+)
+
 data class LivePlaybackInterruption(
     val durationMs: Long,
     val networkWaitMs: Long,
@@ -27,7 +44,9 @@ data class LivePlaybackInterruption(
     val loadingMs: Long,
     val attempts: Int,
     val outcome: LivePlaybackInterruptionOutcome,
-    val connectingMs: Long = 0L
+    val connectingMs: Long = 0L,
+    val errorCount: Int = 0,
+    val errors: List<LivePlaybackInterruptionError> = emptyList()
 )
 
 /** Tracks one selected channel across its automatic reconnect attempts. No timers or jobs. */
@@ -72,15 +91,21 @@ internal class LivePlaybackHealthSession(
         interruption?.let { if (it.attempts < Int.MAX_VALUE) it.attempts++ }
     }
 
-    @Synchronized fun error(retryAfterMs: Long = 0L, playbackAllowed: Boolean = true) {
+    @Synchronized fun error(
+        retryAfterMs: Long = 0L,
+        playbackAllowed: Boolean = true,
+        details: LivePlaybackError? = null
+    ) {
         if (endedAt != null) return
         if (playerErrors < Int.MAX_VALUE) playerErrors++
         val at = nowMs()
+        val wasBuffering = bufferingSince != null
         closeBuffer(at)
         if (playbackAllowed) startInterruption(at)
         interruption?.let {
             it.advanceTo(at)
             it.retryNotBeforeMs = at + retryAfterMs.coerceIn(0L, MAX_DURATION_MS)
+            if (details != null) it.recordError(details, wasBuffering)
         }
     }
 
@@ -185,6 +210,21 @@ internal class LivePlaybackHealthSession(
         private var retryDelayMs = 0L
         private var loadingMs = 0L
         private var connectingMs = 0L
+        private var errorCount = 0
+        private val errors = ArrayList<LivePlaybackInterruptionError>(MAX_ERROR_DETAILS)
+
+        fun recordError(error: LivePlaybackError, wasBuffering: Boolean) {
+            val stage = when (phase) {
+                LiveRecoveryPhase.WAITING_NETWORK -> LivePlaybackErrorStage.WAITING_NETWORK
+                LiveRecoveryPhase.SCHEDULED -> LivePlaybackErrorStage.WAITING_RETRY
+                LiveRecoveryPhase.CONNECTING -> if (httpOpen) LivePlaybackErrorStage.LOADING else LivePlaybackErrorStage.CONNECTING
+                else -> if (wasBuffering) LivePlaybackErrorStage.BUFFERING else LivePlaybackErrorStage.PLAYBACK
+            }
+            if (errorCount < Int.MAX_VALUE) errorCount++
+            // Keep the triggering error and the latest failures even during a long source outage.
+            if (errors.size == MAX_ERROR_DETAILS) errors.removeAt(1)
+            errors.add(LivePlaybackInterruptionError(error, updatedAt - startedAt, stage, attempts))
+        }
 
         fun advanceTo(at: Long) {
             val end = at.coerceIn(updatedAt, startedAt + MAX_DURATION_MS)
@@ -217,7 +257,9 @@ internal class LivePlaybackHealthSession(
                 loadingMs + pending - network - waiting - connecting,
                 attempts,
                 outcome,
-                connectingMs + connecting
+                connectingMs + connecting,
+                errorCount,
+                errors.toList()
             )
         }
     }
@@ -225,6 +267,7 @@ internal class LivePlaybackHealthSession(
     companion object {
         const val MAX_DURATION_MS = 7L * 24 * 60 * 60 * 1000
         const val MAX_INTERRUPTION_DETAILS = 6
+        const val MAX_ERROR_DETAILS = 3
     }
 }
 

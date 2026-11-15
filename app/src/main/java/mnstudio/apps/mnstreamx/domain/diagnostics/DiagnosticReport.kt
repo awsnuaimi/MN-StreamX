@@ -39,6 +39,11 @@ object DiagnosticReport {
                     "Interruptions after playback begins, newest first. Network wait takes priority over overlapping server cooldown. Connecting ends at the first successful HTTP response.",
                     "Unterbrechungen nach Wiedergabebeginn, neueste zuerst. Bei gleichzeitiger Netz- und Server-Wartezeit zählt die Netzwartezeit. Der Verbindungsaufbau endet mit der ersten erfolgreichen HTTP-Antwort."
                 ))
+                appendLine(text.text(
+                    "أول خطأ وآخر خطأين لكل توقّف. المحاولة 0 تسبق إعادة الاتصال. WATCHDOG مؤقّت داخل التطبيق، وNETWORK_TIMEOUT مهلة اتصال أو قراءة أبلغ عنها المشغّل.",
+                    "First and last two errors per interruption. Attempt 0 is before reconnecting. WATCHDOG is the app timer; NETWORK_TIMEOUT is a connection or read timeout reported by the player.",
+                    "Erster und letzte zwei Fehler je Unterbrechung. Versuch 0 liegt vor dem erneuten Verbindungsaufbau. WATCHDOG ist der App-Timer; NETWORK_TIMEOUT ist ein vom Player gemeldetes Verbindungs- oder Lesezeitlimit."
+                ))
                 snapshot.liveHealth.take(LivePlaybackHealthRecorder.LIMIT).forEachIndexed { index, item ->
                     val firstFrame = item.firstFrameMs?.coerceIn(0, 604_800_000)?.toString() ?: "-"
                     appendLine("#${index + 1} | duration=${item.durationMs.coerceIn(0, 604_800_000)} ms" +
@@ -56,7 +61,16 @@ object DiagnosticReport {
                             " | retryDelay=${incident.retryDelayMs.reportDuration()} ms" +
                             " | connecting=${incident.connectingMs.reportDuration()} ms" +
                             " | loading=${incident.loadingMs.reportDuration()} ms" +
-                            " | attempts=${incident.attempts.coerceIn(0, 1_000_000)}")
+                            " | attempts=${incident.attempts.coerceIn(0, 1_000_000)}" +
+                            " | errors=${incident.errorCount.coerceIn(0, 1_000_000)}")
+                        incident.errors.take(LivePlaybackHealthSession.MAX_ERROR_DETAILS).forEach { entry ->
+                            val error = entry.error
+                            val code = error.code.takeIf { it in -1_000_000..1_000_000 }?.toString() ?: "-"
+                            val http = error.httpStatus?.takeIf { it in 100..599 }?.toString() ?: "-"
+                            appendLine("    at=${entry.offsetMs.reportDuration()} ms | stage=${entry.stage.name}" +
+                                " | attempt=${entry.attempt.coerceIn(0, 1_000_000)} | origin=${error.origin.name}" +
+                                " | code=$code | HTTP=$http | retryable=${error.retryable}")
+                        }
                     }
                 }
                 appendLine()

@@ -117,6 +117,84 @@ class LivePlaybackHealthRecorderTest {
         assertEquals(3, summary.recoveryAttempts)
     }
 
+    @Test fun anInterruptionKeepsItsTriggerAndLatestErrorsWithTheirOwnAttemptAndStage() {
+        var clock = 0L
+        val session = LivePlaybackHealthRecorder { clock }.begin()
+        val watchdog = LivePlaybackError(LivePlaybackErrorOrigin.WATCHDOG, 2002, null, true)
+        val network = LivePlaybackError(LivePlaybackErrorOrigin.NETWORK_TIMEOUT, 2002, null, true)
+        val provider = LivePlaybackError(LivePlaybackErrorOrigin.PLAYER, 2004, 458, true)
+        val terminal = LivePlaybackError(LivePlaybackErrorOrigin.PLAYER, 2004, 403, false)
+
+        session.error(details = network)
+        assertEquals(0, session.snapshot().interruptionCount)
+        session.playbackAdvanced()
+        clock = 1_000
+        session.buffering()
+        clock = 2_000
+        session.error(details = watchdog)
+        session.recoveryChanged(LiveRecoveryPhase.SCHEDULED)
+        clock = 3_000
+        session.recoveryChanged(LiveRecoveryPhase.CONNECTING)
+        session.retry()
+        clock = 4_000
+        session.error(details = provider)
+        session.recoveryChanged(LiveRecoveryPhase.SCHEDULED)
+        clock = 5_000
+        session.recoveryChanged(LiveRecoveryPhase.CONNECTING)
+        session.retry()
+        clock = 6_000
+        session.httpOpened()
+        clock = 7_000
+        session.error(details = network)
+        session.recoveryChanged(LiveRecoveryPhase.SCHEDULED)
+        val active = session.snapshot().interruptions.single()
+        assertEquals(LivePlaybackInterruptionOutcome.ACTIVE, active.outcome)
+        assertEquals(LivePlaybackErrorStage.CONNECTING, active.errors[1].stage)
+        assertEquals(458, active.errors[1].error.httpStatus)
+
+        clock = 8_000
+        session.recoveryChanged(LiveRecoveryPhase.CONNECTING)
+        session.retry()
+        clock = 9_000
+        session.error(details = terminal)
+        session.recoveryChanged(LiveRecoveryPhase.FAILED)
+
+        val interruption = session.snapshot().interruptions.single()
+        assertEquals(LivePlaybackInterruptionOutcome.FAILED, interruption.outcome)
+        assertEquals(4, interruption.errorCount)
+        assertEquals(3, interruption.attempts)
+        assertEquals(
+            listOf(
+                LivePlaybackInterruptionError(watchdog, 1_000, LivePlaybackErrorStage.BUFFERING, 0),
+                LivePlaybackInterruptionError(network, 6_000, LivePlaybackErrorStage.LOADING, 2),
+                LivePlaybackInterruptionError(terminal, 8_000, LivePlaybackErrorStage.CONNECTING, 3)
+            ),
+            interruption.errors
+        )
+        assertEquals(3, active.errorCount)
+        assertEquals(458, active.errors[1].error.httpStatus)
+    }
+
+    @Test fun anErrorWithNoAutomaticRetryBelongsOnlyToItsOwnInterruption() {
+        var clock = 0L
+        val session = LivePlaybackHealthRecorder { clock }.begin()
+        val failure = LivePlaybackError(LivePlaybackErrorOrigin.PREPARE, 1000, null, false)
+        session.playbackAdvanced()
+        session.error(details = failure)
+        session.recoveryChanged(LiveRecoveryPhase.FAILED)
+        session.playbackAdvanced()
+        clock = 500
+        session.buffering()
+        clock = 800
+        session.playbackAdvanced()
+
+        val errors = session.snapshot().interruptions
+        assertEquals(0, errors.first().errorCount)
+        assertEquals(LivePlaybackInterruptionOutcome.RECOVERED, errors.first().outcome)
+        assertEquals(0, errors.last().attempts)
+        assertEquals(failure, errors.last().errors.single().error)
+    }
+
     @Test fun playbackProgressClosesAnInPlaceStallWithoutAnyReconnect() {
         var clock = 0L
         val session = LivePlaybackHealthRecorder { clock }.begin()
