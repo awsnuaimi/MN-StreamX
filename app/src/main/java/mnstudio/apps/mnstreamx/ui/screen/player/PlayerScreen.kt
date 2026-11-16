@@ -86,6 +86,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     var playbackError by remember(channel?.id, channel?.streamUrl, retry) { mutableStateOf<String?>(null) }
     var recoveryState by remember(channel?.id, channel?.streamUrl, retry) { mutableStateOf(LiveRecoveryState()) }
     var buffering by remember(channel?.id, channel?.streamUrl, retry) { mutableStateOf(true) }
+    var hasRenderedLiveFrame by remember(channel?.id, channel?.streamUrl, retry) { mutableStateOf(false) }
     var technical by remember(channel?.id, channel?.streamUrl, retry) { mutableStateOf(PlaybackTechnicalInfo()) }
     val error = if (state.sourceChanged) stringResource(R.string.history_source_changed) else state.errorMessage ?: playbackError
     val recovery = if (state.sourceChanged || state.errorMessage != null) LiveRecoveryState() else recoveryState
@@ -224,7 +225,10 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                 },
                 modifier = Modifier.fillMaxSize(), controllerTimeoutMs = appearance.timeoutMillis.toInt(),
                 technicalInfoEnabled = true,
-                onPlaybackStarted = viewModel::onPlaybackStarted,
+                onPlaybackStarted = { selected ->
+                    hasRenderedLiveFrame = true
+                    viewModel.onPlaybackStarted(selected)
+                },
                 captionSettings = captionState.settings,
                 onCaptionBinding = { player, audio -> captionPlayer = player; captionAudio = audio },
                 onRecovery = { id, value -> if (id == activeChannel?.id) recoveryState = value },
@@ -236,8 +240,12 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                     cardsOpen, focused, preview, focusEpoch, panels.focusMore, ::openMore, ::selectChannel,
                     onFocusChannel = { focusedId = it })
             }
-            if ((state.isLoading || (channel != null && buffering)) && !showPlaybackOverlay)
-                CircularProgressIndicator(Modifier.align(Alignment.Center))
+            if (!showPlaybackOverlay && (state.isLoading || (channel != null && buffering))) {
+                LiveBufferingIndicator(
+                    showImmediately = state.isLoading || !hasRenderedLiveFrame,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
             if (showPlaybackOverlay) PlayerErrorOverlay(error, channel != null && !state.sourceChanged,
                 state.queue.size > 0 || channel != null, errorFocus,
                 onRetry = { surface.cancelRecovery(); retry++; focusEpoch++ }, onChannels = ::openChannels,

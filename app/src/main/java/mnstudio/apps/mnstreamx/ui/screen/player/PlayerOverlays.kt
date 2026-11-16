@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -17,6 +18,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +43,8 @@ import mnstudio.apps.mnstreamx.ui.component.common.AppButton
 import mnstudio.apps.mnstreamx.ui.screen.player.deck.PlayerDeckOverlay
 import mnstudio.apps.mnstreamx.ui.state.PlayerEpgUiState
 
+private const val LIVE_BUFFERING_INDICATOR_DELAY_MS = 750L
+
 @Composable
 fun PlayerInfoOverlay(
     channel: Channel?, position: Int, channels: List<Channel>, appearance: PlayerAppearance,
@@ -53,6 +57,19 @@ fun PlayerInfoOverlay(
         if (channel != null) PlayerDeckOverlay(channel, channels, position - 1, appearance, epg, technical,
             cardsOpen, focused, preview, focusEpoch, focusMore, onMore, onSelect, onFocusChannel)
     }
+}
+
+@Composable
+internal fun LiveBufferingIndicator(showImmediately: Boolean, modifier: Modifier = Modifier) {
+    if (!showImmediately) {
+        var delayElapsed by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            delay(LIVE_BUFFERING_INDICATOR_DELAY_MS)
+            delayElapsed = true
+        }
+        if (!delayElapsed) return
+    }
+    CircularProgressIndicator(modifier)
 }
 
 @Composable

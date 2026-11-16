@@ -3,11 +3,17 @@ package mnstudio.apps.mnstreamx.ui.screen.player
 import android.app.Application
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import mnstudio.apps.mnstreamx.R
 import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryPhase
@@ -23,6 +29,42 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], application = Application::class, qualifiers = "en-w960dp-h720dp-mdpi")
 class PlayerRecoveryOverlayTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun initialLoadingIndicatorIsImmediate() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            IPTVAppTheme {
+                LiveBufferingIndicator(showImmediately = true, modifier = Modifier.testTag("live-buffering"))
+            }
+        }
+        compose.onNodeWithTag("live-buffering").assertIsDisplayed()
+    }
+
+    @Test fun onlySustainedBufferingShowsTheIndicatorAfterPlaybackHasStarted() {
+        val buffering = mutableStateOf(true)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            IPTVAppTheme {
+                Box(Modifier.fillMaxSize()) {
+                    if (buffering.value) {
+                        LiveBufferingIndicator(showImmediately = false, modifier = Modifier.testTag("live-buffering"))
+                    }
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(600)
+        compose.onNodeWithTag("live-buffering").assertDoesNotExist()
+        compose.runOnIdle { buffering.value = false }
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithTag("live-buffering").assertDoesNotExist()
+
+        compose.runOnIdle { buffering.value = true }
+        compose.mainClock.autoAdvance = true
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("live-buffering").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("live-buffering").assertIsDisplayed()
+        compose.runOnIdle { buffering.value = false }
+        compose.onNodeWithTag("live-buffering").assertDoesNotExist()
+    }
 
     @Test fun reschedulingUpdatesTheCountdownAndConnectingReplacesIt() {
         val recovery = mutableStateOf(
