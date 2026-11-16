@@ -18,16 +18,16 @@ class PlayerRemoteInputTest {
             assertFalse(handlePlayerRemoteKey(code, 0, 0, false, true, true) { fail() })
         }
     }
-    @Test fun arrowsUseCardVisibilityWithoutATimingWindow() {
+    @Test fun upAndDownOpenOrCloseCardsWithoutSwitchingChannels() {
         fun command(code: Int, cards: Boolean): PlayerRemoteCommand? {
             var value: PlayerRemoteCommand? = null
             handlePlayerRemoteKey(code, 0, 0, false, false, cards) { value = it }
             return value
         }
         assertEquals(PlayerRemoteCommand.OPEN_CARDS, command(20, false))
-        assertEquals(PlayerRemoteCommand.NEXT, command(20, true))
+        assertNull(command(20, true))
         assertEquals(PlayerRemoteCommand.HIDE_CARDS, command(19, true))
-        assertEquals(PlayerRemoteCommand.PREVIOUS, command(19, false))
+        assertNull(command(19, false))
     }
     @Test fun menuAndBackAreStillRecognizedInTheChannelPanel() {
         val commands = mutableListOf<PlayerRemoteCommand>()
@@ -41,25 +41,42 @@ class PlayerRemoteInputTest {
         assertFalse(handlePlayerRemoteKey(21, 0, 0, false, false, true, commands::add))
         assertEquals(listOf(PlayerRemoteCommand.TOGGLE_CHANNELS), commands)
     }
-    @Test fun rightShowsOnlyInformationDuringWatchingAndBrowsesInsideCards() {
+    @Test fun infoOpensProgramDetailsAndRightRemainsAvailableForFocus() {
         val commands = mutableListOf<PlayerRemoteCommand>()
-        assertTrue(handlePlayerRemoteKey(22, 0, 0, false, false, false, commands::add))
+        fun press(code: Int, cards: Boolean = false, modal: Boolean = false) = handlePlayerRemoteKey(
+            code, KeyEvent.ACTION_DOWN, 0, false, modal, cards, commands::add
+        )
+        assertFalse(press(KeyEvent.KEYCODE_DPAD_RIGHT))
+        assertFalse(press(KeyEvent.KEYCODE_DPAD_RIGHT, cards = true))
+        assertTrue(press(KeyEvent.KEYCODE_INFO))
+        assertFalse(press(KeyEvent.KEYCODE_INFO, modal = true))
         assertEquals(listOf(PlayerRemoteCommand.SHOW_INFO), commands)
-        assertFalse(handlePlayerRemoteKey(22, 0, 0, false, false, true, commands::add))
+    }
+
+    @Test fun onlyDedicatedChannelKeysRequestZappingWhileWatching() {
+        val commands = mutableListOf<PlayerRemoteCommand>()
+        fun press(code: Int) = handlePlayerRemoteKey(
+            code, KeyEvent.ACTION_DOWN, 0, false, false, false, commands::add
+        )
+        assertFalse(press(KeyEvent.KEYCODE_PAGE_UP))
+        assertFalse(press(KeyEvent.KEYCODE_PAGE_DOWN))
+        assertTrue(press(KeyEvent.KEYCODE_CHANNEL_UP))
+        assertTrue(press(KeyEvent.KEYCODE_CHANNEL_DOWN))
+        assertEquals(listOf(PlayerRemoteCommand.NEXT, PlayerRemoteCommand.PREVIOUS), commands)
     }
     @Test fun mediaAndSeekKeysRemainAvailableToTheNativePlayer() {
         assertFalse(handlePlayerRemoteKey(85, 0, 0, false, false, false) { fail() })
         assertFalse(handlePlayerRemoteKey(21, 0, 0, true, false, false) { fail() })
     }
-    @Test fun heldDownCannotBecomeANextCommandAfterOpeningCardsEvenIfRepeatCountIsZero() {
+    @Test fun openingCardsConsumesTheHeldDownPressAndTheNextPressCanNavigate() {
         val key = PlayerRemoteKeyGate(); val commands = mutableListOf<PlayerRemoteCommand>()
         assertTrue(key.handle(20, 0, 0, false, false, false, commands::add))
         assertTrue(key.handle(20, 0, 0, false, false, true, commands::add))
         assertTrue(key.handle(20, 0, 10, false, false, true, commands::add))
         assertTrue(key.handle(20, 1, 0, false, false, true, commands::add))
         assertEquals(listOf(PlayerRemoteCommand.OPEN_CARDS), commands)
-        key.handle(20, 0, 0, false, false, true, commands::add)
-        assertEquals(listOf(PlayerRemoteCommand.OPEN_CARDS, PlayerRemoteCommand.NEXT), commands)
+        assertFalse(key.handle(20, 0, 0, false, false, true, commands::add))
+        assertEquals(listOf(PlayerRemoteCommand.OPEN_CARDS), commands)
     }
     @Test fun upReleaseCannotReachVideoOrNewlyFocusedControlsAfterHidingCards() {
         val key = PlayerRemoteKeyGate(); val commands = mutableListOf<PlayerRemoteCommand>()
@@ -67,8 +84,8 @@ class PlayerRemoteInputTest {
         assertTrue(key.handle(19, 0, 1, false, false, false, commands::add))
         assertTrue(key.handle(19, 1, 0, true, true, false, commands::add))
         assertEquals(listOf(PlayerRemoteCommand.HIDE_CARDS), commands)
-        key.handle(19, 0, 0, false, false, false, commands::add)
-        assertEquals(PlayerRemoteCommand.PREVIOUS, commands.last())
+        assertFalse(key.handle(19, 0, 0, false, false, false, commands::add))
+        assertEquals(listOf(PlayerRemoteCommand.HIDE_CARDS), commands)
     }
     @Test fun resettingAfterLifecycleStopClearsAReleaseThatWasLost() {
         val key = PlayerRemoteKeyGate(); val commands = mutableListOf<PlayerRemoteCommand>()

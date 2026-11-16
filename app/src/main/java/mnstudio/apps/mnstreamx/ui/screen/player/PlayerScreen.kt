@@ -75,6 +75,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     val channel = state.channel
     val activeChannel by rememberUpdatedState(channel)
     var panels by rememberSaveable(stateSaver = PlayerPanelSaver) { mutableStateOf(PlayerPanelState()) }
+    var detailsOpenedFromInfo by rememberSaveable { mutableStateOf(false) }
     val cardsOpen = panels.panel == PlayerPanel.CARDS
     var bannerVisible by remember { mutableStateOf(true) }
     var interaction by remember { mutableIntStateOf(0) }
@@ -135,6 +136,13 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         surface.hideControls(); panels = panels.channels(); focusedId = null
     }
     fun back() {
+        if (panels.panel == PlayerPanel.DETAILS && detailsOpenedFromInfo) {
+            detailsOpenedFromInfo = false
+            panels = panels.watching()
+            remoteKeys.reset()
+            focusEpoch++
+            return
+        }
         when (playerBackAction(panels.panel)) {
             PlayerBackAction.EXIT -> { surface.cancelRecovery(); onBack(channel?.id) }
             PlayerBackAction.HIDE_CARDS -> hideCards()
@@ -176,9 +184,13 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                 PlayerRemoteCommand.HIDE_CARDS -> hideCards()
                 PlayerRemoteCommand.TOGGLE_CHANNELS -> openChannels()
                 PlayerRemoteCommand.SHOW_INFO -> {
-                    surface.hideControls()
-                    if (panels.panel == PlayerPanel.CONTROLS) panels = panels.watching()
-                    showBanner()
+                    if (channel != null && !state.sourceChanged) {
+                        surface.hideControls()
+                        focusedId = null
+                        bannerVisible = false
+                        detailsOpenedFromInfo = true
+                        panels = panels.watching().details()
+                    }
                 }
                 PlayerRemoteCommand.BACK -> back()
             }
@@ -286,7 +298,10 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                             else { panels = panels.watching(); parental.model?.requestPin() }
                         }
                         PlayerMoreAction.HISTORY -> panels = panels.history()
-                        PlayerMoreAction.DETAILS -> panels = panels.details()
+                        PlayerMoreAction.DETAILS -> {
+                            detailsOpenedFromInfo = false
+                            panels = panels.details()
+                        }
                         PlayerMoreAction.CHANNELS -> openChannels()
                         PlayerMoreAction.GUIDE -> {
                             panels = panels.watching()
@@ -299,8 +314,11 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                     }
                 }, onRetryFavorites = viewModel::retryFavorites)
             }
-            if (panels.panel == PlayerPanel.DETAILS && channel != null)
-                PlayerProgramDetailsDialog(channel.name, activeEpg, appearance, ::back)
+            if (panels.panel == PlayerPanel.DETAILS && channel != null) {
+                PlayerProgramDetailsDialog(
+                    channel.name, activeEpg, appearance, ::back, fromInfoKey = detailsOpenedFromInfo
+                )
+            }
             if (panels.panel == PlayerPanel.CAPTIONS)
                 PlayerCaptionDialog(captionModel, captionSelection, ::back)
             if (panels.panel == PlayerPanel.HISTORY) WatchHistoryDialog(channel?.id, ::back, { selected, source ->
