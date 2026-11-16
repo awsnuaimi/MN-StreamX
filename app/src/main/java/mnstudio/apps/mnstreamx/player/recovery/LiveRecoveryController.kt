@@ -211,8 +211,8 @@ internal class LiveRecoveryController(
         } else {
             savedDeadlineMs ?: deadlineMs
         }
-        publish(LiveRecoveryPhase.SCHEDULED, nextAttemptNumber())
         scheduleRetryAt(retryAt)
+        publish(LiveRecoveryPhase.SCHEDULED, nextAttemptNumber(), pendingRetryAtMs)
     }
 
     private fun nextAttemptNumber(): Int = attempts + if (attempts == Int.MAX_VALUE) 0 else 1
@@ -264,8 +264,12 @@ internal class LiveRecoveryController(
         stablePlayback = null
     }
 
-    private fun publish(phase: LiveRecoveryPhase, attempt: Int = attempts) {
-        val next = LiveRecoveryState(phase, attempt)
+    private fun publish(
+        phase: LiveRecoveryPhase,
+        attempt: Int = attempts,
+        retryAtElapsedRealtimeMs: Long? = null
+    ) {
+        val next = LiveRecoveryState(phase, attempt, retryAtElapsedRealtimeMs)
         if (next != state) {
             state = next
             onState(next)

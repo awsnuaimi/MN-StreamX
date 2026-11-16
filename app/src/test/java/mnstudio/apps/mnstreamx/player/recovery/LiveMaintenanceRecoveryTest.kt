@@ -73,7 +73,9 @@ class LiveMaintenanceRecoveryTest {
                 repeat(failures) { index ->
                     val attempt = index + 1
                     awaitPlayer("source error $attempt") { errors.size >= attempt }
-                    val scheduled = LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, attempt)
+                    val scheduled = LiveRecoveryState(
+                        LiveRecoveryPhase.SCHEDULED, attempt, SystemClock.elapsedRealtime() + cooldownMs
+                    )
                     assertEquals(scheduled, phases.last())
                     assertEquals(attempt, playlistRequests.get())
 
@@ -112,13 +114,17 @@ class LiveMaintenanceRecoveryTest {
                 session.start()
                 listOf(1_000L, 3_000L, 7_000L).forEachIndexed { index, delayMs ->
                     awaitPlayer("HTTP error ${index + 1}") { errors.size > index }
-                    assertEquals(LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, index + 1), phases.last())
+                    assertEquals(LiveRecoveryState(
+                        LiveRecoveryPhase.SCHEDULED, index + 1, SystemClock.elapsedRealtime() + delayMs
+                    ), phases.last())
                     looper.idleFor(delayMs, TimeUnit.MILLISECONDS)
                 }
 
                 awaitPlayer("unreadable maintenance response") { errors.size == 4 }
                 assertEquals("ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED", errors.last())
-                assertEquals(LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, 4), phases.last())
+                assertEquals(LiveRecoveryState(
+                    LiveRecoveryPhase.SCHEDULED, 4, SystemClock.elapsedRealtime() + 15_000L
+                ), phases.last())
                 assertEquals(4, server.requestCount)
                 looper.idleFor(15_000, TimeUnit.MILLISECONDS)
 

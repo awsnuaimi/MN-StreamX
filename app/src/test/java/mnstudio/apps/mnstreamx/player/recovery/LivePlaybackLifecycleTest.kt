@@ -46,7 +46,10 @@ class LivePlaybackLifecycleTest {
                 runCurrent()
                 assertEquals("/live.ts", server.takeRequest(5, TimeUnit.SECONDS)?.path)
                 fixture.awaitError()
-                assertEquals(LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, 1), fixture.states.last())
+                val scheduled = fixture.states.last()
+                assertEquals(LiveRecoveryPhase.SCHEDULED, scheduled.phase)
+                assertEquals(1, scheduled.attempt)
+                assertNotNull(scheduled.retryAtElapsedRealtimeMs)
                 assertEquals(1, fixture.networkObservers)
 
                 fixture.session.stop()

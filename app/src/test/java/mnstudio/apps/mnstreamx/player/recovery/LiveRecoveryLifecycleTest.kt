@@ -29,8 +29,31 @@ class LiveRecoveryLifecycleTest {
         assertEquals(1, session.attempts)
 
         assertTrue(recovery.resume())
-        assertEquals(LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, 2), recovery.state)
+        assertEquals(LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, 2, 61_000L), recovery.state)
         advanceTimeBy(29_999)
+        runCurrent()
+        assertEquals(1, session.attempts)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(2, session.attempts)
+        assertEquals(LiveRecoveryState(LiveRecoveryPhase.CONNECTING, 2), recovery.state)
+        recovery.close()
+    }
+
+    @Test fun switchingNetworksPublishesTheEarlierDeadlineForTheSameAttempt() = runTest {
+        val session = Harness(this) { testScheduler.currentTime }
+        val recovery = session.recovery
+        recovery.networkChanged(PlaybackConnection.Online(1, validated = true))
+        recovery.error(true)
+        advanceTimeBy(1_000)
+        runCurrent()
+        recovery.error(true)
+        assertEquals(LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, 2, 4_000L), recovery.state)
+
+        advanceTimeBy(500)
+        recovery.networkChanged(PlaybackConnection.Online(2, validated = true))
+        assertEquals(LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, 2, 2_500L), recovery.state)
+        advanceTimeBy(999)
         runCurrent()
         assertEquals(1, session.attempts)
         advanceTimeBy(1)

@@ -3,5 +3,6 @@
     <string name="live_recovery_title">Restoring the connection…</string>
     <string name="live_recovery_waiting_network">Waiting for the network connection. Retrying will resume automatically when it returns.</string>
     <string name="live_recovery_scheduled">Preparing attempt %1$d…</string>
+    <string name="live_recovery_countdown">Attempt %1$d in %2$s</string>
     <string name="live_recovery_connecting">Reconnecting (attempt %1$d)…</string>
 </resources>

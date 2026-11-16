@@ -3,6 +3,7 @@ package mnstudio.apps.mnstreamx.player.recovery
 import android.app.Application
 import android.media.AudioManager
 import android.os.Looper
+import android.os.SystemClock
 import androidx.media3.common.util.UnstableApi
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -84,7 +85,10 @@ class LivePlaylistRecoveryTest {
                     assertEquals("/live.m3u8", server.takeRequest(5, TimeUnit.SECONDS)?.path)
                     awaitPlayer("The player did not report the source error") { errors.size > index }
                     assertEquals("ERROR_CODE_PARSING_MANIFEST_MALFORMED", errors[index])
-                    assertEquals(LiveRecoveryState(LiveRecoveryPhase.SCHEDULED, index + 1), recovery.last())
+                    val scheduled = recovery.last()
+                    assertEquals(LiveRecoveryPhase.SCHEDULED, scheduled.phase)
+                    assertEquals(index + 1, scheduled.attempt)
+                    assertTrue(checkNotNull(scheduled.retryAtElapsedRealtimeMs) > SystemClock.elapsedRealtime())
                     advanceTimeBy(retryDelay - 10)
                     runCurrent()
                     assertEquals(index + 1, playlistRequests.get())
