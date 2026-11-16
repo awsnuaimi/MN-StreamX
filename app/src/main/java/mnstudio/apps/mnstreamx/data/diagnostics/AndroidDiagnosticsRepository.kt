@@ -16,19 +16,24 @@ import mnstudio.apps.mnstreamx.data.image.ImageDiagnostics
 internal class AndroidDiagnosticsRepository(context: Context) : DiagnosticsRepository {
     private val app = context.applicationContext
     private val environment = AndroidDiagnosticSnapshot(context.applicationContext)
+    private val liveHistory = DeviceLivePlaybackHistory.forApp(app)
     private val probe = DiagnosticSourceProbe(DiagnosticTransport(HttpClient.create().newBuilder()
         .connectTimeout(6,TimeUnit.SECONDS).readTimeout(8,TimeUnit.SECONDS).callTimeout(10,TimeUnit.SECONDS).build()))
     private val reports = DiagnosticReports(File(context.applicationContext.cacheDir,"diagnostic-reports"))
     override suspend fun snapshot() = withContext(Dispatchers.IO) {
-        environment.read().copy(performance = PerformanceJournal.snapshot(), images = ImageDiagnostics.read(app),
-            liveHealth = LivePlaybackHealthJournal.snapshot())
+        withMeasurements(environment.read())
     }
     override fun sourceKind(source: AppSettings) = probe.kind(source)
     override suspend fun probe(source: AppSettings,onCheck: (DiagnosticCheck) -> Unit) = probe.run(source,onCheck)
     override suspend fun export(snapshot: DiagnosticSnapshot, source: DiagnosticSource, sourceKey: String?,
         checks: List<DiagnosticCheck>, events: List<DiagnosticEvent>, language: HomeLanguage) = withContext(Dispatchers.IO) {
-        reports.write(DiagnosticReport.build(snapshot.copy(performance = PerformanceJournal.snapshot(),
-            images = ImageDiagnostics.read(app), liveHealth = LivePlaybackHealthJournal.snapshot()),
-            source,sourceKey,checks,events,language))
+        reports.write(DiagnosticReport.build(withMeasurements(snapshot), source,sourceKey,checks,events,language))
     }
+
+    private suspend fun withMeasurements(snapshot: DiagnosticSnapshot) = snapshot.copy(
+        performance = PerformanceJournal.snapshot(),
+        images = ImageDiagnostics.read(app),
+        liveHealth = LivePlaybackHealthJournal.snapshot(),
+        savedLiveInterruptions = liveHistory.snapshot()
+    )
 }

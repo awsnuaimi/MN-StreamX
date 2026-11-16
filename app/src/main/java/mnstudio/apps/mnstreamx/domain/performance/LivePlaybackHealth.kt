@@ -52,7 +52,9 @@ data class LivePlaybackInterruption(
 /** Tracks one selected channel across its automatic reconnect attempts. No timers or jobs. */
 internal class LivePlaybackHealthSession(
     private val nowMs: () -> Long,
-    private val startedAt: Long = nowMs()
+    private val startedAt: Long = nowMs(),
+    private val history: LivePlaybackHistorySink? = null,
+    private val wallTimeMs: () -> Long = System::currentTimeMillis
 ) {
     private var endedAt: Long? = null
     private var firstFrameAt: Long? = null
@@ -72,7 +74,7 @@ internal class LivePlaybackHealthSession(
         val at = nowMs()
         bufferingSince = at
         if (bufferingEvents < Int.MAX_VALUE) bufferingEvents++
-        startInterruption(at)
+        startInterruption(at, LivePlaybackInterruptionTrigger.BUFFERING)
     }
 
     @Synchronized fun bufferEnded() {
@@ -88,7 +90,10 @@ internal class LivePlaybackHealthSession(
     @Synchronized fun retry() {
         if (endedAt != null) return
         if (recoveryAttempts < Int.MAX_VALUE) recoveryAttempts++
-        interruption?.let { if (it.attempts < Int.MAX_VALUE) it.attempts++ }
+        interruption?.let {
+            if (it.attempts < Int.MAX_VALUE) it.attempts++
+            saveInterruption(it, nowMs())
+        }
     }
 
     @Synchronized fun error(
@@ -101,37 +106,42 @@ internal class LivePlaybackHealthSession(
         val at = nowMs()
         val wasBuffering = bufferingSince != null
         closeBuffer(at)
-        if (playbackAllowed) startInterruption(at)
+        if (playbackAllowed) startInterruption(at, LivePlaybackInterruptionTrigger.PLAYER_ERROR)
         interruption?.let {
             it.advanceTo(at)
             it.retryNotBeforeMs = at + retryAfterMs.coerceIn(0L, MAX_DURATION_MS)
             if (details != null) it.recordError(details, wasBuffering)
+            saveInterruption(it, at)
         }
     }
 
     @Synchronized fun recoveryChanged(phase: LiveRecoveryPhase) {
         if (endedAt != null || !playbackConfirmed) return
         val at = nowMs()
-        if (phase == LiveRecoveryPhase.WAITING_NETWORK) startInterruption(at)
+        if (phase == LiveRecoveryPhase.WAITING_NETWORK) startInterruption(at, LivePlaybackInterruptionTrigger.NETWORK_WAIT)
         interruption?.let {
+            val changed = it.phase != phase || (phase == LiveRecoveryPhase.CONNECTING && it.httpOpen)
             it.advanceTo(at)
             it.phase = phase
             if (phase == LiveRecoveryPhase.CONNECTING) it.httpOpen = false
-        }
-        if (phase == LiveRecoveryPhase.FAILED) {
-            recordInterruption(at, LivePlaybackInterruptionOutcome.FAILED)
+            if (phase == LiveRecoveryPhase.FAILED) recordInterruption(at, LivePlaybackInterruptionOutcome.FAILED)
+            else if (changed) saveInterruption(it, at)
         }
     }
 
     @Synchronized fun httpOpened() {
         val current = interruption ?: return
         if (current.phase != LiveRecoveryPhase.CONNECTING || current.httpOpen) return
-        current.advanceTo(nowMs())
+        val at = nowMs()
+        current.advanceTo(at)
         current.httpOpen = true
+        saveInterruption(current, at)
     }
 
     @Synchronized fun playbackStalled() {
-        if (endedAt == null && playbackConfirmed && interruption == null) startInterruption(nowMs())
+        if (endedAt == null && playbackConfirmed && interruption == null) {
+            startInterruption(nowMs(), LivePlaybackInterruptionTrigger.OUTPUT_STALLED)
+        }
     }
 
     @Synchronized fun playbackAdvanced() {
@@ -176,17 +186,27 @@ internal class LivePlaybackHealthSession(
         )
     }
 
-    private fun startInterruption(at: Long) {
+    private fun startInterruption(at: Long, trigger: LivePlaybackInterruptionTrigger) {
         if (!playbackConfirmed || interruption != null) return
-        interruption = Interruption(at)
+        val current = Interruption(at, if (history != null) wallTimeMs() else 0L, trigger)
+        interruption = current
         if (interruptionCount < Int.MAX_VALUE) interruptionCount++
+        saveInterruption(current, at, isStart = true)
     }
 
     private fun recordInterruption(at: Long, outcome: LivePlaybackInterruptionOutcome) {
         val current = interruption ?: return
         interruption = null
-        recentInterruptions.addFirst(current.snapshot(at, outcome))
+        val summary = current.snapshot(at, outcome)
+        recentInterruptions.addFirst(summary)
         if (recentInterruptions.size > MAX_INTERRUPTION_DETAILS) recentInterruptions.removeLast()
+        history?.record(current.historyKey, current.historyEntry(wallTimeMs(), summary), isStart = false)
+    }
+
+    private fun saveInterruption(current: Interruption, at: Long, isStart: Boolean = false) {
+        val sink = history ?: return
+        val summary = current.snapshot(at, LivePlaybackInterruptionOutcome.ACTIVE)
+        sink.record(current.historyKey, current.historyEntry(wallTimeMs(), summary), isStart)
     }
 
     private fun closeBuffer(at: Long) {
@@ -199,7 +219,12 @@ internal class LivePlaybackHealthSession(
 
     private fun elapsed(start: Long, end: Long) = (end - start).coerceIn(0L, MAX_DURATION_MS)
 
-    private class Interruption(private val startedAt: Long) {
+    private class Interruption(
+        private val startedAt: Long,
+        private val wallStartedAt: Long,
+        private val trigger: LivePlaybackInterruptionTrigger
+    ) {
+        val historyKey = Any()
         var phase = LiveRecoveryPhase.NONE
         var retryNotBeforeMs = 0L
         var attempts = 0
@@ -212,6 +237,10 @@ internal class LivePlaybackHealthSession(
         private var connectingMs = 0L
         private var errorCount = 0
         private val errors = ArrayList<LivePlaybackInterruptionError>(MAX_ERROR_DETAILS)
+
+        fun historyEntry(observedAt: Long, summary: LivePlaybackInterruption) =
+            LivePlaybackHistoryEntry(wallStartedAt, observedAt, trigger, phase,
+                phase == LiveRecoveryPhase.CONNECTING && httpOpen, summary)
 
         fun recordError(error: LivePlaybackError, wasBuffering: Boolean) {
             val stage = when (phase) {
@@ -275,8 +304,8 @@ internal class LivePlaybackHealthSession(
 internal class LivePlaybackHealthRecorder(private val nowMs: () -> Long = { System.nanoTime() / 1_000_000 }) {
     private val sessions = ArrayDeque<LivePlaybackHealthSession>()
 
-    @Synchronized fun begin(): LivePlaybackHealthSession {
-        val session = LivePlaybackHealthSession(nowMs)
+    @Synchronized fun begin(history: LivePlaybackHistorySink? = null): LivePlaybackHealthSession {
+        val session = LivePlaybackHealthSession(nowMs, history = history)
         sessions.addFirst(session)
         while (sessions.size > LIMIT) sessions.removeLast()
         return session
@@ -290,7 +319,13 @@ internal class LivePlaybackHealthRecorder(private val nowMs: () -> Long = { Syst
 
 internal object LivePlaybackHealthJournal {
     private val recorder = LivePlaybackHealthRecorder()
-    fun begin() = recorder.begin()
+    @Volatile private var history: LivePlaybackHistorySink? = null
+
+    fun attachHistory(sink: LivePlaybackHistorySink) { history = sink }
+    fun begin() = recorder.begin(history)
     fun snapshot(): List<LivePlaybackHealthSummary> = recorder.snapshot()
-    fun clear() = recorder.clear()
+    fun clear() {
+        recorder.clear()
+        history?.clear()
+    }
 }

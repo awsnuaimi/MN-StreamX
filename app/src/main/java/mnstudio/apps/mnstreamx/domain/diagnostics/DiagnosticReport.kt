@@ -5,6 +5,9 @@ import mnstudio.apps.mnstreamx.domain.caption.CaptionDiagnosticJournal
 import java.time.Instant
 import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthRecorder
 import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHealthSession
+import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackHistoryEntry
+import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackInterruption
+import mnstudio.apps.mnstreamx.domain.performance.LivePlaybackInterruptionOutcome
 import mnstudio.apps.mnstreamx.domain.performance.PerformanceReport
 
 object DiagnosticReport {
@@ -54,23 +57,7 @@ object DiagnosticReport {
                         " | errors=${item.playerErrors.coerceIn(0, 1_000_000)} | finished=${item.finished}" +
                         " | interruptions=${item.interruptionCount.coerceIn(0, 1_000_000)}")
                     item.interruptions.take(LivePlaybackHealthSession.MAX_INTERRUPTION_DETAILS).forEachIndexed { number, incident ->
-                        appendLine("  ${number + 1}. ${incident.outcome.name}" +
-                            " | gap=${incident.durationMs.reportDuration()} ms" +
-                            " | networkWait=${incident.networkWaitMs.reportDuration()} ms" +
-                            " | retryAfterWait=${incident.retryAfterWaitMs.reportDuration()} ms" +
-                            " | retryDelay=${incident.retryDelayMs.reportDuration()} ms" +
-                            " | connecting=${incident.connectingMs.reportDuration()} ms" +
-                            " | loading=${incident.loadingMs.reportDuration()} ms" +
-                            " | attempts=${incident.attempts.coerceIn(0, 1_000_000)}" +
-                            " | errors=${incident.errorCount.coerceIn(0, 1_000_000)}")
-                        incident.errors.take(LivePlaybackHealthSession.MAX_ERROR_DETAILS).forEach { entry ->
-                            val error = entry.error
-                            val code = error.code.takeIf { it in -1_000_000..1_000_000 }?.toString() ?: "-"
-                            val http = error.httpStatus?.takeIf { it in 100..599 }?.toString() ?: "-"
-                            appendLine("    at=${entry.offsetMs.reportDuration()} ms | stage=${entry.stage.name}" +
-                                " | attempt=${entry.attempt.coerceIn(0, 1_000_000)} | origin=${error.origin.name}" +
-                                " | code=$code | HTTP=$http | retryable=${error.retryable}")
-                        }
+                        appendInterruption(incident, "  ${number + 1}. ")
                     }
                 }
                 appendLine()
@@ -92,14 +79,76 @@ object DiagnosticReport {
             appendLine(text.categoryNote());appendLine();appendLine(text.events())
             events.take(DiagnosticJournal.LIMIT).forEach { event ->
                 val scope = when { event.sourceKey == null -> text.app();event.sourceKey == active -> text.current();else -> text.other() }
-                val time = Instant.ofEpochMilli(event.timeMs.coerceIn(0,4_102_444_800_000L))
+                val time = event.timeMs.reportTime()
                 appendLine("$time | $scope | ${text.area(event.area)} | ${text.issue(event.issue)} | ${DiagnosticSummary.technical(event)}")
             }
             if (events.isEmpty()) appendLine(text.noEvents())
         }
-        require(result.toByteArray(Charsets.UTF_8).size <= MAX_BYTES)
-        return result
+        val availableBytes = MAX_BYTES - result.utf8Size()
+        require(availableBytes >= 0)
+        return result + savedInterruptions(snapshot.savedLiveInterruptions, text, availableBytes)
     }
 
+    private fun savedInterruptions(
+        entries: List<LivePlaybackHistoryEntry>,
+        text: DiagnosticText,
+        availableBytes: Int
+    ): String {
+        if (entries.isEmpty()) return ""
+        val heading = buildString {
+            appendLine()
+            appendLine(text.text("انقطاعات Live TV المحفوظة",
+                "Saved live TV interruptions", "Gespeicherte Live-TV-Unterbrechungen"))
+            appendLine(text.text(
+                "حتى ${LivePlaybackHistoryEntry.LIMIT} انقطاعًا عبر جلسات التطبيق بحسب المساحة المتاحة، والأحدث أولًا. يعرض ACTIVE آخر حالة مسجلة لانقطاع لم يكتمل استرجاعه.",
+                "Up to ${LivePlaybackHistoryEntry.LIMIT} interruptions across app sessions as space permits, newest first. ACTIVE describes the last recorded state of an unfinished interruption.",
+                "Bis zu ${LivePlaybackHistoryEntry.LIMIT} Unterbrechungen über mehrere App-Sitzungen, je nach Platz, neueste zuerst. ACTIVE zeigt den zuletzt erfassten Zustand einer noch offenen Unterbrechung."
+            ))
+        }
+        var remaining = availableBytes - heading.utf8Size()
+        val rows = buildString {
+            for ((index, entry) in entries.take(LivePlaybackHistoryEntry.LIMIT).withIndex()) {
+                val timeLabel = if (entry.interruption.outcome == LivePlaybackInterruptionOutcome.RECOVERED) {
+                    "recoveredAt"
+                } else {
+                    "observedAt"
+                }
+                val row = buildString {
+                    appendLine("#${index + 1} | startedAt=${entry.startedAtMs.reportTime()}" +
+                        " | $timeLabel=${entry.observedAtMs.reportTime()} | trigger=${entry.trigger.name}" +
+                        " | phase=${entry.phase.name} | httpOpened=${entry.httpOpened}")
+                    appendInterruption(entry.interruption, "  ")
+                }
+                val bytes = row.utf8Size()
+                if (bytes > remaining) break
+                append(row)
+                remaining -= bytes
+            }
+        }
+        return if (rows.isEmpty()) "" else heading + rows
+    }
+
+    private fun StringBuilder.appendInterruption(incident: LivePlaybackInterruption, prefix: String) {
+        appendLine("$prefix${incident.outcome.name}" +
+            " | gap=${incident.durationMs.reportDuration()} ms" +
+            " | networkWait=${incident.networkWaitMs.reportDuration()} ms" +
+            " | retryAfterWait=${incident.retryAfterWaitMs.reportDuration()} ms" +
+            " | retryDelay=${incident.retryDelayMs.reportDuration()} ms" +
+            " | connecting=${incident.connectingMs.reportDuration()} ms" +
+            " | loading=${incident.loadingMs.reportDuration()} ms" +
+            " | attempts=${incident.attempts.coerceIn(0, 1_000_000)}" +
+            " | errors=${incident.errorCount.coerceIn(0, 1_000_000)}")
+        incident.errors.take(LivePlaybackHealthSession.MAX_ERROR_DETAILS).forEach { entry ->
+            val error = entry.error
+            val code = error.code.takeIf { it in -1_000_000..1_000_000 }?.toString() ?: "-"
+            val http = error.httpStatus?.takeIf { it in 100..599 }?.toString() ?: "-"
+            appendLine("    at=${entry.offsetMs.reportDuration()} ms | stage=${entry.stage.name}" +
+                " | attempt=${entry.attempt.coerceIn(0, 1_000_000)} | origin=${error.origin.name}" +
+                " | code=$code | HTTP=$http | retryable=${error.retryable}")
+        }
+    }
+
+    private fun Long.reportTime(): Instant = Instant.ofEpochMilli(coerceIn(0, 4_102_444_800_000L))
     private fun Long.reportDuration(): Long = coerceIn(0L, LivePlaybackHealthSession.MAX_DURATION_MS)
+    private fun String.utf8Size(): Int = toByteArray(Charsets.UTF_8).size
 }

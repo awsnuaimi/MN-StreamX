@@ -12,7 +12,7 @@ class DiagnosticText(private val language: HomeLanguage) {
     fun start() = text("بدء التشخيص","Run diagnostics","Diagnose starten")
     fun cancel() = text("إلغاء الفحص","Cancel checks","Diagnose abbrechen")
     fun share() = text("مشاركة التقرير","Share report","Bericht teilen")
-    fun clear() = text("مسح سجل الجلسة","Clear session log","Sitzungsprotokoll leeren")
+    fun clear() = text("مسح سجلات التشخيص","Clear diagnostic logs","Diagnoseprotokolle leeren")
     fun refresh() = text("تحديث قياسات الجهاز والصور", "Refresh device and image measurements", "Geräte- und Bildmesswerte aktualisieren")
     fun refreshing() = text("جارٍ تحديث القياسات المحلية…", "Refreshing local measurements…", "Lokale Messwerte werden aktualisiert…")
     fun back() = text("رجوع","Back","Zurück")
@@ -25,9 +25,9 @@ class DiagnosticText(private val language: HomeLanguage) {
     fun categoryNote() = text("فحص التصنيفات لا يثبت توفر كل العناوين أو قابلية تشغيلها. اختبر الفيديو ثم ارجع إلى سجل الجلسة.",
         "Category checks do not prove that every title is available or playable. Play a video, then inspect the session log.",
         "Die Kategorienprüfung bestätigt nicht die Verfügbarkeit oder Wiedergabe aller Titel. Ein Video testen und danach das Sitzungsprotokoll prüfen.")
-    fun sessionNote() = text("الأحداث تخص جلسة التطبيق الحالية فقط؛ لا يمثل هذا سجل انهيار أندرويد.",
-        "Events belong to the current app process only; this is not an Android crash log.",
-        "Ereignisse gelten nur für die aktuelle App-Sitzung; dies ist kein Android-Absturzprotokoll.")
+    fun sessionNote() = text("أحداث الجلسة وقياساتها تخص تشغيل التطبيق الحالي.",
+        "Session events and measurements belong to the current app process.",
+        "Sitzungsereignisse und Messwerte gelten für die aktuelle App-Sitzung.")
     fun device() = text("الجهاز والموارد","Device and resources","Gerät und Ressourcen")
     fun checks() = text("نتائج فحص المصدر","Source checks","Prüfung der Quelle")
     fun events() = text("آخر أحداث الجلسة","Recent session events","Letzte Sitzungsereignisse")
