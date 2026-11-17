@@ -14,9 +14,19 @@ internal data class LiveProviderGroup(val name: String?, val channels: List<Chan
 }
 
 internal object LiveCountryBrowser {
+    private const val ARABIC_CODE = "AR"
+    private const val ARGENTINA_CODE = "ARG"
     private val countryCodes = Locale.getISOCountries().toSet()
-    private val prefix = Regex("""^(?:\|([a-z]{2})\||\[([a-z]{2})\]|([a-z]{2})\s*[:|–-])""", RegexOption.IGNORE_CASE)
+    private val prefix = Regex(
+        """^(?:\|([a-z]{2,3})\||\[([a-z]{2,3})\]|([a-z]{2,3})\s*[:|–-]|(ARG?)(?=\s|$))""",
+        RegexOption.IGNORE_CASE
+    )
+    private val argentinaName = Regex(
+        """^[|\[]?\s*(?:argentina|argentinien|الأرجنتين|الارجنتين)(?=[\s|\]:–-]|$)""",
+        RegexOption.IGNORE_CASE
+    )
     private val folders = buildMap {
+        put(FolderLabel.ARABIC, ARABIC_CODE)
         CountryLexicon.entries.forEach { entry ->
             val label = entry.value.leaf ?: when (entry.id) {
                 "pl" -> FolderLabel.POLISH
@@ -48,7 +58,12 @@ internal object LiveCountryBrowser {
         }
         val collator = Collator.getInstance(locale)
         return countries.map { (code, groups) ->
-            val name = if (code.isEmpty()) unclassified else Locale.Builder().setRegion(code).build().getDisplayCountry(locale)
+            val name = when (code) {
+                "" -> unclassified
+                ARABIC_CODE -> Locale.forLanguageTag("ar").getDisplayLanguage(locale)
+                ARGENTINA_CODE -> Locale.Builder().setRegion("AR").build().getDisplayCountry(locale)
+                else -> Locale.Builder().setRegion(code).build().getDisplayCountry(locale)
+            }
             LiveCountry(code, name, groups.map { (group, members) -> LiveProviderGroup(group, members) })
         }.sortedWith { a, b ->
             when {
@@ -63,16 +78,25 @@ internal object LiveCountryBrowser {
     private fun countryCode(group: String?): String {
         val value = group?.trimStart().orEmpty()
         val code = prefix.find(value)?.groupValues?.drop(1)?.firstOrNull { it.isNotEmpty() }?.uppercase(Locale.ROOT)
-        val iso = if (code == "UK") "GB" else code
+        // The provider's AR prefix means Arabic. An ISO AR flag means Argentina.
+        val iso = when (code) {
+            ARABIC_CODE -> return ARABIC_CODE
+            ARGENTINA_CODE -> return ARGENTINA_CODE
+            "UK" -> "GB"
+            else -> code
+        }
         if (iso != null && iso in countryCodes) return iso
         if (value.length >= 4) {
             val first = value.codePointAt(0) - 0x1F1E6
             val second = value.codePointAt(2) - 0x1F1E6
             if (first in 0..25 && second in 0..25) {
                 val flag = "${'A' + first}${'A' + second}"
-                if (flag in countryCodes) return flag
+                if (flag in countryCodes) return fromIso(flag)
             }
         }
-        return CountryLexicon.find(value)?.id?.uppercase(Locale.ROOT).orEmpty()
+        if (argentinaName.containsMatchIn(value)) return ARGENTINA_CODE
+        return CountryLexicon.find(value)?.id?.uppercase(Locale.ROOT)?.let(::fromIso).orEmpty()
     }
+
+    private fun fromIso(code: String): String = if (code == "AR") ARGENTINA_CODE else code
 }

@@ -28,6 +28,25 @@ class LiveCountryBrowserTest {
         assertEquals("DE: Regional", result.single().groups.single().name)
     }
 
+    @Test fun arabicAndArgentineProviderGroupsUseDifferentCodesAndNames() {
+        val arabic = listOf("AR", "AR SYRIA", "|AR| Sport", "[ar] News", "AR: Movies")
+        val argentina = listOf("ARG", "arg Sports", "|ARG| Sports", "[ARG] News", "ARG: Movies",
+            "🇦🇷 Nacional", "Argentina: Regional", "Argentinien", "الأرجنتين")
+        val catalog = (arabic + argentina).mapIndexed { index, group -> channel(index.toString(), group) }
+        val countries = project(catalog).associateBy { it.code }
+        assertEquals(setOf("AR", "ARG"), countries.keys)
+        assertEquals("Arabisch", countries.getValue("AR").name)
+        assertEquals(arabic, countries.getValue("AR").groups.map { it.name })
+        assertEquals("Argentinien", countries.getValue("ARG").name)
+        assertEquals(argentina, countries.getValue("ARG").groups.map { it.name })
+    }
+
+    @Test fun arabicFolderUsesTheArabicCodeWithoutAProviderPrefix() {
+        val tree = OrganizationTree(true, listOf(ChannelFolder("arabic", label = FolderLabel.ARABIC)))
+        val catalog = listOf(channel("one", "International").copy(folderIds = listOf("arabic")))
+        assertEquals("AR", project(catalog, tree).single().code)
+    }
+
     private fun channel(id: String, group: String) = Channel(id, id, streamUrl = "synthetic:$id", group = group)
 
     private fun project(channels: List<Channel>, tree: OrganizationTree = OrganizationTree(),
