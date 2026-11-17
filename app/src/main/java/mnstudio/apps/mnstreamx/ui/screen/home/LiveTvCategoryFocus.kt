@@ -53,8 +53,15 @@ internal fun LiveTvCategoryFocus(items: List<LiveTvCategoryTarget>, activeIndex:
         }
     }
     LaunchedEffect(keys, activeIndex) {
-        if (inside) focus(activeIndex)
-        else if (items.isNotEmpty()) list.scrollToItem(activeIndex.coerceIn(items.indices))
+        if (inside) {
+            // A category refresh must preserve the user's latest D-pad target.
+            val target = keys.indexOfFirst { it == pending }.takeIf { it >= 0 }
+                ?: keys.indexOfFirst { it == lastKey }.takeIf { it >= 0 }
+                ?: activeIndex
+            focus(target)
+        } else if (items.isNotEmpty()) {
+            list.scrollToItem(activeIndex.coerceIn(items.indices))
+        }
     }
     LaunchedEffect(inside, navigation) {
         if (!inside) { withFrameNanos { }; if (!inside) navigation?.leftCategories() }
