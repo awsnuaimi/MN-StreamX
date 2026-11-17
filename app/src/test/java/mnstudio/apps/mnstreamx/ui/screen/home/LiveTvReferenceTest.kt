@@ -130,7 +130,7 @@ class LiveTvReferenceTest {
         compose.onNodeWithTag("live-watch").assertIsFocused()
         compose.onNodeWithTag("live-watch").performKeyInput { pressKey(Key.DirectionLeft) }
         compose.onNodeWithTag("live-channel-5").assertIsFocused()
-        compose.onNodeWithTag("live-channel-5").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithTag("live-channel-5").performKeyInput { pressKey(Key.ChannelUp) }
         compose.onNodeWithTag("live-detail-title").assertTextEquals("TVN FABULA")
         assertNull(played)
         compose.onNodeWithTag("live-watch").performClick()
@@ -187,7 +187,7 @@ class LiveTvReferenceTest {
         board(language = HomeLanguage.ARABIC, scale = 2f)
         compose.onNodeWithTag("live-detail").assertDoesNotExist()
         focus("live-channel-0")
-        repeat(7) { compose.onNodeWithTag("live-channel-$it").performKeyInput { pressKey(Key.DirectionDown) } }
+        repeat(7) { compose.onNodeWithTag("live-channel-$it").performKeyInput { pressKey(Key.ChannelUp) } }
         compose.onNodeWithTag("live-channel-7").assertIsDisplayed().assertIsFocused()
         preview("live-tv-reference-ar-large.png")
     }

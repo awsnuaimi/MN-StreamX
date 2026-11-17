@@ -263,7 +263,15 @@ fun HomeScreen(
                                 }, onRestored = viewModel::onGridRestoreHandled,
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
                                 sidebarFocus = sidebarFocus.getValue(selected), entryFocus = liveContentFocus,
-                                headerFocus = liveHeaderFocus, aboveHeader = aboveContent)
+                                headerFocus = liveHeaderFocus, aboveHeader = aboveContent,
+                                onCountryPlay = { channel ->
+                                    if (viewModel.preparePlayback(channel.id, state.browseScope)) {
+                                        initialFocusDone = true
+                                        launchedFromDashboard = false
+                                        if (state.visibleChannels.any { it.id == channel.id }) viewModel.selectChannel(channel.id)
+                                        onPlayChannel(channel.id, channel.group, "", state.favoritesOnly)
+                                    }
+                                })
                         }
                     }
                 }

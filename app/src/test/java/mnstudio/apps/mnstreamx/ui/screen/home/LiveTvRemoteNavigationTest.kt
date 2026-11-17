@@ -70,20 +70,12 @@ class LiveTvRemoteNavigationTest {
             .any { it.config.getOrElse(SemanticsProperties.Focused) { false } } }
         compose.onNodeWithTag("live-channel-$id").assertIsDisplayed().assertIsFocused()
     }
-    @Test fun rapidDpadBatchesKeepTheLatestTargetAndNeverStartPlayback() {
+    @Test fun rapidChannelKeyBatchesKeepTheLatestTargetAndNeverStartPlayback() {
         board(); focus("live-channel-0")
-        compose.onNodeWithTag("live-channel-0").performKeyInput { repeat(30) { pressKey(Key.DirectionDown) } }
+        compose.onNodeWithTag("live-channel-0").performKeyInput { repeat(30) { pressKey(Key.ChannelUp) } }
         focused("30")
-        compose.onNodeWithTag("live-channel-30").performKeyInput { repeat(10) { advanceEventTime(350); pressKey(Key.DirectionUp) } }
+        compose.onNodeWithTag("live-channel-30").performKeyInput { repeat(10) { pressKey(Key.ChannelDown) } }
         focused("20"); compose.runOnIdle { assertNull(played) }
-    }
-    @Test fun queuedPagePressesLandOnTheNewestTargetWithoutStartingPlayback() {
-        board(); focus("live-channel-0")
-        val height = compose.onNodeWithTag("live-channel-list").fetchSemanticsNode().boundsInRoot.height
-        val page = LiveTvNavigationPolicy.visibleRows(height.toInt(), 44, 5)
-        compose.onRoot().performKeyInput { repeat(3) { pressKey(Key.PageDown) } }
-        focused("${page * 3}")
-        compose.runOnIdle { assertNull(played) }
     }
     @Test fun categoriesAndHeaderReturnToTheListThroughExplicitRoutes() {
         board(); focus("live-channel-0")
@@ -121,14 +113,13 @@ class LiveTvRemoteNavigationTest {
         compose.onNodeWithTag("rail-LIVE").performKeyInput { pressKey(Key.DirectionLeft) }
         focused("40")
     }
-    @Test fun pageAndChannelKeysUseTheMeasuredVisiblePage() {
-        board(); focus("live-channel-0")
-        val height = compose.onNodeWithTag("live-channel-list").fetchSemanticsNode().boundsInRoot.height
-        val page = LiveTvNavigationPolicy.visibleRows(height.toInt(), 44, 5)
-        compose.onNodeWithTag("live-channel-0").performKeyInput { pressKey(Key.PageDown) }; focused("$page")
-        compose.onNodeWithTag("live-channel-$page").performKeyInput { pressKey(Key.ChannelDown) }; focused("${page * 2}")
-        compose.onNodeWithTag("live-channel-${page * 2}").performKeyInput { pressKey(Key.PageUp) }; focused("$page")
-        compose.onNodeWithTag("live-channel-$page").performKeyInput { pressKey(Key.ChannelUp) }; focused("0")
+    @Test fun channelKeysMoveOneChannelAndVerticalArrowsStayOnTheRow() {
+        board(); focus("live-channel-5")
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.DirectionUp) }
+        focused("5")
+        compose.onRoot().performKeyInput { pressKey(Key.ChannelUp) }; focused("6")
+        compose.onRoot().performKeyInput { pressKey(Key.ChannelDown) }; focused("5")
+        compose.runOnIdle { assertNull(played) }
     }
     @Test fun restorationAtLargeFontsNeverWaitsForAnUnreachableEighthRow() {
         scale = 2f
@@ -144,9 +135,9 @@ class LiveTvRemoteNavigationTest {
         val viewport = compose.onNodeWithTag("live-channel-list").fetchSemanticsNode().boundsInRoot
         assertTrue(item.top >= viewport.top - 1); assertTrue(item.bottom <= viewport.bottom + 1)
     }
-    @Test fun leavingDuringPageAnimationCancelsLateFocusRequests() {
+    @Test fun leavingDuringRepeatedChannelKeysCancelsLateFocusRequests() {
         board(); focus("live-channel-0")
-        compose.onNodeWithTag("live-channel-0").performKeyInput { pressKey(Key.PageDown) }
+        compose.onNodeWithTag("live-channel-0").performKeyInput { repeat(30) { pressKey(Key.ChannelUp) } }
         focus("live-search"); compose.mainClock.advanceTimeBy(2000)
         compose.onNodeWithTag("live-search").assertIsFocused(); compose.runOnIdle { assertNull(played) }
     }

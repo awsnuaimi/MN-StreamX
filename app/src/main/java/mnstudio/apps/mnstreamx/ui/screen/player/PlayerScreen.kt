@@ -1,6 +1,5 @@
 package mnstudio.apps.mnstreamx.ui.screen.player
 
-import mnstudio.apps.mnstreamx.ui.component.organization.organizationFilterName
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -26,6 +25,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import mnstudio.apps.mnstreamx.domain.model.PlaybackTechnicalInfo
 import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryState
+import mnstudio.apps.mnstreamx.domain.model.Channel
+import mnstudio.apps.mnstreamx.domain.profile.ProfileScope
 import mnstudio.apps.mnstreamx.ui.component.player.*
 import mnstudio.apps.mnstreamx.ui.component.common.FocusInputEpoch
 import mnstudio.apps.mnstreamx.ui.component.common.rememberContextFocus
@@ -75,8 +76,9 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     val channel = state.channel
     val activeChannel by rememberUpdatedState(channel)
     var panels by rememberSaveable(stateSaver = PlayerPanelSaver) { mutableStateOf(PlayerPanelState()) }
-    var detailsOpenedFromInfo by rememberSaveable { mutableStateOf(false) }
     val cardsOpen = panels.panel == PlayerPanel.CARDS
+    val browserOpen = cardsOpen || panels.panel == PlayerPanel.CHANNELS
+    var detailsOpenedFromInfo by rememberSaveable { mutableStateOf(false) }
     var bannerVisible by remember { mutableStateOf(true) }
     var interaction by remember { mutableIntStateOf(0) }
     var focusEpoch by remember { mutableIntStateOf(0) }
@@ -110,8 +112,10 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer); activation.reset(); remoteKeys.reset() }
     }
-    val focused = if (cardsOpen) state.queue.channels.firstOrNull { it.id == focusedId } else null
-    val preview = if (cardsOpen) {
+    val focused = remember(browserOpen, state.catalogChannels, focusedId) {
+        if (browserOpen && focusedId != null) state.catalogChannels.firstOrNull { it.id == focusedId } else null
+    }
+    val preview = if (browserOpen) {
         val value by previewViewModel.uiState.collectAsStateWithLifecycle()
         value
     } else PlayerEpgUiState()
@@ -139,7 +143,6 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         if (panels.panel == PlayerPanel.DETAILS && detailsOpenedFromInfo) {
             detailsOpenedFromInfo = false
             panels = panels.watching()
-            remoteKeys.reset()
             focusEpoch++
             return
         }
@@ -162,9 +165,9 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         focusEpoch++; showBanner()
     }
     fun selectChannel(id: String) {
+        if (!viewModel.selectBrowserChannel(id)) return
         panels = panels.afterSelection(); focusedId = null
         surface.hideControls()
-        if (id != channel?.id) viewModel.selectChannel(id)
         focusEpoch++; showBanner()
     }
     fun handleRemote(event: KeyEvent, visible: Boolean): Boolean {
@@ -184,9 +187,8 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                 PlayerRemoteCommand.HIDE_CARDS -> hideCards()
                 PlayerRemoteCommand.TOGGLE_CHANNELS -> openChannels()
                 PlayerRemoteCommand.SHOW_INFO -> {
-                    if (channel != null && !state.sourceChanged) {
+                    if (channel != null) {
                         surface.hideControls()
-                        focusedId = null
                         bannerVisible = false
                         detailsOpenedFromInfo = true
                         panels = panels.watching().details()
@@ -199,8 +201,8 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
 
     BackHandler { back() }
     LaunchedEffect(channel) { epgViewModel.selectChannel(channel) }
-    LaunchedEffect(cardsOpen, focused?.id, channel?.id) {
-        previewViewModel.selectChannel(focused?.takeIf { cardsOpen && it.id != channel?.id })
+    LaunchedEffect(browserOpen, focused?.id, channel?.id) {
+        previewViewModel.selectChannel(focused?.takeIf { it.id != channel?.id })
     }
     LaunchedEffect(channel?.id) { focusedId = null; showBanner() }
     LaunchedEffect(channel?.id, interaction, panels.panel, showPlaybackOverlay, appearance.displaySeconds) {
@@ -247,10 +249,9 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                 onTechnicalInfo = { id, value -> if (id == activeChannel?.id) technical = value })
             GeneratedCaptionOverlay(captionModel, captionAudio, captionState.settings,
                 raised = panels.panel != PlayerPanel.WATCHING || bannerVisible)
-            if ((cardsOpen || (bannerVisible && panels.panel == PlayerPanel.WATCHING)) && !showPlaybackOverlay) {
+            if (bannerVisible && panels.panel == PlayerPanel.WATCHING && !showPlaybackOverlay) {
                 PlayerInfoOverlay(channel, state.currentIndex + 1, state.queue.channels, appearance, activeEpg, technical,
-                    cardsOpen, focused, preview, focusEpoch, panels.focusMore, ::openMore, ::selectChannel,
-                    onFocusChannel = { focusedId = it })
+                    false, null, PlayerEpgUiState(), focusEpoch, false, ::openMore, ::selectChannel, onFocusChannel = {})
             }
             if (!showPlaybackOverlay && (state.isLoading || (channel != null && buffering))) {
                 LiveBufferingIndicator(
@@ -263,9 +264,32 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                 onRetry = { surface.cancelRecovery(); retry++; focusEpoch++ }, onChannels = ::openChannels,
                 onBack = { surface.cancelRecovery(); onBack(channel?.id) },
                 recovery = recovery)
-            if (panels.panel == PlayerPanel.CHANNELS) PlayerChannelPanel(state.queue.channels, state.currentIndex,
-                organizationFilterName(state.selectedGroup, state.organization), state.query, state.favoritesOnly, onSelect = ::selectChannel,
-                onDismiss = ::back, onRemoteKey = ::handleRemote, loading = state.queueLoading)
+            if (browserOpen) {
+                val preferences: LiveTvPreferencesViewModel = hiltViewModel(key = "player-live-browser")
+                val personal by preferences.state.collectAsStateWithLifecycle()
+                val scope = viewModel.browserScope
+                LaunchedEffect(scope) { preferences.bind(scope) }
+                val source = ProfileScope.source(scope)
+                val access = parental.state
+                val ready = source == null || (personal.scope == scope && (personal.ready || personal.error))
+                val visible: (Channel) -> Boolean = remember(source, scope, access, personal) {
+                    { item ->
+                        source == null || (personal.scope == scope && personal.ready && personal.value.visible(item) &&
+                            access.profileId == ProfileScope.profile(scope) && access.allows(source, item))
+                    }
+                }
+                val index = remember(state.catalogChannels, channel?.id) {
+                    state.catalogChannels.indexOfFirst { it.id == channel?.id }
+                }
+                PlayerChannelPanel(state.catalogChannels, index, state.favoritesOnly,
+                    onSelect = { id ->
+                        state.catalogChannels.firstOrNull { it.id == id }?.takeIf(visible)?.let { selectChannel(id) }
+                    }, onDismiss = ::back, onRemoteKey = ::handleRemote,
+                    loading = state.queueLoading || !ready, organization = state.organization,
+                    onMore = if (cardsOpen) ::openMore else null, focusMore = cardsOpen && panels.focusMore,
+                    onFocusChannel = { focusedId = it }, previewEpg = if (focused?.id == channel?.id) activeEpg else preview,
+                    visible = visible)
+            }
             if (panels.panel == PlayerPanel.MORE && channel != null) {
             val lastChannel by viewModel.lastChannelState.collectAsStateWithLifecycle()
             val recallScope = rememberCoroutineScope()
@@ -314,11 +338,8 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                     }
                 }, onRetryFavorites = viewModel::retryFavorites)
             }
-            if (panels.panel == PlayerPanel.DETAILS && channel != null) {
-                PlayerProgramDetailsDialog(
-                    channel.name, activeEpg, appearance, ::back, fromInfoKey = detailsOpenedFromInfo
-                )
-            }
+            if (panels.panel == PlayerPanel.DETAILS && channel != null)
+                PlayerProgramDetailsDialog(channel.name, activeEpg, appearance, ::back, fromInfoKey = detailsOpenedFromInfo)
             if (panels.panel == PlayerPanel.CAPTIONS)
                 PlayerCaptionDialog(captionModel, captionSelection, ::back)
             if (panels.panel == PlayerPanel.HISTORY) WatchHistoryDialog(channel?.id, ::back, { selected, source ->

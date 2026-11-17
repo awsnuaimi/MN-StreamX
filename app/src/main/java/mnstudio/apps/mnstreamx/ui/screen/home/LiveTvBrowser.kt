@@ -34,7 +34,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import java.util.Locale
+import mnstudio.apps.mnstreamx.ui.component.common.LocalizedResources
 import mnstudio.apps.mnstreamx.ui.component.common.restoreOrRequestFocus
+import mnstudio.apps.mnstreamx.ui.screen.player.PlayerChannelPanel
 
 @Composable
 internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, labels: HomeLabels,
@@ -48,7 +50,8 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     preferences: LiveTvPreferencesState = LiveTvPreferencesState(ready = true),
     onPreference: (((LiveTvPreferences) -> LiveTvPreferences) -> Unit)? = null,
     onPreferencesRetry: () -> Unit = {}, headerEntry: FocusRequester? = null, aboveHeader: FocusRequester? = null,
-    onWatchChoice: ((context: String, family: String) -> Unit)? = null) {
+    onWatchChoice: ((context: String, family: String) -> Unit)? = null,
+    onCountryPlay: (Channel) -> Unit = onPlay) {
     val colors = liveTvColors(appearance)
     LaunchedEffect(catalog.browseScope, catalog.selectedGroup, preferences.value.hiddenGroups, preferences.value.hiddenFolders) {
         val selected = catalog.selectedGroup
@@ -110,6 +113,15 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
     var menuKey by remember(state.browseScope, state.selectedGroup, state.query, accessEpoch) { mutableStateOf<String?>(null) }
     val menu = rowIndex.forKey(menuKey)
     val categories = remember { FocusRequester() }; val watch = remember { FocusRequester() }
+    var countryBrowser by remember(catalog.browseScope, accessEpoch) { mutableStateOf(false) }
+    var restoreCountryEntry by remember { mutableStateOf(false) }
+    LaunchedEffect(countryBrowser, restoreCountryEntry) {
+        if (!countryBrowser && restoreCountryEntry) {
+            withFrameNanos { }
+            categories.requestFocus()
+            restoreCountryEntry = false
+        }
+    }
     val detailMemory = remember { FocusRequester() }
     val defaultEntry = remember { FocusRequester() }
     val entry = entryFocus ?: defaultEntry
@@ -247,7 +259,10 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
             onManage = onPreference?.takeIf { preferences.ready }?.let { { manage = true } }, canSort = preferences.ready && !preferences.saving,
             sidebar = sidebarFocus, sidebarOnRight = appearance.sidebarOnRight,
             above = if (hasStatusRetry) statusFocus else aboveHeader, manageEntry = hiddenFocus, searchEntry = headerSearchFocus)
-        LiveTvCategories(state.groups, state.channels, state.organization, state.selectedGroup, labels, colors, categories, selectGroup, projectionDispatcher, entry, headerFocus, sidebarFocus, appearance.sidebarOnRight, headerSearchFocus, navigation)
+        LiveTvCategories(state.groups, state.channels, state.organization, state.selectedGroup, labels, colors, categories, selectGroup, projectionDispatcher, entry, headerFocus, sidebarFocus, appearance.sidebarOnRight, headerSearchFocus, navigation,
+            onCountries = if (personal == null) null else {
+                { numeric.clear(); navigation.cancel(); countryBrowser = true }
+            })
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().onPreviewKeyEvent(numberKeys)
             .onFocusChanged { if (!it.hasFocus) numeric.clear() }.focusGroup()) {
             val detail = maxWidth >= 680.dp && LocalDensity.current.fontScale <= 1.6f
@@ -309,11 +324,29 @@ internal fun LiveTvBrowser(catalog: HomeUiState, appearance: HomeAppearance, lab
             if (numeric.active) LiveTvNumberOverlay(numeric, numberRows[numeric.number], labels, colors,
                 Modifier.align(Alignment.TopEnd).padding(8.dp))
         }
-        Text(labels.text("↑↑ القوائم · 0–9 انتقال · CH± صفحات · OK مشاهدة / مطوّل خيارات", "↑↑ Lists · 0–9 Number · CH± Pages · OK Watch / Hold Options",
-            "↑↑ Listen · 0–9 Sendernummer · CH± Seiten · OK ansehen / halten: Optionen"), color = colors.muted, fontSize = 10.sp,
+        Text(labels.text("↑↑ القوائم · 0–9 انتقال · P± القنوات · OK مشاهدة / مطوّل خيارات", "↑↑ Lists · 0–9 Number · P± Channels · OK Watch / Hold Options",
+            "↑↑ Listen · 0–9 Sendernummer · P± Sender · OK ansehen / halten: Optionen"), color = colors.muted, fontSize = 10.sp,
             modifier = Modifier.testTag("live-browse-hint"))
     }
     BackHandler(numeric.active) { numeric.clear(); navigation.cancel() }
+    if (countryBrowser) {
+        val options = personal?.channels.orEmpty()
+        val currentIndex = remember(options, catalog.selectedChannelId) {
+            options.indexOfFirst { it.id == catalog.selectedChannelId }
+        }
+        LocalizedResources(appearance.language) {
+            PlayerChannelPanel(options, currentIndex, catalog.favoritesOnly,
+                onSelect = { id ->
+                    options.firstOrNull { it.id == id && (!catalog.favoritesOnly || it.isFavorite) }?.let {
+                        countryBrowser = false
+                        onCountryPlay(it)
+                    }
+                },
+                onDismiss = { countryBrowser = false; restoreCountryEntry = true },
+                onRemoteKey = { _, _ -> false }, loading = personal == null,
+                organization = state.organization, startWithCountries = true)
+        }
+    }
     menu?.let { row ->
         LiveTvChannelMenu(row, row.channel(focused, preferences.value.preferredQualities), labels, colors, canFavorite, onDismiss = { menuKey = null; runCatching { entry.requestFocus() } },
             onFavorite = { onFavorite(row.channel(focused, preferences.value.preferredQualities)); menuKey = null; runCatching { entry.requestFocus() } },

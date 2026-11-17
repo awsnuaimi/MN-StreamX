@@ -70,7 +70,7 @@ class LiveTvAdaptiveEntryUiTest {
         preferences = preferences.copy(value = LiveTvPreferences(adaptive = learned("20")))
         board(); focus("live-list-entry"); waitFocus("20")
         compose.runOnIdle { assertTrue(choices.isEmpty()); assertNull(played) }
-        compose.onNodeWithTag("live-channel-20").performKeyInput { pressKey(Key.DirectionDown) }; waitFocus("21")
+        compose.onNodeWithTag("live-channel-20").performKeyInput { pressKey(Key.ChannelUp) }; waitFocus("21")
         compose.runOnIdle { assertTrue(choices.isEmpty()) }
         compose.onNodeWithTag("live-channel-21").performKeyInput { pressKey(Key.Enter) }
         compose.runOnIdle { assertEquals("21", played); assertEquals(listOf(context to rows.first { it.key == "21" }.preferenceKey), choices) }

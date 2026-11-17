@@ -72,6 +72,7 @@ class PlayerViewModel @Inject constructor(
     private val historyRecorder = PlaybackHistoryRecorder(history) { state.value.channel }
     private val lastChannel = LastChannelController(viewModelScope, history, channels, settings) { state.value.channel }
     val lastChannelState = lastChannel.uiState
+    val browserScope: String get() = historyRecorder.sourceKey.orEmpty()
     private val organizer = OrganizationController(viewModelScope, organization, background) { value ->
         val result = ParentalProjection.prune(value,parental.state.value)
         available = result.channels
@@ -168,6 +169,23 @@ class PlayerViewModel @Inject constructor(
         val index = snapshot.queue.indexOf(selected.id)
         val present = snapshot.queue.channels.getOrNull(index) ?: available?.firstOrNull { it.id == selected.id } ?: return false
         if (present.streamUrl != selected.streamUrl) return false
+        return selectAvailableChannel(present, index)
+    }
+
+    fun selectBrowserChannel(id: String): Boolean {
+        val snapshot = state.value
+        if (snapshot.sourceChanged) return false
+        val present = available?.firstOrNull { it.id == id } ?: return false
+        val scope = browserScope
+        if (scope.isNotEmpty()) {
+            val source = ProfileScope.source(scope) ?: return false
+            val access = parental.state.value
+            if (access.profileId != ProfileScope.profile(scope) || !access.allows(source, present)) return false
+        }
+        return selectAvailableChannel(present, snapshot.queue.indexOf(id))
+    }
+
+    private fun selectAvailableChannel(present: Channel, index: Int): Boolean {
         if (state.value.channel?.id == present.id && state.value.channel?.streamUrl == present.streamUrl) return true
         if (index >= 0) { selectChannel(present.id); return true }
         savedStateHandle["channelId"] = present.id
@@ -175,7 +193,7 @@ class PlayerViewModel @Inject constructor(
         savedStateHandle["group"] = null
         savedStateHandle["query"] = ""
         savedStateHandle["favoritesOnly"] = false
-        state.update { it.copy(selectedGroup = null, query = "", favoritesOnly = false, errorMessage = null) }
+        state.update { it.copy(selectedGroup = null, query = "", favoritesOnly = false, errorMessage = null, queueLoading = true) }
         rebuildQueue()
         return true
     }
@@ -211,11 +229,12 @@ class PlayerViewModel @Inject constructor(
         val snapshot = state.value
         val ids = favoriteIds
         rebuildJob = viewModelScope.launch {
-            val (base, queue) = withContext(background) {
+            val (catalog, base, queue) = withContext(background) {
                 val marked = ChannelFavorites.apply(stored, ids)
                 val base = PlaybackQueue.create(marked, snapshot.selectedGroup, snapshot.query)
-                base to if (snapshot.favoritesOnly)
+                val queue = if (snapshot.favoritesOnly)
                     PlaybackQueue.create(marked, snapshot.selectedGroup, snapshot.query, true) else base
+                Triple(marked, base, queue)
             }
             original = base
             // A DB emission must not undo zapping performed during background filtering.
@@ -229,7 +248,7 @@ class PlayerViewModel @Inject constructor(
                 base.channels.getOrNull(base.indexOf(id)) else null) ?: state.value.detachedChannel?.takeIf {
                     index < 0 && base.size == 0 && it.id == id
                 }
-            state.value = state.value.copy(queue = queue, currentIndex = index, detachedChannel = detached,
+            state.value = state.value.copy(queue = queue, currentIndex = index, detachedChannel = detached, catalogChannels = catalog,
                 isLoading = false,queueLoading = false,
                 errorMessage = if (index < 0 && detached == null)
                     "القناة غير متاحة. اختر قناة من القائمة أو حدّث القنوات." else null)

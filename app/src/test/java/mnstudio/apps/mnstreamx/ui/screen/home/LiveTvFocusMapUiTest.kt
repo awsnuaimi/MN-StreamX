@@ -111,7 +111,7 @@ class LiveTvFocusMapUiTest {
     }
     @Test fun categoriesCanReachAndFocusALazyChipOutsideTheViewport() {
         board(); focus("live-category-all")
-        compose.onNodeWithTag("live-category-all").performKeyInput { repeat(35) { pressKey(Key.DirectionRight) } }
+        compose.onNodeWithTag("live-category-all").performKeyInput { repeat(36) { pressKey(Key.DirectionRight) } }
         waitFocus("live-category-Group 34")
         compose.onNodeWithTag("live-category-Group 34").assertIsDisplayed()
         press("live-category-Group 34", Key.DirectionUp); waitFocus("live-search")
@@ -132,7 +132,7 @@ class LiveTvFocusMapUiTest {
     }
     @Test fun leavingCategoriesCancelsPendingLazyFocusRequests() {
         board(); focus("live-category-all")
-        compose.onNodeWithTag("live-category-all").performKeyInput { repeat(35) { pressKey(Key.DirectionRight) }; pressKey(Key.DirectionUp) }
+        compose.onNodeWithTag("live-category-all").performKeyInput { repeat(36) { pressKey(Key.DirectionRight) }; pressKey(Key.DirectionUp) }
         waitFocus("live-search")
         compose.mainClock.advanceTimeBy(1000)
         waitFocus("live-search")

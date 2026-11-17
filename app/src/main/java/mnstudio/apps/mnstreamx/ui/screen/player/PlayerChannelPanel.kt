@@ -5,120 +5,327 @@ package mnstudio.apps.mnstreamx.ui.screen.player
 import android.view.KeyEvent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.ui.res.stringResource
-import mnstudio.apps.mnstreamx.R
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import mnstudio.apps.mnstreamx.R
 import mnstudio.apps.mnstreamx.domain.model.Channel
+import mnstudio.apps.mnstreamx.domain.organization.OrganizationTree
 import mnstudio.apps.mnstreamx.ui.component.channel.ChannelLogo
 import mnstudio.apps.mnstreamx.ui.component.channel.FavoriteBadge
 import mnstudio.apps.mnstreamx.ui.component.common.AppButton
+import mnstudio.apps.mnstreamx.ui.component.common.FocusInputEpoch
 import mnstudio.apps.mnstreamx.ui.component.common.Resume
 import mnstudio.apps.mnstreamx.ui.component.common.tvFocusIndicator
-import mnstudio.apps.mnstreamx.ui.component.common.FocusInputEpoch
+import mnstudio.apps.mnstreamx.ui.presentation.LiveCountry
+import mnstudio.apps.mnstreamx.ui.presentation.LiveCountryBrowser
+import mnstudio.apps.mnstreamx.ui.state.PlayerEpgUiState
+
+private enum class BrowserColumn { COUNTRIES, GROUPS, CHANNELS, CONTROLS }
 
 @Composable
 fun PlayerChannelPanel(
     channels: List<Channel>,
     currentIndex: Int,
-    group: String?,
-    query: String,
     favoritesOnly: Boolean,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
     onRemoteKey: (KeyEvent, Boolean) -> Boolean,
-    loading: Boolean = false
+    loading: Boolean = false,
+    organization: OrganizationTree? = null,
+    startWithCountries: Boolean = false,
+    onMore: (() -> Unit)? = null,
+    focusMore: Boolean = false,
+    onFocusChannel: (String) -> Unit = {},
+    previewEpg: PlayerEpgUiState? = null,
+    visible: ((Channel) -> Boolean)? = null
 ) {
-    val focus = rememberPlayerFocus()
+    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val unclassified = stringResource(R.string.org_folder_unclassified)
+    val tree = organization ?: remember { OrganizationTree() }
+    val input = remember(channels, tree, locale, unclassified, favoritesOnly, visible, loading) { Any() }
+    val result by produceState<Pair<Any, List<LiveCountry>>?>(null, input) {
+        if (!loading) {
+            val projected = withContext(Dispatchers.Default) {
+                LiveCountryBrowser.project(channels, tree, locale, unclassified, visible = {
+                    (!favoritesOnly || it.isFavorite) && (visible?.invoke(it) ?: true)
+                }) { ensureActive() }
+            }
+            value = input to projected
+        }
+    }
+    val countries = result?.takeIf { it.first === input }?.second
     val currentId = channels.getOrNull(currentIndex)?.id
-    val context = "player-channels:$currentId"
-    val controls = "$context:controls"
-    val keys = remember(channels, loading) { if (loading) emptyList() else channels.map { it.id } }
-    val list = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
-    var loadingInput by remember { mutableStateOf<Long?>(null) }
-    Dialog(onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        val windowFocused = LocalWindowInfo.current.isWindowFocused
-        focus.Resume(setOf(context, controls), context, currentId.takeIf { focus.bookmarks.get(context) == null })
-        LaunchedEffect(loading, currentId) {
-            if (loading) loadingInput = FocusInputEpoch.value
-            else {
-                if (loadingInput == FocusInputEpoch.value && currentId != null) focus.request(context, currentId)
-                loadingInput = null
+    val focus = rememberPlayerFocus()
+    val prefix = "player-channels:$currentId"
+    val countryContext = "$prefix:countries"
+    val controlContext = "$prefix:controls"
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    var column by remember { mutableStateOf(BrowserColumn.CONTROLS) }
+    var selectedCountry by remember { mutableStateOf<String?>(null) }
+    var selectedGroup by remember { mutableStateOf<String?>(null) }
+    var groupTarget by remember { mutableStateOf<String?>(null) }
+    var focusedCountry by remember { mutableStateOf<String?>(null) }
+    var channelTarget by remember { mutableStateOf<String?>(null) }
+    val initialEpoch = remember { FocusInputEpoch.value }
+    var initialized by remember { mutableStateOf(false) }
+    val country = countries?.firstOrNull { it.code == selectedCountry }
+    val groups = country?.groups.orEmpty()
+    val activeGroup = groups.firstOrNull { it.key == selectedGroup }
+    val groupContext = "$prefix:groups:$selectedCountry"
+    val channelContext = "$groupContext:channels:$selectedGroup"
+    val rows = activeGroup?.channels.orEmpty()
+    val countryKeys = remember(countries) { countries.orEmpty().map { it.code } }
+    val groupKeys = remember(groups) { groups.map { it.key } }
+    val channelKeys = remember(rows) { rows.map { it.id } }
+    val positions = remember(channelKeys) { channelKeys.withIndex().associate { it.value to it.index } }
+    val controls = remember(onMore != null) { if (onMore == null) listOf("close") else listOf("more", "close") }
+
+    fun openCountry(code: String) {
+        val target = countries?.firstOrNull { it.code == code } ?: return
+        selectedCountry = code
+        val context = "$prefix:groups:$code"
+        val groupKey = focus.bookmarks.get(context)?.key?.takeIf { key -> target.groups.any { it.key == key } }
+            ?: target.groups.firstOrNull()?.key
+        selectedGroup = groupKey
+        groupTarget = groupKey
+        channelTarget = null
+        if (groupKey != null) focus.request(context, groupKey)
+    }
+
+    LaunchedEffect(Unit) {
+        if (countries == null) focus.request(controlContext, "close")
+    }
+    LaunchedEffect(countries) {
+        val available = countries ?: return@LaunchedEffect
+        if (initialized && (selectedCountry == null || country != null && activeGroup != null)) return@LaunchedEffect
+        val initial = !initialized
+        initialized = true
+        val safeToFocus = !initial || initialEpoch == FocusInputEpoch.value
+        if (available.isEmpty()) {
+            selectedCountry = null
+            selectedGroup = null
+            if (safeToFocus) focus.request(controlContext, if (focusMore) "more" else "close")
+        } else if (startWithCountries || !initial) {
+            selectedCountry = null
+            selectedGroup = null
+            if (safeToFocus) focus.request(countryContext, available.first().code)
+        } else {
+            val playingCountry = available.firstOrNull { entry -> entry.groups.any { group ->
+                group.channels.any { it.id == currentId }
+            } }
+            val target = playingCountry ?: available.first()
+            val preferred = target.groups.firstOrNull { group -> group.channels.any { it.id == currentId } }
+                ?: target.groups.first()
+            selectedCountry = target.code
+            selectedGroup = preferred.key
+            val context = "$prefix:groups:${target.code}:channels:${preferred.key}"
+            val bookmarked = focus.bookmarks.get(context)?.key
+            channelTarget = preferred.channels.firstOrNull { it.id == bookmarked }?.id
+                ?: preferred.channels.firstOrNull { it.id == currentId }?.id ?: preferred.channels.first().id
+            if (safeToFocus) {
+                if (focusMore && onMore != null) focus.request(controlContext, "more")
+                else focus.request(context, channelTarget)
             }
         }
-        focus.Maintain(context, keys)
-        focus.Restore(context, keys, ready = windowFocused,
-            onEmpty = { focus.request(controls, "close") }, scrollTo = { index ->
-                if (list.layoutInfo.visibleItemsInfo.none { it.index == index }) list.scrollToItem(index)
-            })
-        focus.Restore(controls, listOf("close"), ready = windowFocused)
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))
-            .then(focus.inputModifier())
-            .onPreviewKeyEvent { onRemoteKey(it.nativeKeyEvent, false) }) {
+    }
+
+    val countryList = rememberLazyListState()
+    val groupList = key(selectedCountry) { rememberLazyListState() }
+    val channelList = key(selectedCountry, selectedGroup) { rememberLazyListState() }
+    val towardChannels = if (rtl) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+    val towardGroups = if (rtl) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+
+    fun handleKey(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        if (code == KeyEvent.KEYCODE_CHANNEL_UP || code == KeyEvent.KEYCODE_CHANNEL_DOWN) {
+            if (event.action == KeyEvent.ACTION_DOWN && !event.isCanceled && column == BrowserColumn.CHANNELS) {
+                val at = positions[channelTarget] ?: 0
+                val step = if (code == KeyEvent.KEYCODE_CHANNEL_UP) 1 else -1
+                channelKeys.getOrNull(at + step)?.let { next ->
+                    channelTarget = next
+                    focus.request(channelContext, next)
+                } ?: channelTarget?.let { focus.request(channelContext, it) }
+            }
+            return true
+        }
+        val down = event.action == KeyEvent.ACTION_DOWN && !event.isCanceled
+        return when (code) {
+            towardChannels -> when (column) {
+                BrowserColumn.GROUPS -> {
+                    if (down && rows.isNotEmpty()) focus.request(channelContext, channelTarget
+                        ?.takeIf { positions.containsKey(it) } ?: rows.first().id)
+                    true
+                }
+                BrowserColumn.CHANNELS -> true
+                else -> false
+            }
+            towardGroups -> when (column) {
+                BrowserColumn.CHANNELS -> {
+                    if (down) focus.request(groupContext, selectedGroup)
+                    true
+                }
+                BrowserColumn.GROUPS -> true
+                else -> false
+            }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> when (column) {
+                BrowserColumn.CHANNELS -> true
+                BrowserColumn.COUNTRIES -> if (code == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    if (down) focusedCountry?.let(::openCountry)
+                    true
+                } else false
+                BrowserColumn.GROUPS -> {
+                    if (down) {
+                        val at = groupKeys.indexOf(groupTarget ?: selectedGroup)
+                        val step = if (code == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
+                        val next = groupKeys.getOrNull(at + step)
+                        if (next != null) {
+                            groupTarget = next
+                            focus.request(groupContext, next)
+                        } else if (step < 0) {
+                            groupTarget = null
+                            focus.request(countryContext, selectedCountry)
+                        } else groupTarget?.let { focus.request(groupContext, it) }
+                    }
+                    true
+                }
+                BrowserColumn.CONTROLS -> false
+            }
+            else -> onRemoteKey(event, false)
+        }
+    }
+
+    LaunchedEffect(focusMore, countries) {
+        if (focusMore && onMore != null && countries != null) focus.request(controlContext, "more")
+    }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val windowFocused = LocalWindowInfo.current.isWindowFocused
+        focus.Resume(setOf(countryContext, groupContext, channelContext, controlContext), controlContext, "close", initial = false)
+        focus.Restore(countryContext, countryKeys, ready = windowFocused, scrollTo = { countryList.scrollToItem(it) })
+        focus.Restore(groupContext, groupKeys, ready = windowFocused, scrollTo = {
+            if (groupList.layoutInfo.visibleItemsInfo.none { item -> item.index == it }) groupList.scrollToItem(it)
+        })
+        focus.Restore(channelContext, channelKeys, ready = windowFocused, scrollTo = {
+            if (channelList.layoutInfo.visibleItemsInfo.none { item -> item.index == it }) channelList.scrollToItem(it)
+        })
+        focus.Restore(controlContext, controls, ready = windowFocused)
+        Box(Modifier.fillMaxSize().padding(horizontal = 24.dp)
+            .then(focus.inputModifier()).onPreviewKeyEvent { handleKey(it.nativeKeyEvent) }) {
             Surface(
-                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
-                    .widthIn(max = 460.dp).fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp)
+                    .widthIn(max = 920.dp).fillMaxWidth().fillMaxHeight(0.91f),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface
             ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.player_channels) + " · ${channels.size}", style = MaterialTheme.typography.titleLarge)
-                            Text((if (favoritesOnly) "★ " + stringResource(R.string.player_favorites) + " · " else "") + (group ?: stringResource(R.string.player_all_categories)), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
-                        }
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.player_channels), Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleLarge)
+                        if (onMore != null) AppButton(stringResource(R.string.player_more), onMore,
+                            focus.target(controlContext, "more", 0).onFocusChanged {
+                                if (it.isFocused) column = BrowserColumn.CONTROLS
+                            }.testTag("player-more"))
                         AppButton(stringResource(R.string.player_close), onDismiss,
-                            focus.target(controls, "close", 0).testTag("player-channels-close"))
+                            focus.target(controlContext, "close", controls.lastIndex).onFocusChanged {
+                                if (it.isFocused) column = BrowserColumn.CONTROLS
+                            }.testTag("player-channels-close"))
                     }
-                    if (query.isNotBlank()) Text(stringResource(R.string.player_search, query), maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-                    if (loading) CircularProgressIndicator(Modifier.testTag("player-channel-loading"))
-                    else if (channels.isEmpty()) Text(stringResource(R.string.player_empty_list))
-                    LazyColumn(state = list, modifier = Modifier.weight(1f).fillMaxWidth().testTag("player-channel-list"),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        itemsIndexed(channels, key = { _, channel -> channel.id }) { index, channel ->
-                            PlayerChannelRow(channel, index + 1, index == currentIndex,
-                                onClick = { focus.record(context, channel.id, index); onSelect(channel.id) },
-                                modifier = focus.target(context, channel.id, index).testTag("player-channel-${channel.id}"))
+                    if (countries == null) {
+                        CircularProgressIndicator(Modifier.testTag("player-channel-loading"))
+                    } else if (countries.isEmpty()) {
+                        Text(stringResource(R.string.player_empty_list))
+                    } else {
+                        LazyRow(state = countryList, modifier = Modifier.fillMaxWidth().focusGroup().testTag("live-countries"),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            itemsIndexed(countries, key = { _, item -> item.code }) { index, item ->
+                                AppButton(item.name, { openCountry(item.code) },
+                                    focus.target(countryContext, item.code, index).onFocusChanged {
+                                        if (it.isFocused) {
+                                            column = BrowserColumn.COUNTRIES
+                                            focusedCountry = item.code
+                                        }
+                                    }.semantics { selected = item.code == selectedCountry }.testTag("live-country-${item.code}"))
+                            }
+                        }
+                        if (country != null && groups.isNotEmpty()) {
+                            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                LazyColumn(state = groupList, modifier = Modifier.weight(0.8f).fillMaxHeight()
+                                    .focusGroup().testTag("live-country-groups"),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    itemsIndexed(groups, key = { _, item -> item.key }) { index, item ->
+                                        AppButton(item.name ?: stringResource(R.string.org_folder_other),
+                                            {
+                                                if (selectedGroup != item.key) channelTarget = null
+                                                selectedGroup = item.key
+                                                groupTarget = item.key
+                                                val context = "$groupContext:channels:${item.key}"
+                                                focus.request(context, channelTarget ?: item.channels.first().id)
+                                            },
+                                            focus.target(groupContext, item.key, index).fillMaxWidth().onFocusChanged {
+                                                if (it.isFocused) {
+                                                    column = BrowserColumn.GROUPS
+                                                    if (selectedGroup != item.key) channelTarget = null
+                                                    selectedGroup = item.key
+                                                    val pending = focus.pending?.preferred
+                                                    if (pending == null || pending == item.key) groupTarget = item.key
+                                                }
+                                            }.semantics { selected = item.key == selectedGroup }.testTag("live-group-${item.key}"))
+                                    }
+                                }
+                                LazyColumn(state = channelList, modifier = Modifier.weight(1.2f).fillMaxHeight()
+                                    .focusGroup().testTag("player-channel-list"),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    itemsIndexed(rows, key = { _, channel -> channel.id }) { index, channel ->
+                                        PlayerChannelRow(channel, index + 1, channel.id == currentId,
+                                            onClick = {
+                                                focus.record(channelContext, channel.id, index)
+                                                onSelect(channel.id)
+                                            },
+                                            modifier = focus.target(channelContext, channel.id, index).onFocusChanged {
+                                                if (it.isFocused) {
+                                                    column = BrowserColumn.CHANNELS
+                                                    val pending = focus.pending?.preferred
+                                                    if (pending == null || pending == channel.id) channelTarget = channel.id
+                                                    onFocusChannel(channel.id)
+                                                }
+                                            }.testTag("player-channel-${channel.id}"))
+                                    }
+                                }
+                            }
+                            if (column == BrowserColumn.CHANNELS) {
+                                val program = previewEpg?.takeIf { it.channelId == channelTarget }
+                                    ?.let { it.schedule.current(it.nowMillis) }
+                                if (program != null) Text(program.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
-                    Text(stringResource(R.string.player_list_hint),
+                    Text(stringResource(R.string.live_country_browser_hint),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

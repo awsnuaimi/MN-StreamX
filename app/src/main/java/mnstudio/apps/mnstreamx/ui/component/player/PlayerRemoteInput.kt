@@ -12,8 +12,8 @@ fun handlePlayerRemoteKey(
     val blocked = controlsVisible || channelListOpen
     val command = when (keyCode) {
         KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> PlayerRemoteCommand.BACK
-        KeyEvent.KEYCODE_CHANNEL_UP -> PlayerRemoteCommand.NEXT
-        KeyEvent.KEYCODE_CHANNEL_DOWN -> PlayerRemoteCommand.PREVIOUS
+        KeyEvent.KEYCODE_CHANNEL_UP -> if (channelListOpen || cardsVisible) null else PlayerRemoteCommand.NEXT
+        KeyEvent.KEYCODE_CHANNEL_DOWN -> if (channelListOpen || cardsVisible) null else PlayerRemoteCommand.PREVIOUS
         KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_GUIDE -> PlayerRemoteCommand.TOGGLE_CHANNELS
         KeyEvent.KEYCODE_INFO -> if (!channelListOpen) PlayerRemoteCommand.SHOW_INFO else null
         KeyEvent.KEYCODE_DPAD_UP -> if (!blocked && cardsVisible) PlayerRemoteCommand.HIDE_CARDS else null

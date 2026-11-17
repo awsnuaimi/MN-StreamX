@@ -1,6 +1,7 @@
 package mnstudio.apps.mnstreamx.ui.screen.player
 
 import android.view.KeyEvent
+
 import mnstudio.apps.mnstreamx.ui.component.player.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -42,10 +43,10 @@ class PlayerPanelStateTest {
         assertEquals(PlayerPanel.CARDS, state.closeTop().closeTop().panel)
         assertEquals(PlayerPanel.WATCHING, state.afterSelection().panel)
     }
-    @Test fun arrowsNavigateCardsAndOnlyChannelKeysZap() {
+    @Test fun arrowsOpenAndCloseCardsAndOnlyChannelKeysZapDuringPlayback() {
         var state = PlayerPanelState(); var next = 0; var previous = 0
         val keys = PlayerRemoteKeyGate()
-        fun press(code: Int): Boolean {
+        fun press(code: Int, handled: Boolean = true) {
             fun send(action: Int) = keys.handle(code, action, 0, false, state.isModal, state.panel == PlayerPanel.CARDS) {
                 when (it) {
                     PlayerRemoteCommand.OPEN_CARDS -> state = state.cards()
@@ -55,23 +56,19 @@ class PlayerPanelStateTest {
                     else -> Unit
                 }
             }
-            val consumed = send(KeyEvent.ACTION_DOWN)
-            assertEquals(consumed, send(KeyEvent.ACTION_UP))
-            return consumed
+            assertEquals(handled, send(0)); assertEquals(handled, send(1))
         }
-        assertTrue(press(KeyEvent.KEYCODE_DPAD_DOWN))
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
         assertEquals(PlayerPanel.CARDS, state.panel)
-        assertFalse(press(KeyEvent.KEYCODE_DPAD_DOWN))
+        press(KeyEvent.KEYCODE_DPAD_DOWN, handled = false)
+        press(KeyEvent.KEYCODE_CHANNEL_UP, handled = false)
         assertEquals(0, next)
-        assertTrue(press(KeyEvent.KEYCODE_CHANNEL_UP))
+        press(KeyEvent.KEYCODE_DPAD_UP)
+        assertEquals(PlayerPanel.WATCHING, state.panel)
+        press(KeyEvent.KEYCODE_DPAD_UP, handled = false)
+        press(KeyEvent.KEYCODE_CHANNEL_UP)
+        press(KeyEvent.KEYCODE_CHANNEL_DOWN)
         assertEquals(1, next)
-        assertEquals(PlayerPanel.CARDS, state.panel)
-        assertTrue(press(KeyEvent.KEYCODE_DPAD_UP))
-        assertEquals(PlayerPanel.WATCHING, state.panel)
-        assertFalse(press(KeyEvent.KEYCODE_DPAD_UP))
-        assertEquals(0, previous)
-        assertTrue(press(KeyEvent.KEYCODE_CHANNEL_DOWN))
         assertEquals(1, previous)
-        assertEquals(PlayerPanel.WATCHING, state.panel)
     }
 }

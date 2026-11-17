@@ -137,13 +137,13 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
             navigation.upShortcut.up(key.eventTime, key.isCanceled, key.deviceId)
         } else if (event.type == KeyEventType.KeyDown && event.key != Key.DirectionUp) navigation.clearShortcut()
         val delta = when (event.key) {
-            Key.DirectionUp -> -1; Key.DirectionDown -> 1
-            Key.PageUp, Key.ChannelUp -> -LiveTvNavigationPolicy.visibleRows(viewport, rowPx, spacingPx)
-            Key.PageDown, Key.ChannelDown -> LiveTvNavigationPolicy.visibleRows(viewport, rowPx, spacingPx)
+            Key.ChannelUp -> 1
+            Key.ChannelDown -> -1
             else -> 0
         }
         val horizontal = event.key == Key.DirectionLeft || event.key == Key.DirectionRight
-        if (delta == 0 && !horizontal) false
+        val vertical = event.key == Key.DirectionUp || event.key == Key.DirectionDown
+        if (delta == 0 && !horizontal && !vertical) false
         else if (event.type == KeyEventType.KeyUp) true
         else if (event.type != KeyEventType.KeyDown) false
         else if (event.nativeKeyEvent.isCanceled) true
@@ -184,7 +184,7 @@ internal fun LiveTvChannelList(rows: List<LiveChannelRow>, selectedChannelId: St
                 else if (event.key != details && sidebarFocus != null) sidebarFocus.requestFocus()
             } else if (event.key == Key.DirectionUp && position == 0) {
                 categories()
-            } else {
+            } else if (delta != 0) {
                 val next = LiveTvNavigationPolicy.target(position, delta, rows.size)
                 if (next != position) navigation.request(rows[next].key,
                     fast = LiveTvFocusIntent.fastScroll(delta, key.repeatCount > 0, pending != null))

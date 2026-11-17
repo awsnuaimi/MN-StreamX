@@ -18,7 +18,7 @@ class PlayerRemoteInputTest {
             assertFalse(handlePlayerRemoteKey(code, 0, 0, false, true, true) { fail() })
         }
     }
-    @Test fun upAndDownOpenOrCloseCardsWithoutSwitchingChannels() {
+    @Test fun arrowsUseCardVisibilityWithoutATimingWindow() {
         fun command(code: Int, cards: Boolean): PlayerRemoteCommand? {
             var value: PlayerRemoteCommand? = null
             handlePlayerRemoteKey(code, 0, 0, false, false, cards) { value = it }
@@ -41,34 +41,21 @@ class PlayerRemoteInputTest {
         assertFalse(handlePlayerRemoteKey(21, 0, 0, false, false, true, commands::add))
         assertEquals(listOf(PlayerRemoteCommand.TOGGLE_CHANNELS), commands)
     }
-    @Test fun infoOpensProgramDetailsAndRightRemainsAvailableForFocus() {
+    @Test fun informationAndChannelChangesHaveDedicatedKeys() {
         val commands = mutableListOf<PlayerRemoteCommand>()
-        fun press(code: Int, cards: Boolean = false, modal: Boolean = false) = handlePlayerRemoteKey(
-            code, KeyEvent.ACTION_DOWN, 0, false, modal, cards, commands::add
-        )
-        assertFalse(press(KeyEvent.KEYCODE_DPAD_RIGHT))
-        assertFalse(press(KeyEvent.KEYCODE_DPAD_RIGHT, cards = true))
-        assertTrue(press(KeyEvent.KEYCODE_INFO))
-        assertFalse(press(KeyEvent.KEYCODE_INFO, modal = true))
-        assertEquals(listOf(PlayerRemoteCommand.SHOW_INFO), commands)
-    }
-
-    @Test fun onlyDedicatedChannelKeysRequestZappingWhileWatching() {
-        val commands = mutableListOf<PlayerRemoteCommand>()
-        fun press(code: Int) = handlePlayerRemoteKey(
-            code, KeyEvent.ACTION_DOWN, 0, false, false, false, commands::add
-        )
-        assertFalse(press(KeyEvent.KEYCODE_PAGE_UP))
-        assertFalse(press(KeyEvent.KEYCODE_PAGE_DOWN))
-        assertTrue(press(KeyEvent.KEYCODE_CHANNEL_UP))
-        assertTrue(press(KeyEvent.KEYCODE_CHANNEL_DOWN))
-        assertEquals(listOf(PlayerRemoteCommand.NEXT, PlayerRemoteCommand.PREVIOUS), commands)
+        assertFalse(handlePlayerRemoteKey(KeyEvent.KEYCODE_DPAD_RIGHT, 0, 0, false, false, false, commands::add))
+        assertTrue(handlePlayerRemoteKey(KeyEvent.KEYCODE_INFO, 0, 0, false, false, false, commands::add))
+        assertTrue(handlePlayerRemoteKey(KeyEvent.KEYCODE_CHANNEL_DOWN, 0, 0, false, false, false, commands::add))
+        assertFalse(handlePlayerRemoteKey(KeyEvent.KEYCODE_CHANNEL_DOWN, 0, 0, false, true, false, commands::add))
+        assertFalse(handlePlayerRemoteKey(KeyEvent.KEYCODE_CHANNEL_UP, 0, 0, false, false, true, commands::add))
+        assertFalse(handlePlayerRemoteKey(KeyEvent.KEYCODE_PAGE_UP, 0, 0, false, false, false, commands::add))
+        assertEquals(listOf(PlayerRemoteCommand.SHOW_INFO, PlayerRemoteCommand.PREVIOUS), commands)
     }
     @Test fun mediaAndSeekKeysRemainAvailableToTheNativePlayer() {
         assertFalse(handlePlayerRemoteKey(85, 0, 0, false, false, false) { fail() })
         assertFalse(handlePlayerRemoteKey(21, 0, 0, true, false, false) { fail() })
     }
-    @Test fun openingCardsConsumesTheHeldDownPressAndTheNextPressCanNavigate() {
+    @Test fun heldDownCannotBecomeANextCommandAfterOpeningCardsEvenIfRepeatCountIsZero() {
         val key = PlayerRemoteKeyGate(); val commands = mutableListOf<PlayerRemoteCommand>()
         assertTrue(key.handle(20, 0, 0, false, false, false, commands::add))
         assertTrue(key.handle(20, 0, 0, false, false, true, commands::add))

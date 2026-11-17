@@ -46,7 +46,7 @@ class PlayerPanelFocusUiTest {
                         onAction = { if (it == PlayerMoreAction.CHANNELS) panel = PlayerPanel.CHANNELS },
                         onRetryFavorites = {}, lastChannel = last)
                     if (panel == PlayerPanel.CHANNELS) PlayerChannelPanel(if (loading) emptyList() else channels,
-                        if (loading) -1 else 75, null, "", false,
+                        if (loading) -1 else 75, false,
                         {}, { panel = PlayerPanel.MORE }, { _, _ -> false }, loading)
                 }
             }
@@ -68,6 +68,42 @@ class PlayerPanelFocusUiTest {
         compose.onNodeWithTag("player-more-CHANNELS").performClick()
         focusLatestDialog()
         compose.waitForFocus("player-channel-75")
+    }
+
+    private fun waitForChannelProjection() {
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("player-channel-loading").fetchSemanticsNodes().isEmpty()
+        }
+    }
+
+    @Test fun changingTheFocusedProviderGroupShowsItsChannelsBeforeAnySelection() {
+        val groups = listOf("PL| Sport", "PL| News")
+        val catalog = channels.take(6).mapIndexed { index, item -> item.copy(group = groups[index / 3]) }
+        var played = ""
+        compose.setContent {
+            val input = LocalInputModeManager.current
+            SideEffect { input.requestInputMode(InputMode.Keyboard) }
+            IPTVAppTheme {
+                PlayerChannelPanel(catalog, -1, false, { played = it }, {}, { _, _ -> false },
+                    startWithCountries = true)
+            }
+        }
+        focusLatestDialog()
+        compose.waitForFocus("live-country-PL")
+        compose.onNodeWithTag("live-country-PL").performClick()
+        compose.waitForFocus("live-group-group:PL| Sport")
+        compose.onNodeWithTag("live-group-group:PL| Sport").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.waitForFocus("live-group-group:PL| News")
+        compose.onNodeWithTag("player-channel-3").assertIsDisplayed()
+        compose.onNodeWithTag("live-group-group:PL| News").performKeyInput { pressKey(Key.DirectionRight) }
+        compose.waitForFocus("player-channel-3")
+        compose.onNodeWithTag("player-channel-3").performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.ChannelUp) }
+        compose.waitForFocus("player-channel-4")
+        compose.onNodeWithTag("player-channel-4").performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithTag("player-channel-4").assertIsFocused()
+        compose.runOnIdle { assertTrue(played.isEmpty()) }
+        compose.onNodeWithTag("player-channel-4").performKeyInput { pressKey(Key.Enter) }
+        compose.runOnIdle { assertEquals("4", played) }
     }
 
     @Test fun closingTheChannelPanelReturnsToTheActionThatOpenedIt() {
@@ -109,7 +145,7 @@ class PlayerPanelFocusUiTest {
         compose.onNodeWithTag("player-channel-loading").assertIsDisplayed()
         compose.waitForFocus("player-channels-close")
         compose.runOnIdle { loading = false }
-        compose.onNodeWithTag("player-channel-loading").assertDoesNotExist()
+        waitForChannelProjection()
         compose.waitForFocus("player-channel-75")
         compose.onNodeWithTag("player-channels-close").performClick()
         focusLatestDialog()
@@ -125,7 +161,7 @@ class PlayerPanelFocusUiTest {
         compose.waitForFocus("player-channels-close")
         compose.onNodeWithTag("player-channels-close").performKeyInput { pressKey(Key.DirectionDown) }
         compose.runOnIdle { loading = false }
-        compose.onNodeWithTag("player-channel-loading").assertDoesNotExist()
+        waitForChannelProjection()
         compose.onNodeWithTag("player-channels-close").assertIsFocused()
     }
 }

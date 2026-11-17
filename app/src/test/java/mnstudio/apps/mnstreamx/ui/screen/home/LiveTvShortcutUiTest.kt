@@ -112,10 +112,12 @@ class LiveTvShortcutUiTest {
         compose.runOnIdle { assertNull(played) }
     }
 
-    @Test fun firstArrowMovesImmediatelyAndSeparatedPressesKeepScrolling() {
+    @Test fun separateArrowPressesLeaveTheChannelHighlightUnchanged() {
         board(); focus("live-channel-40")
-        press(Key.DirectionUp); waitFocus("live-channel-39")
-        press(Key.DirectionUp, 400); waitFocus("live-channel-38")
+        press(Key.DirectionUp); waitFocus("live-channel-40")
+        press(Key.DirectionUp, 400); waitFocus("live-channel-40")
+        press(Key.ChannelDown); waitFocus("live-channel-39")
+        press(Key.ChannelDown); waitFocus("live-channel-38")
         compose.runOnIdle { assertNull(played) }
     }
 
