@@ -17,6 +17,7 @@ import mnstudio.apps.mnstreamx.ui.state.*
 import mnstudio.apps.mnstreamx.ui.theme.IPTVAppTheme
 import org.junit.*
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -99,13 +100,41 @@ class PlayerPanelFocusUiTest {
         compose.onNodeWithTag("player-channel-3").assertIsDisplayed()
         compose.onNodeWithTag("live-group-group:PL| News").performKeyInput { pressKey(Key.DirectionRight) }
         compose.waitForFocus("player-channel-3")
-        compose.onNodeWithTag("player-channel-3").performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.ChannelUp) }
+        compose.onNodeWithTag("player-channel-3").performKeyInput { pressKey(Key.DirectionDown) }
         compose.waitForFocus("player-channel-4")
         compose.onNodeWithTag("player-channel-4").performKeyInput { pressKey(Key.DirectionUp) }
-        compose.onNodeWithTag("player-channel-4").assertIsFocused()
+        compose.waitForFocus("player-channel-3")
+        compose.onNodeWithTag("player-channel-3").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.waitForFocus("player-channel-4")
+        compose.onNodeWithTag("player-channel-4").performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.waitForFocus("live-group-group:PL| News")
+        compose.onNodeWithTag("live-group-group:PL| News").performKeyInput { pressKey(Key.DirectionRight) }
+        compose.waitForFocus("player-channel-4")
         compose.runOnIdle { assertTrue(played.isEmpty()) }
         compose.onNodeWithTag("player-channel-4").performKeyInput { pressKey(Key.Enter) }
         compose.runOnIdle { assertEquals("4", played) }
+    }
+
+    @Test fun rapidArrowsScrollChannelsWithoutStartingPlayback() {
+        var played: String? = null
+        compose.setContent {
+            val input = LocalInputModeManager.current
+            SideEffect { input.requestInputMode(InputMode.Keyboard) }
+            IPTVAppTheme {
+                PlayerChannelPanel(channels, 75, false, { played = it }, {}, { _, _ -> false })
+            }
+        }
+        focusLatestDialog()
+        compose.waitForFocus("player-channel-75")
+        compose.onNodeWithTag("player-channel-75").performKeyInput {
+            repeat(20) { pressKey(Key.DirectionDown) }
+        }
+        compose.waitForFocus("player-channel-95")
+        compose.onNodeWithTag("player-channel-95").performKeyInput {
+            repeat(10) { pressKey(Key.DirectionUp) }
+        }
+        compose.waitForFocus("player-channel-85")
+        compose.runOnIdle { assertNull(played) }
     }
 
     @Test fun closingTheChannelPanelReturnsToTheActionThatOpenedIt() {

@@ -159,20 +159,23 @@ fun PlayerChannelPanel(
     val towardChannels = if (rtl) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
     val towardGroups = if (rtl) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
 
+    fun moveChannelFocus(direction: Int) {
+        val at = positions[channelTarget] ?: 0
+        channelKeys.getOrNull(at + direction)?.let { next ->
+            channelTarget = next
+            focus.request(channelContext, next)
+        } ?: channelTarget?.let { focus.request(channelContext, it) }
+    }
+
     fun handleKey(event: KeyEvent): Boolean {
         val code = event.keyCode
+        val down = event.action == KeyEvent.ACTION_DOWN && !event.isCanceled
         if (code == KeyEvent.KEYCODE_CHANNEL_UP || code == KeyEvent.KEYCODE_CHANNEL_DOWN) {
-            if (event.action == KeyEvent.ACTION_DOWN && !event.isCanceled && column == BrowserColumn.CHANNELS) {
-                val at = positions[channelTarget] ?: 0
-                val step = if (code == KeyEvent.KEYCODE_CHANNEL_UP) 1 else -1
-                channelKeys.getOrNull(at + step)?.let { next ->
-                    channelTarget = next
-                    focus.request(channelContext, next)
-                } ?: channelTarget?.let { focus.request(channelContext, it) }
+            if (down && column == BrowserColumn.CHANNELS) {
+                moveChannelFocus(if (code == KeyEvent.KEYCODE_CHANNEL_UP) 1 else -1)
             }
             return true
         }
-        val down = event.action == KeyEvent.ACTION_DOWN && !event.isCanceled
         return when (code) {
             towardChannels -> when (column) {
                 BrowserColumn.GROUPS -> {
@@ -192,7 +195,10 @@ fun PlayerChannelPanel(
                 else -> false
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> when (column) {
-                BrowserColumn.CHANNELS -> true
+                BrowserColumn.CHANNELS -> {
+                    if (down) moveChannelFocus(if (code == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1)
+                    true
+                }
                 BrowserColumn.COUNTRIES -> if (code == KeyEvent.KEYCODE_DPAD_DOWN) {
                     if (down) focusedCountry?.let(::openCountry)
                     true
