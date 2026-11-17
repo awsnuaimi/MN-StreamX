@@ -16,6 +16,8 @@ import mnstudio.apps.mnstreamx.ui.component.common.rememberContextFocus
 import mnstudio.apps.mnstreamx.ui.state.*
 import mnstudio.apps.mnstreamx.ui.theme.IPTVAppTheme
 import org.junit.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
