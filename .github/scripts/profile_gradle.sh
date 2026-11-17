@@ -15,7 +15,7 @@ case "$phase" in
 esac
 
 metrics='build/ci-metrics/gradle-steps.tsv'
-mkdir -p "$(dirname "$metrics")"
+mkdir -p "$(dirname "$metrics")" build/reports/profile app/build/reports/profile
 if [[ ! -e "$metrics" ]]; then
   printf 'phase\twall_seconds\texit_code\n' > "$metrics"
 fi
@@ -26,13 +26,17 @@ gradle --no-daemon --profile --console=plain "$@"
 result=$?
 set -e
 seconds=$(( $(date +%s) - started ))
-printf '%s\t%s\t%s\n' "$phase" "$seconds" "$result" >> "$metrics"
+if ! printf '%s\t%s\t%s\n' "$phase" "$seconds" "$result" >> "$metrics"; then
+  echo '::warning::Could not append Gradle timing metrics.' >&2
+fi
 echo "Gradle phase ${phase}: ${seconds}s (exit ${result})"
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-  {
+  if ! {
     printf '### Gradle %s\n\n' "$phase"
     printf 'Wall time: **%s seconds**; exit code: **%s**.\n\n' "$seconds" "$result"
     printf 'Task timings: download the `MN-StreamX-ci-diagnostics` artifact and open the Gradle HTML profile.\n\n'
-  } >> "$GITHUB_STEP_SUMMARY"
+  } >> "$GITHUB_STEP_SUMMARY"; then
+    echo '::warning::Could not write the Gradle step summary.' >&2
+  fi
 fi
 exit "$result"

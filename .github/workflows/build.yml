@@ -41,6 +41,9 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Prepare and verify pinned Android NDK and CMake
+        run: python3 .github/scripts/prepare_android_sdk.py
+
       # ccache is separate from Gradle's user-home cache.  It stores only
       # compiled C/C++ objects, not signing keys, APKs, or downloaded sources.
       - name: Prepare optional native compiler cache

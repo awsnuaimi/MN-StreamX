@@ -9,7 +9,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / '.github/scripts/profile_gradle.s
 
 
 class GradleProfileScriptTest(unittest.TestCase):
-    def _execute(self, phase='verify', exit_code=0):
+    def _execute(self, phase='verify', exit_code=0, summary_full=False):
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)
             bindir = folder / 'bin'
@@ -22,7 +22,7 @@ class GradleProfileScriptTest(unittest.TestCase):
                 'PATH': f'{bindir}{os.pathsep}{env.get("PATH", "")}',
                 'ARGS_OUT': str(folder / 'args.txt'),
                 'FAKE_CODE': str(exit_code),
-                'GITHUB_STEP_SUMMARY': str(folder / 'summary.md'),
+                'GITHUB_STEP_SUMMARY': '/dev/full' if summary_full else str(folder / 'summary.md'),
             })
             cmd = ['bash', str(SCRIPT), phase, 'testDebugUnitTest']
             result = subprocess.run(cmd, cwd=folder, env=env, capture_output=True, text=True)
@@ -47,6 +47,13 @@ class GradleProfileScriptTest(unittest.TestCase):
         self.assertEqual(17, r['result'].returncode)
         self.assertRegex(r['metrics'], r'verify\t\d+\t17')
         self.assertIn('exit code: **17**', r['summary'])
+
+    @unittest.skipUnless(Path('/dev/full').exists(), 'requires the Linux full-device fixture')
+    def test_reporting_failure_preserves_the_gradle_failure(self):
+        r = self._execute(exit_code=17, summary_full=True)
+        self.assertEqual(17, r['result'].returncode)
+        self.assertRegex(r['metrics'], r'verify\t\d+\t17')
+        self.assertIn('Could not write the Gradle step summary', r['result'].stderr)
 
     def test_manifest_phase(self):
         r = self._execute(phase='manifest')
