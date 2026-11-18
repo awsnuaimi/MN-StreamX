@@ -5,13 +5,13 @@ import android.media.AudioManager
 import android.os.Looper
 import android.os.SystemClock
 import androidx.media3.common.util.UnstableApi
+import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import mnstudio.apps.mnstreamx.domain.model.Channel
 import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryPhase
 import mnstudio.apps.mnstreamx.domain.model.LiveRecoveryState
@@ -31,13 +31,16 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
+import org.robolectric.shadows.ShadowSystemClock
 
-@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, manifest = Config.NONE)
+@LooperMode(LooperMode.Mode.PAUSED)
 @androidx.annotation.OptIn(UnstableApi::class)
 class LivePlaylistRecoveryTest {
-    @Test fun repeatedMalformedPlaylistsAreRetriedUntilTheServerPublishesMediaAgain() = runTest {
+    @Test
+    fun repeatedMalformedPlaylistsAreRetriedUntilTheServerPublishesMediaAgain() {
         MockWebServer().use { server ->
             val playlistRequests = AtomicInteger()
             val playlist = """
@@ -64,59 +67,94 @@ class LivePlaylistRecoveryTest {
             val application = RuntimeEnvironment.getApplication()
             shadowOf(application.getSystemService(AudioManager::class.java))
                 .setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+            val looper = shadowOf(Looper.getMainLooper())
+            // Use the same Android/Robolectric clock for the recovery coroutine and deadlines.
+            // runTest's virtual scheduler is independent of SystemClock.elapsedRealtime().
+            val scope = CoroutineScope(Dispatchers.Main.immediate)
             val errors = mutableListOf<String>()
-            val recovery = mutableListOf<LiveRecoveryState>()
+            val states = mutableListOf<LiveRecoveryState>()
             val session = PlayerPlaybackSession(
                 controller = PlayerController(application),
-                initialChannel = Channel("test", "Test channel", streamUrl = server.url("/live.m3u8").toString()),
-                scope = this,
+                initialChannel = Channel(
+                    "test", "Test channel", streamUrl = server.url("/live.m3u8").toString()
+                ),
+                scope = scope,
                 network = emptyFlow(),
                 onError = { _, error -> if (error != null) errors.add(error) },
                 onBuffering = { _, _ -> },
                 isSelected = { true },
-                onRecovery = { _, state -> recovery.add(state) }
+                onRecovery = { _, state -> states.add(state) }
             )
             try {
                 session.start()
-                runCurrent()
                 val player = checkNotNull(session.player)
-                val firstMediaId = player.currentMediaItem?.mediaId
-                listOf(1_000L, 3_000L, 7_000L).forEachIndexed { index, retryDelay ->
-                    assertEquals("/live.m3u8", server.takeRequest(5, TimeUnit.SECONDS)?.path)
-                    awaitPlayer("The player did not report the source error") { errors.size > index }
+                val originalMediaId = player.currentMediaItem?.mediaId
+
+                listOf(1_000L, 3_000L, 7_000L).forEachIndexed { index, backoffMs ->
+                    val request = awaitPlayer("playlist request ${index + 1}") {
+                        server.takeRequest(0, TimeUnit.MILLISECONDS)
+                    }
+                    assertEquals("/live.m3u8", request.path)
+                    awaitPlayer("malformed playlist error ${index + 1}") {
+                        Unit.takeIf {
+                            errors.size > index && states.any { state ->
+                                state.phase == LiveRecoveryPhase.SCHEDULED &&
+                                    state.attempt == index + 1
+                            }
+                        }
+                    }
                     assertEquals("ERROR_CODE_PARSING_MANIFEST_MALFORMED", errors[index])
-                    val scheduled = recovery.last()
-                    assertEquals(LiveRecoveryPhase.SCHEDULED, scheduled.phase)
-                    assertEquals(index + 1, scheduled.attempt)
-                    assertTrue(checkNotNull(scheduled.retryAtElapsedRealtimeMs) > SystemClock.elapsedRealtime())
-                    advanceTimeBy(retryDelay - 10)
-                    runCurrent()
+                    val scheduled = states.last { state ->
+                        state.phase == LiveRecoveryPhase.SCHEDULED && state.attempt == index + 1
+                    }
+                    val deadline = checkNotNull(scheduled.retryAtElapsedRealtimeMs)
+                    val remaining = deadline - SystemClock.elapsedRealtime()
+                    assertTrue("Retry deadline already passed for attempt ${index + 1}", remaining > 0L)
+                    assertTrue("Backoff unexpectedly exceeded the policy", remaining <= backoffMs)
+                    // Check that the retry does not start before its own SystemClock deadline.
+                    looper.idleFor(remaining - 1L, TimeUnit.MILLISECONDS)
                     assertEquals(index + 1, playlistRequests.get())
-                    advanceTimeBy(20)
-                    runCurrent()
+                    looper.idleFor(1L, TimeUnit.MILLISECONDS)
                 }
 
-                assertEquals("/live.m3u8", server.takeRequest(5, TimeUnit.SECONDS)?.path)
-                awaitPlayer("The player did not request media from the restored playlist") {
-                    generateSequence { server.takeRequest(0, TimeUnit.MILLISECONDS) }
-                        .any { it.path == "/segment.ts" }
+                val restored = awaitPlayer("restored playlist request") {
+                    server.takeRequest(0, TimeUnit.MILLISECONDS)
                 }
-                assertNotEquals(firstMediaId, player.currentMediaItem?.mediaId)
+                assertEquals("/live.m3u8", restored.path)
+                awaitPlayer("a media segment from the restored playlist") {
+                    var segmentSeen = false
+                    var next = server.takeRequest(0, TimeUnit.MILLISECONDS)
+                    while (next != null) {
+                        if (next.path == "/segment.ts") segmentSeen = true
+                        next = server.takeRequest(0, TimeUnit.MILLISECONDS)
+                    }
+                    Unit.takeIf { segmentSeen }
+                }
+                assertNotEquals(originalMediaId, player.currentMediaItem?.mediaId)
                 assertEquals(3, errors.size)
-                assertTrue(recovery.none { it.phase == LiveRecoveryPhase.FAILED })
+                assertTrue(playlistRequests.get() >= 4)
+                assertTrue(states.none { it.phase == LiveRecoveryPhase.FAILED })
             } finally {
-                session.stop()
+                try {
+                    session.stop()
+                } finally {
+                    scope.cancel()
+                }
             }
         }
     }
 
-    private fun awaitPlayer(message: String, condition: () -> Boolean) {
+    private fun <T : Any> awaitPlayer(message: String, read: () -> T?): T {
         val looper = shadowOf(Looper.getMainLooper())
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-        while (!condition()) {
-            assertTrue(message, System.nanoTime() < deadline)
-            looper.idleFor(10, TimeUnit.MILLISECONDS)
-            Thread.sleep(10)
+        val timeoutAt = System.nanoTime() + TimeUnit.SECONDS.toNanos(7)
+        while (System.nanoTime() < timeoutAt) {
+            looper.idle()
+            read()?.let { return it }
+            // ExoPlayer's worker thread uses real scheduling; let it progress without
+            // advancing Android's recovery deadline by a large artificial amount.
+            Thread.sleep(10L)
+            ShadowSystemClock.advanceBy(Duration.ofMillis(1L))
         }
+        throw AssertionError("Timed out waiting for $message")
     }
 }
