@@ -7,7 +7,6 @@ plugins {
 }
 apply from: rootProject.file('gradle/moonshine-runtime.gradle')
 
-
 def positiveNumber = { String raw, String label ->
     if (raw == null || !(raw ==~ /[1-9][0-9]*/) || raw.length() > 10) {
         throw new GradleException("${label} must be a positive integer.")
@@ -24,7 +23,6 @@ def updateVersionCode = explicitVersion ? positiveNumber(explicitVersion, 'appVe
 if (updateVersionCode > 2100000000L) throw new GradleException('versionCode exceeds the Android limit.')
 def updateVersionName = providers.gradleProperty('appVersionName').orNull ?:
     (runNumber ? "1.1.${runNumber}.${runAttempt}" : '1.1.0')
-
 // Public release repository, automatically supplied by GitHub Actions. No access token enters the APK.
 def updateRepository = providers.gradleProperty('updateRepository')
     .orElse(providers.environmentVariable('MN_STREAMX_UPDATE_REPOSITORY'))
@@ -32,7 +30,6 @@ def updateRepository = providers.gradleProperty('updateRepository')
 if (updateRepository && !(updateRepository ==~ /[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_.-]{1,100}/)) {
     throw new GradleException('updateRepository must be owner/repository.')
 }
-
 def stableStore = System.getenv('MN_STREAMX_KEYSTORE_FILE')
 def stablePassword = System.getenv('MN_STREAMX_KEYSTORE_PASSWORD')
 def stableAlias = System.getenv('MN_STREAMX_KEY_ALIAS')
@@ -45,12 +42,10 @@ if (stableSigningReady && !file(stableStore).isFile()) {
     throw new GradleException('The configured MN StreamX signing keystore does not exist.')
 }
 def livePlaybackTest = providers.gradleProperty('livePlaybackTest').getOrElse('false').toBoolean()
-
 android {
     namespace 'mnstudio.apps.mnstreamx'
     compileSdk 35
     ndkVersion "27.2.12479018"
-
     defaultConfig {
         applicationId 'mnstudio.apps.mnstreamx'
         minSdk 29
@@ -75,7 +70,6 @@ android {
             }
         }
     }
-
     signingConfigs {
         if (stableSigningReady) {
             stable {
@@ -91,7 +85,6 @@ android {
     // Without this, AGP creates the instrumentation variant only for debug and
     // compileBenchmarkAndroidTestKotlin does not exist.
     testBuildType 'benchmark'
-
     buildTypes {
         debug {
             if (stableSigningReady) signingConfig signingConfigs.stable
@@ -110,7 +103,6 @@ android {
             matchingFallbacks = ['release']
         }
     }
-
     externalNativeBuild { cmake { path file('src/main/cpp/CMakeLists.txt'); version '3.22.1' } }
 
     // One APK per Android ABI: smaller sideload/update footprint on low-storage TVs.
@@ -124,7 +116,6 @@ android {
         }
     }
 
-
     // Azure Speech's Netty dependencies publish duplicate packaging metadata.
     // Keep service registrations and executable resources intact. The Netty
     // version properties are diagnostic metadata, not runtime class files.
@@ -135,7 +126,6 @@ android {
             excludes.add('/META-INF/io.netty.versions.properties')
         }
     }
-
     buildFeatures {
         compose true
         buildConfig true
@@ -151,7 +141,6 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
-
     testOptions {
         unitTests.includeAndroidResources = true
         // Robolectric's real FileProvider read test closes an Android file descriptor on JDK 17.
@@ -162,7 +151,6 @@ android {
             maxParallelForks = Math.min(2, Runtime.runtime.availableProcessors())
         }
     }
-
     room {
         schemaDirectory("$projectDir/schemas")
     }
@@ -177,7 +165,6 @@ tasks.configureEach { task ->
         }
     }
 }
-
 dependencies {
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.23.2'
     implementation 'ai.moonshine:moonshine-voice:0.1.6'
@@ -192,7 +179,6 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.4'
     implementation 'io.coil-kt:coil-compose:2.7.0'
     implementation 'androidx.activity:activity-compose:1.9.1'
-
     implementation platform('androidx.compose:compose-bom:2024.09.03')
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.material3:material3'
@@ -201,13 +187,11 @@ dependencies {
     implementation "com.google.dagger:hilt-android:$hilt_version"
     kapt "com.google.dagger:hilt-compiler:$hilt_version"
     implementation 'androidx.hilt:hilt-navigation-compose:1.2.0'
-
     implementation "androidx.room:room-runtime:$room_version"
     implementation "androidx.room:room-ktx:$room_version"
     kapt "androidx.room:room-compiler:$room_version"
 
     implementation 'androidx.datastore:datastore-preferences:1.1.1'
-
     implementation "androidx.media3:media3-exoplayer:$media3_version"
     implementation "androidx.media3:media3-datasource-okhttp:$media3_version"
     implementation "androidx.media3:media3-exoplayer-dash:$media3_version"
@@ -215,12 +199,10 @@ dependencies {
     implementation "androidx.media3:media3-session:$media3_version"
 
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
-
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.squareup.retrofit2:retrofit:2.11.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.11.0'
     implementation 'com.google.code.gson:gson:2.11.0'
-
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.benchmark:benchmark-junit4:1.3.3'
     androidTestImplementation 'androidx.test:runner:1.6.2'
@@ -241,7 +223,7 @@ def captionNoticeFile = captionNoticeAssets.map { it.file('licenses/onnxruntime-
 def captionOffline = gradle.startParameter.offline
 def captionNotices = tasks.register('prepareCaptionNotices') {
     def source = layout.projectDirectory.file('src/main/assets/onnxruntime-ThirdPartyNotices.txt')
-    def expected = 'e9e90971a8e75a9a8ac0c6412e29c1202d079998389915aa485f46c816c3b4cc'
+    def expected = '0432d91d6be8fa7635c3a2fe5d88778b1fe845b59cfbecb9f9286f76e54f9754'
     // InputFiles deliberately tolerates an absent optional source copy.
     inputs.files(source).withPropertyName('optionalCaptionNotice')
     inputs.property('noticeSha256', expected)
