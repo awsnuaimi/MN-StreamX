@@ -20,7 +20,7 @@ internal fun LiveTvCategories(groups: List<String>, channels: List<Channel>, tre
     onSelect: (String?) -> Unit, projectionDispatcher: CoroutineDispatcher = Dispatchers.Default,
     listEntry: FocusRequester? = null, header: FocusRequester? = null,
     sidebar: FocusRequester? = null, sidebarOnRight: Boolean = false, headerFallback: FocusRequester? = null,
-    navigation: LiveTvListNavigation? = null, onCountries: (() -> Unit)? = null) {
+    navigation: LiveTvListNavigation? = null) {
     val names = organizationFolderLabels()
     val folder = tree.folder(FolderFilter.id(selected))
     val parent = if (folder != null && tree.children(folder.id).isNotEmpty()) folder.id else folder?.parentId
@@ -47,8 +47,6 @@ internal fun LiveTvCategories(groups: List<String>, channels: List<Channel>, tre
         })
         add(LiveTvCategoryTarget("@all", "live-category-all", labels.text("الكل", "All", "Alle"),
             FolderFilter.id(selected) == parent && (tree.enabled || selected == null)) { onSelect(parent?.let(FolderFilter::of)) })
-        if (onCountries != null) add(LiveTvCategoryTarget("@countries", "live-country-picker",
-            labels.text("الدول", "Countries", "Länder"), false, onCountries))
         entries.forEach { item ->
             add(LiveTvCategoryTarget("group:${item.key}", "live-category-${item.key}",
                 "${item.title} · ${item.count}", item.key == selected) { onSelect(item.key) })

@@ -80,7 +80,7 @@ class LiveTvFocusMapUiTest {
     @Test fun sidebarKeepsVerticalOrderAndStopsAtBothEnds() {
         board(); focus("rail-DASHBOARD")
         press("rail-DASHBOARD", Key.DirectionUp); waitFocus("rail-DASHBOARD")
-        val sections = listOf("DASHBOARD", "LIVE", "MOVIES", "SERIES", "FAVORITES", "MORE", "SETTINGS")
+        val sections = listOf("DASHBOARD", "COUNTRIES", "LIVE", "MOVIES", "SERIES", "FAVORITES", "MORE", "SETTINGS")
         sections.zipWithNext().forEach { (a, b) -> press("rail-$a", Key.DirectionDown); waitFocus("rail-$b") }
         press("rail-SETTINGS", Key.DirectionDown); waitFocus("rail-SETTINGS")
         sections.asReversed().zipWithNext().forEach { (a, b) -> press("rail-$a", Key.DirectionUp); waitFocus("rail-$b") }
@@ -111,7 +111,7 @@ class LiveTvFocusMapUiTest {
     }
     @Test fun categoriesCanReachAndFocusALazyChipOutsideTheViewport() {
         board(); focus("live-category-all")
-        compose.onNodeWithTag("live-category-all").performKeyInput { repeat(36) { pressKey(Key.DirectionRight) } }
+        compose.onNodeWithTag("live-category-all").performKeyInput { repeat(35) { pressKey(Key.DirectionRight) } }
         waitFocus("live-category-Group 34")
         compose.onNodeWithTag("live-category-Group 34").assertIsDisplayed()
         press("live-category-Group 34", Key.DirectionUp); waitFocus("live-search")
@@ -132,7 +132,7 @@ class LiveTvFocusMapUiTest {
     }
     @Test fun leavingCategoriesCancelsPendingLazyFocusRequests() {
         board(); focus("live-category-all")
-        compose.onNodeWithTag("live-category-all").performKeyInput { repeat(36) { pressKey(Key.DirectionRight) }; pressKey(Key.DirectionUp) }
+        compose.onNodeWithTag("live-category-all").performKeyInput { repeat(35) { pressKey(Key.DirectionRight) }; pressKey(Key.DirectionUp) }
         waitFocus("live-search")
         compose.mainClock.advanceTimeBy(1000)
         waitFocus("live-search")

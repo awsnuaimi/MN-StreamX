@@ -31,6 +31,13 @@ internal fun HomeSidebarIcon(section: HomeSection, color: Color) {
                         }
                         drawPath(house, color, style = stroke)
                     }
+                    HomeSection.COUNTRIES -> {
+                        drawCircle(color, 9f, Offset(12f, 12f), style = stroke)
+                        drawOval(color, Offset(8f, 3f), Size(8f, 18f), style = stroke)
+                        drawLine(color, Offset(3f, 12f), Offset(21f, 12f), 1.8f)
+                        drawLine(color, Offset(5f, 7.5f), Offset(19f, 7.5f), 1.2f)
+                        drawLine(color, Offset(5f, 16.5f), Offset(19f, 16.5f), 1.2f)
+                    }
                     HomeSection.LIVE -> {
                         drawRoundRect(color, Offset(2f, 4f), Size(20f, 14f), CornerRadius(2f), style = stroke)
                         drawLine(color, Offset(8f, 22f), Offset(16f, 22f), 1.8f)

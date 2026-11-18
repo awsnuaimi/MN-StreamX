@@ -100,6 +100,15 @@ fun HomeScreen(
         onDispose { quickAccessViewModel.bind(null) }
     }
     val sidebarFocus = remember { HomeSection.entries.associateWith { FocusRequester() } }
+    var countriesVisible by remember(state.browseScope, parental.state.epoch) { mutableStateOf(false) }
+    var restoreCountriesFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(countriesVisible, restoreCountriesFocus) {
+        if (!countriesVisible && restoreCountriesFocus) {
+            withFrameNanos { }
+            sidebarFocus.getValue(HomeSection.COUNTRIES).requestFocus()
+            restoreCountriesFocus = false
+        }
+    }
     val dashboardFocus = remember { FocusRequester() }
     val liveContentFocus = remember { FocusRequester() }
     val liveHeaderFocus = remember { FocusRequester() }
@@ -146,6 +155,7 @@ fun HomeScreen(
             onReturnHandled()
             withFrameNanos { }
             if (lastArea == "content") currentContentFocus?.restoreOrRequestFocus()
+            else restoreSidebarFocus()
         }
     }
     LaunchedEffect(state.sessionReady, state.isLoading, state.browseScope) {
@@ -164,6 +174,7 @@ fun HomeScreen(
         }
     }
     val selected = when {
+        countriesVisible -> HomeSection.COUNTRIES
         dashboardVisible -> HomeSection.DASHBOARD
         state.favoritesOnly -> HomeSection.FAVORITES
         else -> HomeSection.LIVE
@@ -174,6 +185,17 @@ fun HomeScreen(
         when (section) {
             HomeSection.MORE -> Unit
             HomeSection.DASHBOARD -> { dashboardVisible = true; enterContent = true }
+            HomeSection.COUNTRIES -> {
+                if (liveLocked) parental.model?.requestPin()
+                else if (state.needsSource) onSettings()
+                else {
+                    lastSidebarFocus = HomeSection.COUNTRIES.name
+                    lastArea = "rail"
+                    enterContent = false
+                    restoreCountriesFocus = true
+                    countriesVisible = true
+                }
+            }
             HomeSection.LIVE, HomeSection.FAVORITES -> {
                 if (liveLocked) parental.model?.requestPin()
                 else { dashboardVisible = false; viewModel.selectSection(section == HomeSection.FAVORITES); enterContent = true }
@@ -263,20 +285,24 @@ fun HomeScreen(
                                 }, onRestored = viewModel::onGridRestoreHandled,
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
                                 sidebarFocus = sidebarFocus.getValue(selected), entryFocus = liveContentFocus,
-                                headerFocus = liveHeaderFocus, aboveHeader = aboveContent,
-                                onCountryPlay = { channel ->
-                                    if (viewModel.preparePlayback(channel.id, state.browseScope)) {
-                                        initialFocusDone = true
-                                        launchedFromDashboard = false
-                                        if (state.visibleChannels.any { it.id == channel.id }) viewModel.selectChannel(channel.id)
-                                        onPlayChannel(channel.id, channel.group, "", state.favoritesOnly)
-                                    }
-                                })
+                                headerFocus = liveHeaderFocus, aboveHeader = aboveContent)
                         }
                     }
                 }
             }
         }
+    }
+    if (countriesVisible) {
+        HomeCountryBrowserScene(state, appearance, onDismiss = { countriesVisible = false },
+            onPlay = { channel ->
+                if (viewModel.preparePlayback(channel.id, state.browseScope)) {
+                    initialFocusDone = true
+                    launchedFromDashboard = dashboardVisible
+                    countriesVisible = false
+                    if (!dashboardVisible && state.visibleChannels.any { it.id == channel.id }) viewModel.selectChannel(channel.id)
+                    onPlayChannel(channel.id, channel.group, "", false)
+                }
+            })
     }
 }
 
