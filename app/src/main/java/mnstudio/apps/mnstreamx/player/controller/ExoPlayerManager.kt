@@ -90,6 +90,13 @@ class ExoPlayerManager(context: Context) {
                 override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
                     if (owns(eventTime) && state == Player.STATE_READY) current.reached(PerformanceStage.LIVE_PLAYER_READY)
                 }
+                override fun onRenderedFirstFrame(
+                    eventTime: AnalyticsListener.EventTime,
+                    output: Any,
+                    renderTimeMs: Long
+                ) {
+                    if (owns(eventTime)) current.reached(PerformanceStage.LIVE_ATTEMPT_FIRST_FRAME)
+                }
                 override fun onPlayerError(eventTime: AnalyticsListener.EventTime, error: PlaybackException) {
                     if (owns(eventTime)) current.close(PerformanceOutcome.FAILED)
                 }
