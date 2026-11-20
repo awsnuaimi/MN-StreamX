@@ -63,7 +63,8 @@ fun PlayerChannelPanel(
     previewEpg: PlayerEpgUiState? = null,
     visible: ((Channel) -> Boolean)? = null
 ) {
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val configuration = LocalConfiguration.current
+    val locale = configuration.locales[0] ?: Locale.getDefault()
     val unclassified = stringResource(R.string.org_folder_unclassified)
     val tree = organization ?: remember { OrganizationTree() }
     val input = remember(channels, tree, locale, unclassified, favoritesOnly, visible, loading) { Any() }
@@ -98,6 +99,12 @@ fun PlayerChannelPanel(
     val groupContext = "$prefix:groups:$selectedCountry"
     val channelContext = "$groupContext:channels:$selectedGroup"
     val rows = activeGroup?.channels.orEmpty()
+    // On narrow displays keep one readable list rather than two truncated columns.
+    val channelColumns = remember(rows.size, configuration.screenWidthDp) {
+        PlayerChannelColumns(rows.size, configuration.screenWidthDp >= 780)
+    }
+    val firstChannels = remember(rows, channelColumns) { rows.take(channelColumns.firstCount) }
+    val secondChannels = remember(rows, channelColumns) { rows.drop(channelColumns.firstCount) }
     val countryKeys = remember(countries) { countries.orEmpty().map { it.code } }
     val groupKeys = remember(groups) { groups.map { it.key } }
     val channelKeys = remember(rows) { rows.map { it.id } }
@@ -156,15 +163,26 @@ fun PlayerChannelPanel(
     val countryList = rememberLazyListState()
     val groupList = key(selectedCountry) { rememberLazyListState() }
     val channelList = key(selectedCountry, selectedGroup) { rememberLazyListState() }
+    val secondChannelList = key(selectedCountry, selectedGroup) { rememberLazyListState() }
     val towardChannels = if (rtl) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
     val towardGroups = if (rtl) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
 
+    fun requestChannel(index: Int?) {
+        val next = index?.let(channelKeys::getOrNull) ?: return
+        channelTarget = next
+        focus.request(channelContext, next)
+    }
+
     fun moveChannelFocus(direction: Int) {
-        val at = positions[channelTarget] ?: 0
-        channelKeys.getOrNull(at + direction)?.let { next ->
-            channelTarget = next
-            focus.request(channelContext, next)
-        } ?: channelTarget?.let { focus.request(channelContext, it) }
+        val at = positions[channelTarget] ?: return
+        requestChannel(channelColumns.vertical(at, direction) ?: at)
+    }
+
+    fun moveAcrossColumns(towardSecond: Boolean) {
+        val at = positions[channelTarget] ?: return
+        val next = if (towardSecond) channelColumns.towardSecond(at)
+            else channelColumns.towardFirst(at)
+        requestChannel(next)
     }
 
     fun handleKey(event: KeyEvent): Boolean {
@@ -179,16 +197,23 @@ fun PlayerChannelPanel(
         return when (code) {
             towardChannels -> when (column) {
                 BrowserColumn.GROUPS -> {
-                    if (down && rows.isNotEmpty()) focus.request(channelContext, channelTarget
-                        ?.takeIf { positions.containsKey(it) } ?: rows.first().id)
+                    if (down) requestChannel(channelColumns.groupEntry(positions[channelTarget]))
                     true
                 }
-                BrowserColumn.CHANNELS -> true
+                BrowserColumn.CHANNELS -> {
+                    if (down) moveAcrossColumns(towardSecond = true)
+                    true
+                }
                 else -> false
             }
             towardGroups -> when (column) {
                 BrowserColumn.CHANNELS -> {
-                    if (down) focus.request(groupContext, selectedGroup)
+                    if (down) {
+                        val at = positions[channelTarget]
+                        if (at != null && channelColumns.isSecond(at)) {
+                            moveAcrossColumns(towardSecond = false)
+                        } else focus.request(groupContext, selectedGroup)
+                    }
                     true
                 }
                 BrowserColumn.GROUPS -> true
@@ -234,15 +259,17 @@ fun PlayerChannelPanel(
         focus.Restore(groupContext, groupKeys, ready = windowFocused, scrollTo = {
             if (groupList.layoutInfo.visibleItemsInfo.none { item -> item.index == it }) groupList.scrollToItem(it)
         })
-        focus.Restore(channelContext, channelKeys, ready = windowFocused, scrollTo = {
-            if (channelList.layoutInfo.visibleItemsInfo.none { item -> item.index == it }) channelList.scrollToItem(it)
+        focus.Restore(channelContext, channelKeys, ready = windowFocused, scrollTo = { index ->
+            val list = if (channelColumns.isSecond(index)) secondChannelList else channelList
+            val localIndex = channelColumns.localIndex(index)
+            if (list.layoutInfo.visibleItemsInfo.none { it.index == localIndex }) list.scrollToItem(localIndex)
         })
         focus.Restore(controlContext, controls, ready = windowFocused)
         Box(Modifier.fillMaxSize().padding(horizontal = 24.dp)
             .then(focus.inputModifier()).onPreviewKeyEvent { handleKey(it.nativeKeyEvent) }) {
             Surface(
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp)
-                    .widthIn(max = 920.dp).fillMaxWidth().fillMaxHeight(0.91f),
+                    .widthIn(max = 1080.dp).fillMaxWidth().fillMaxHeight(0.91f),
                 shape = MaterialTheme.shapes.large,
                 color = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -280,7 +307,7 @@ fun PlayerChannelPanel(
                         }
                         if (country != null && groups.isNotEmpty()) {
                             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                LazyColumn(state = groupList, modifier = Modifier.weight(0.8f).fillMaxHeight()
+                                LazyColumn(state = groupList, modifier = Modifier.weight(if (channelColumns.secondCount > 0) 0.75f else 0.8f).fillMaxHeight()
                                     .focusGroup().testTag("live-country-groups"),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     itemsIndexed(groups, key = { _, item -> item.key }) { index, item ->
@@ -303,23 +330,61 @@ fun PlayerChannelPanel(
                                             }.semantics { selected = item.key == selectedGroup }.testTag("live-group-${item.key}"))
                                     }
                                 }
-                                LazyColumn(state = channelList, modifier = Modifier.weight(1.2f).fillMaxHeight()
-                                    .focusGroup().testTag("player-channel-list"),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    itemsIndexed(rows, key = { _, channel -> channel.id }) { index, channel ->
-                                        PlayerChannelRow(channel, index + 1, channel.id == currentId,
-                                            onClick = {
-                                                focus.record(channelContext, channel.id, index)
-                                                onSelect(channel.id)
-                                            },
-                                            modifier = focus.target(channelContext, channel.id, index).onFocusChanged {
-                                                if (it.isFocused) {
-                                                    column = BrowserColumn.CHANNELS
-                                                    val pending = focus.pending?.preferred
-                                                    if (pending == null || pending == channel.id) channelTarget = channel.id
-                                                    onFocusChannel(channel.id)
-                                                }
-                                            }.testTag("player-channel-${channel.id}"))
+                                Column(Modifier.weight(if (channelColumns.secondCount > 0) 1f else 1.2f)
+                                    .fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (channelColumns.secondCount > 0) {
+                                        Text("1–${channelColumns.firstCount}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    LazyColumn(state = channelList, modifier = Modifier.weight(1f).fillMaxWidth()
+                                        .focusGroup().testTag("player-channel-list"),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        itemsIndexed(firstChannels, key = { _, channel -> channel.id }) { index, channel ->
+                                            PlayerChannelRow(channel, index + 1, channel.id == currentId,
+                                                onClick = {
+                                                    focus.record(channelContext, channel.id, index)
+                                                    onSelect(channel.id)
+                                                },
+                                                compact = channelColumns.secondCount > 0,
+                                                modifier = focus.target(channelContext, channel.id, index).onFocusChanged {
+                                                    if (it.isFocused) {
+                                                        column = BrowserColumn.CHANNELS
+                                                        val pending = focus.pending?.preferred
+                                                        if (pending == null || pending == channel.id) channelTarget = channel.id
+                                                        onFocusChannel(channel.id)
+                                                    }
+                                                }.testTag("player-channel-${channel.id}"))
+                                        }
+                                    }
+                                }
+                                if (channelColumns.secondCount > 0) {
+                                    Column(Modifier.weight(1f).fillMaxHeight(),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("${channelColumns.firstCount + 1}–${rows.size}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        LazyColumn(state = secondChannelList, modifier = Modifier.weight(1f).fillMaxWidth()
+                                            .focusGroup().testTag("player-channel-list-second"),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            itemsIndexed(secondChannels, key = { _, channel -> channel.id }) { local, channel ->
+                                                val index = channelColumns.firstCount + local
+                                                PlayerChannelRow(channel, index + 1, channel.id == currentId,
+                                                    onClick = {
+                                                        focus.record(channelContext, channel.id, index)
+                                                        onSelect(channel.id)
+                                                    },
+                                                    compact = true,
+                                                    modifier = focus.target(channelContext, channel.id, index).onFocusChanged {
+                                                        if (it.isFocused) {
+                                                            column = BrowserColumn.CHANNELS
+                                                            val pending = focus.pending?.preferred
+                                                            if (pending == null || pending == channel.id) channelTarget = channel.id
+                                                            onFocusChannel(channel.id)
+                                                        }
+                                                    }.testTag("player-channel-${channel.id}"))
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -341,7 +406,8 @@ fun PlayerChannelPanel(
 
 @Composable
 private fun PlayerChannelRow(
-    channel: Channel, number: Int, playing: Boolean, onClick: () -> Unit, modifier: Modifier
+    channel: Channel, number: Int, playing: Boolean, onClick: () -> Unit,
+    modifier: Modifier, compact: Boolean = false
 ) {
     var focused by remember { mutableStateOf(false) }
     val playingLabel = stringResource(R.string.player_playing)
@@ -358,14 +424,14 @@ private fun PlayerChannelRow(
                 playing -> MaterialTheme.colorScheme.secondary
                 else -> MaterialTheme.colorScheme.outline
             })) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.padding(if (compact) 8.dp else 12.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp)) {
             Text(number.toString(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-            ChannelLogo(channel.name, channel.logoUrl, Modifier.size(40.dp))
+            ChannelLogo(channel.name, channel.logoUrl, Modifier.size(if (compact) 32.dp else 40.dp))
             FavoriteBadge(channel.isFavorite)
             Column(Modifier.weight(1f)) {
                 Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium)
+                    style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium)
                 if (playing) Text(stringResource(R.string.player_playing), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
             }
         }

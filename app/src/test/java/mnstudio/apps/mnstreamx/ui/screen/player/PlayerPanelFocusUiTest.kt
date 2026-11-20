@@ -137,6 +137,27 @@ class PlayerPanelFocusUiTest {
         compose.runOnIdle { assertNull(played) }
     }
 
+    @Test fun horizontalNavigationAcrossBothColumnsPreservesRowWithoutPlayback() {
+        var played: String? = null
+        compose.setContent {
+            val input = LocalInputModeManager.current
+            SideEffect { input.requestInputMode(InputMode.Keyboard) }
+            IPTVAppTheme {
+                PlayerChannelPanel(channels, 75, false, { played = it }, {}, { _, _ -> false })
+            }
+        }
+        focusLatestDialog()
+        compose.waitForFocus("player-channel-75")
+        compose.onNodeWithTag("player-channel-list-second").assertIsDisplayed()
+        compose.onNodeWithTag("player-channel-75").performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.waitForFocus("player-channel-15")
+        compose.onNodeWithTag("player-channel-15").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.waitForFocus("player-channel-16")
+        compose.onNodeWithTag("player-channel-16").performKeyInput { pressKey(Key.DirectionRight) }
+        compose.waitForFocus("player-channel-76")
+        compose.runOnIdle { assertNull(played) }
+    }
+
     @Test fun closingTheChannelPanelReturnsToTheActionThatOpenedIt() {
         board()
         openChannels()
@@ -148,7 +169,8 @@ class PlayerPanelFocusUiTest {
     @Test fun reopeningThePanelRecallsTheBrowsedRowOutsideTheInitialViewport() {
         board()
         openChannels()
-        compose.onNodeWithTag("player-channel-list").performScrollToIndex(100)
+        // Channel 100 belongs to the second half (60..119), at local index 40.
+        compose.onNodeWithTag("player-channel-list-second").performScrollToIndex(40)
         compose.onNodeWithTag("player-channel-100").performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag("player-channels-close").performClick()
         focusLatestDialog()
