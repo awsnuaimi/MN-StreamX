@@ -106,6 +106,7 @@ internal fun PlayerRecentChannelsRail(
         }
     }
     val colors = MaterialTheme.colorScheme
+    val error = state.error
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     BoxWithConstraints(
         Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp),
@@ -135,7 +136,7 @@ internal fun PlayerRecentChannelsRail(
                     state.isLoading -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = colors.primary)
                     }
-                    state.error != null -> Text(stringResource(when (state.error) {
+                    error != null -> Text(stringResource(when (error) {
                         WatchHistoryError.READ -> R.string.history_read_error
                         WatchHistoryError.CHANNELS -> R.string.history_channels_error
                         WatchHistoryError.WRITE -> R.string.history_write_error
