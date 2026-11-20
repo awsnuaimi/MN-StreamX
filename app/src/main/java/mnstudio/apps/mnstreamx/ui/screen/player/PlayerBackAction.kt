@@ -1,11 +1,12 @@
 package mnstudio.apps.mnstreamx.ui.screen.player
 
-internal enum class PlayerBackAction { CLOSE_DETAILS, CLOSE_CHANNELS, CLOSE_MORE, HIDE_CONTROLS, HIDE_CARDS, EXIT, CLOSE_HISTORY, CLOSE_CAPTIONS }
+internal enum class PlayerBackAction { CLOSE_DETAILS, CLOSE_CHANNELS, CLOSE_MORE, HIDE_CONTROLS, HIDE_CARDS, EXIT, CLOSE_HISTORY, CLOSE_CAPTIONS, CLOSE_RECENTS }
 
 internal fun playerBackAction(panel: PlayerPanel): PlayerBackAction = when (panel) {
     PlayerPanel.DETAILS -> PlayerBackAction.CLOSE_DETAILS
     PlayerPanel.CAPTIONS -> PlayerBackAction.CLOSE_CAPTIONS
     PlayerPanel.HISTORY -> PlayerBackAction.CLOSE_HISTORY
+    PlayerPanel.RECENTS -> PlayerBackAction.CLOSE_RECENTS
     PlayerPanel.CHANNELS -> PlayerBackAction.CLOSE_CHANNELS
     PlayerPanel.MORE -> PlayerBackAction.CLOSE_MORE
     PlayerPanel.CONTROLS -> PlayerBackAction.HIDE_CONTROLS

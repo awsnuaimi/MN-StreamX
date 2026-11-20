@@ -36,6 +36,15 @@ class PlayerPanelStateTest {
         assertEquals(PlayerPanel.CARDS, history.closeTop().closeTop().panel)
         assertEquals(PlayerPanel.WATCHING, history.afterSelection().panel)
     }
+    @Test fun recentRailIsModalAndBackOrSelectionClosesToWatching() {
+        val state = PlayerPanelState().recents()
+        assertEquals(PlayerPanel.RECENTS, state.panel)
+        assertTrue(state.isModal)
+        assertEquals(PlayerBackAction.CLOSE_RECENTS, playerBackAction(state.panel))
+        assertEquals(PlayerPanel.WATCHING, state.closeTop().panel)
+        assertEquals(PlayerPanel.WATCHING, state.afterSelection().panel)
+        assertEquals(PlayerPanel.WATCHING, state.afterZapping().panel)
+    }
     @Test fun captionsReturnToMoreAndNeverChangeTheWatchingState() {
         val state = PlayerPanelState().cards().more().captions()
         assertTrue(state.isModal)

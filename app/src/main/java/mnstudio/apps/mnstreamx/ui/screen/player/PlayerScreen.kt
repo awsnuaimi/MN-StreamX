@@ -78,6 +78,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     var panels by rememberSaveable(stateSaver = PlayerPanelSaver) { mutableStateOf(PlayerPanelState()) }
     val cardsOpen = panels.panel == PlayerPanel.CARDS
     val browserOpen = cardsOpen || panels.panel == PlayerPanel.CHANNELS
+    val recentsOpen = panels.panel == PlayerPanel.RECENTS
     var detailsOpenedFromInfo by rememberSaveable { mutableStateOf(false) }
     var bannerVisible by remember { mutableStateOf(true) }
     var interaction by remember { mutableIntStateOf(0) }
@@ -135,6 +136,12 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         viewModel.requestChannels()
         panels = panels.more()
     }
+    fun openRecents() {
+        if (channel == null || showPlaybackOverlay) return
+        surface.hideControls()
+        panels = panels.recents()
+        bannerVisible = false
+    }
     fun openChannels() {
         viewModel.requestChannels()
         surface.hideControls(); panels = panels.channels(); focusedId = null
@@ -184,6 +191,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                 PlayerRemoteCommand.NEXT -> changeChannel(true)
                 PlayerRemoteCommand.PREVIOUS -> changeChannel(false)
                 PlayerRemoteCommand.OPEN_CARDS -> openCards()
+                PlayerRemoteCommand.OPEN_RECENTS -> openRecents()
                 PlayerRemoteCommand.HIDE_CARDS -> hideCards()
                 PlayerRemoteCommand.TOGGLE_CHANNELS -> openChannels()
                 PlayerRemoteCommand.SHOW_INFO -> {
@@ -289,6 +297,25 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                     onMore = if (cardsOpen) ::openMore else null, focusMore = cardsOpen && panels.focusMore,
                     onFocusChannel = { focusedId = it }, previewEpg = if (focused?.id == channel?.id) activeEpg else preview,
                     visible = visible)
+            }
+            if (recentsOpen) {
+                PlayerRecentChannelsRail(
+                    playingId = channel?.id,
+                    expectedSource = viewModel.browserScope,
+                    onDismiss = ::back,
+                    onPlay = { selected, source ->
+                        // Keep history/profile validation and the established navigation fallback.
+                        if (source == viewModel.browserScope) {
+                            surface.hideControls()
+                            panels = panels.afterSelection()
+                            focusEpoch++
+                            showBanner()
+                            if (!viewModel.selectHistoryChannel(selected, source)) {
+                                onOpenHistoryChannel(selected.id, source)
+                            }
+                        }
+                    }
+                )
             }
             if (panels.panel == PlayerPanel.MORE && channel != null) {
             val lastChannel by viewModel.lastChannelState.collectAsStateWithLifecycle()

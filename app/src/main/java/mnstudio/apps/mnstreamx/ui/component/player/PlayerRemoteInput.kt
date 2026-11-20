@@ -2,7 +2,7 @@ package mnstudio.apps.mnstreamx.ui.component.player
 
 import android.view.KeyEvent
 
-enum class PlayerRemoteCommand { NEXT, PREVIOUS, OPEN_CARDS, HIDE_CARDS, TOGGLE_CHANNELS, SHOW_INFO, BACK }
+enum class PlayerRemoteCommand { NEXT, PREVIOUS, OPEN_CARDS, HIDE_CARDS, OPEN_RECENTS, TOGGLE_CHANNELS, SHOW_INFO, BACK }
 
 fun handlePlayerRemoteKey(
     keyCode: Int, action: Int, repeatCount: Int,
@@ -19,6 +19,7 @@ fun handlePlayerRemoteKey(
         KeyEvent.KEYCODE_DPAD_UP -> if (!blocked && cardsVisible) PlayerRemoteCommand.HIDE_CARDS else null
         KeyEvent.KEYCODE_DPAD_DOWN -> if (!blocked && !cardsVisible) PlayerRemoteCommand.OPEN_CARDS else null
         KeyEvent.KEYCODE_DPAD_LEFT -> if (!blocked && !cardsVisible) PlayerRemoteCommand.TOGGLE_CHANNELS else null
+        KeyEvent.KEYCODE_DPAD_RIGHT -> if (!blocked && !cardsVisible) PlayerRemoteCommand.OPEN_RECENTS else null
         else -> null
     } ?: return false
     return when (action) {

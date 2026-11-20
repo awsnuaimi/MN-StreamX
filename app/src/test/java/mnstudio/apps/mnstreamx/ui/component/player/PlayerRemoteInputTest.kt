@@ -43,13 +43,30 @@ class PlayerRemoteInputTest {
     }
     @Test fun informationAndChannelChangesHaveDedicatedKeys() {
         val commands = mutableListOf<PlayerRemoteCommand>()
-        assertFalse(handlePlayerRemoteKey(KeyEvent.KEYCODE_DPAD_RIGHT, 0, 0, false, false, false, commands::add))
+        assertTrue(handlePlayerRemoteKey(KeyEvent.KEYCODE_DPAD_RIGHT, 0, 0, false, false, false, commands::add))
         assertTrue(handlePlayerRemoteKey(KeyEvent.KEYCODE_INFO, 0, 0, false, false, false, commands::add))
         assertTrue(handlePlayerRemoteKey(KeyEvent.KEYCODE_CHANNEL_DOWN, 0, 0, false, false, false, commands::add))
         assertFalse(handlePlayerRemoteKey(KeyEvent.KEYCODE_CHANNEL_DOWN, 0, 0, false, true, false, commands::add))
         assertFalse(handlePlayerRemoteKey(KeyEvent.KEYCODE_CHANNEL_UP, 0, 0, false, false, true, commands::add))
         assertFalse(handlePlayerRemoteKey(KeyEvent.KEYCODE_PAGE_UP, 0, 0, false, false, false, commands::add))
-        assertEquals(listOf(PlayerRemoteCommand.SHOW_INFO, PlayerRemoteCommand.PREVIOUS), commands)
+        assertEquals(listOf(PlayerRemoteCommand.OPEN_RECENTS, PlayerRemoteCommand.SHOW_INFO,
+            PlayerRemoteCommand.PREVIOUS), commands)
+    }
+    @Test fun rightOpensRecentsOnlyWhileWatchingAndConsumesRelease() {
+        val gate = PlayerRemoteKeyGate()
+        val commands = mutableListOf<PlayerRemoteCommand>()
+        assertTrue(gate.handle(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN, 0,
+            false, false, false, commands::add))
+        // A second event for the same physical press must not reopen it.
+        assertTrue(gate.handle(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN, 2,
+            true, true, false, commands::add))
+        assertTrue(gate.handle(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_UP, 0,
+            true, true, false, commands::add))
+        assertEquals(listOf(PlayerRemoteCommand.OPEN_RECENTS), commands)
+        assertFalse(gate.handle(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN, 0,
+            true, true, false, commands::add))
+        assertFalse(handlePlayerRemoteKey(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN,
+            0, false, false, true, commands::add))
     }
     @Test fun mediaAndSeekKeysRemainAvailableToTheNativePlayer() {
         assertFalse(handlePlayerRemoteKey(85, 0, 0, false, false, false) { fail() })
