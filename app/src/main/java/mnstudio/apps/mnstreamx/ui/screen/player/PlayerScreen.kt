@@ -79,6 +79,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     val cardsOpen = panels.panel == PlayerPanel.CARDS
     val browserOpen = cardsOpen || panels.panel == PlayerPanel.CHANNELS
     val recentsOpen = panels.panel == PlayerPanel.RECENTS
+    val playbackFocusActive = !panels.isModal && !browserOpen
     var detailsOpenedFromInfo by rememberSaveable { mutableStateOf(false) }
     var bannerVisible by remember { mutableStateOf(true) }
     var interaction by remember { mutableIntStateOf(0) }
@@ -181,7 +182,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
         if (activation.handle(event.keyCode, event.action, event.repeatCount,
                 panels.panel == PlayerPanel.WATCHING && !visible && !showPlaybackOverlay, ::showBanner)) return true
         return remoteKeys.handle(event.keyCode, event.action, event.repeatCount,
-            visible || panels.isModal, panels.isModal, cardsOpen) { command ->
+            visible || panels.isModal, panels.isModal, cardsOpen, showPlaybackOverlay) { command ->
             if (panels.isModal) {
                 if (command == PlayerRemoteCommand.BACK) back()
                 else if (panels.panel == PlayerPanel.CHANNELS && command == PlayerRemoteCommand.TOGGLE_CHANNELS) back()
@@ -220,14 +221,13 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
     }
     val requestInputEpoch = remember(focusEpoch, channel?.id, retry, showPlaybackOverlay, panels.panel) { FocusInputEpoch.value }
     LaunchedEffect(focusEpoch, channel?.id, retry, showPlaybackOverlay, panels.panel) {
-        if (!panels.isModal) {
+        if (playbackFocusActive) {
             lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
             withFrameNanos { }
             if (FocusInputEpoch.value != requestInputEpoch || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
                 return@LaunchedEffect
             when {
-                showPlaybackOverlay -> { surface.hideControls(); runCatching { errorFocus.requestFocus() } }
-                cardsOpen && channel != null -> Unit
+                showPlaybackOverlay -> surface.hideControls()
                 channel == null -> runCatching { rootFocus.requestFocus() }
                 else -> surface.requestFocus()
             }
@@ -271,7 +271,7 @@ private fun PlayerScreenContent(onBack: (String?) -> Unit, viewModel: PlayerView
                 state.queue.size > 0 || channel != null, errorFocus,
                 onRetry = { surface.cancelRecovery(); retry++; focusEpoch++ }, onChannels = ::openChannels,
                 onBack = { surface.cancelRecovery(); onBack(channel?.id) },
-                recovery = recovery)
+                recovery = recovery, focusActive = playbackFocusActive)
             if (browserOpen) {
                 val preferences: LiveTvPreferencesViewModel = hiltViewModel(key = "player-live-browser")
                 val personal by preferences.state.collectAsStateWithLifecycle()

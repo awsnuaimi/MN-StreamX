@@ -97,4 +97,43 @@ class PlayerRemoteInputTest {
         key.handle(20, 0, 0, false, false, false, commands::add)
         assertEquals(listOf(PlayerRemoteCommand.OPEN_CARDS, PlayerRemoteCommand.OPEN_CARDS), commands)
     }
+    @Test fun recoveryActionsReceiveEveryArrowPressRepeatAndRelease() {
+        val gate = PlayerRemoteKeyGate()
+        for (code in listOf(19, 20, 21, 22)) {
+            for ((action, repeat) in listOf(0 to 0, 0 to 3, 1 to 0)) {
+                assertFalse(gate.handle(code, action, repeat, false, false, false, true) { fail() })
+            }
+        }
+        for (code in listOf(23, 66, 160)) {
+            assertFalse(gate.handle(code, 0, 0, false, false, false, true) { fail() })
+            assertFalse(gate.handle(code, 1, 0, false, false, false, true) { fail() })
+        }
+    }
+    @Test fun recoveryPreservesBackMenuAndDedicatedChannelKeys() {
+        val gate = PlayerRemoteKeyGate(); val commands = mutableListOf<PlayerRemoteCommand>()
+        for (code in listOf(4, 82, 166, 167)) {
+            assertTrue(gate.handle(code, 0, 0, false, false, false, true, commands::add))
+            assertTrue(gate.handle(code, 0, 3, false, false, false, true, commands::add))
+            assertTrue(gate.handle(code, 1, 0, false, false, false, true, commands::add))
+        }
+        assertEquals(listOf(PlayerRemoteCommand.BACK, PlayerRemoteCommand.TOGGLE_CHANNELS,
+            PlayerRemoteCommand.NEXT, PlayerRemoteCommand.PREVIOUS), commands)
+    }
+    @Test fun aPressOwnedBeforeRecoveryCannotActivateANewlyFocusedAction() {
+        val gate = PlayerRemoteKeyGate(); val commands = mutableListOf<PlayerRemoteCommand>()
+        assertTrue(gate.handle(22, 0, 0, false, false, false, false, commands::add))
+        assertTrue(gate.handle(22, 0, 1, false, false, false, true, commands::add))
+        assertTrue(gate.handle(22, 1, 0, false, false, false, true, commands::add))
+        assertFalse(gate.handle(22, 0, 0, false, false, false, true, commands::add))
+        assertFalse(gate.handle(22, 1, 0, false, false, false, true, commands::add))
+        assertEquals(listOf(PlayerRemoteCommand.OPEN_RECENTS), commands)
+    }
+    @Test fun closingRecoveryRestoresWatchingArrowsWithoutChangingTheOldCallers() {
+        val gate = PlayerRemoteKeyGate(); val commands = mutableListOf<PlayerRemoteCommand>()
+        assertFalse(gate.handle(20, 0, 0, false, false, false, true, commands::add))
+        assertFalse(gate.handle(20, 1, 0, false, false, false, true, commands::add))
+        assertTrue(gate.handle(20, 0, 0, false, false, false, false, commands::add))
+        assertTrue(gate.handle(20, 1, 0, false, false, false, commands::add))
+        assertEquals(listOf(PlayerRemoteCommand.OPEN_CARDS), commands)
+    }
 }

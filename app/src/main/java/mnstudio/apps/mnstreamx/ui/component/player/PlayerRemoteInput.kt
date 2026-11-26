@@ -35,13 +35,21 @@ class PlayerRemoteKeyGate {
     fun reset() { held.clear() }
     fun handle(keyCode: Int, action: Int, repeatCount: Int,
         controlsVisible: Boolean, channelListOpen: Boolean, cardsVisible: Boolean,
+        onCommand: (PlayerRemoteCommand) -> Unit): Boolean =
+        handle(keyCode, action, repeatCount, controlsVisible, channelListOpen, cardsVisible,
+            playbackOverlayVisible = false, onCommand = onCommand)
+
+    /** Recovery actions own the arrows just like native controls; held presses keep their owner. */
+    fun handle(keyCode: Int, action: Int, repeatCount: Int,
+        controlsVisible: Boolean, channelListOpen: Boolean, cardsVisible: Boolean,
+        playbackOverlayVisible: Boolean,
         onCommand: (PlayerRemoteCommand) -> Unit): Boolean {
         if (keyCode in held) {
             if (action == KeyEvent.ACTION_UP) held.remove(keyCode)
             return true
         }
         val handled = handlePlayerRemoteKey(keyCode, action, repeatCount,
-            controlsVisible, channelListOpen, cardsVisible, onCommand)
+            controlsVisible || playbackOverlayVisible, channelListOpen, cardsVisible, onCommand)
         if (handled && action == KeyEvent.ACTION_DOWN) held.add(keyCode)
         return handled
     }
