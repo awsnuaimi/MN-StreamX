@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="caption_input_edit_hint">Press OK to edit; arrow navigation does not open the keyboard</string>
+    <string name="caption_input_finish_hint">Press Done or Back to finish typing</string>
+    <string name="caption_key_show">Show</string>
+    <string name="caption_key_hide">Hide</string>
+</resources>

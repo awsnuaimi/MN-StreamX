@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="caption_input_edit_hint">اضغط OK للتحرير؛ التنقل بالأسهم لا يفتح لوحة المفاتيح</string>
+    <string name="caption_input_finish_hint">اضغط تم أو رجوع لإنهاء الإدخال</string>
+    <string name="caption_key_show">إظهار</string>
+    <string name="caption_key_hide">إخفاء</string>
+</resources>

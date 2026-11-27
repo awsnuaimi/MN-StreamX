@@ -3,13 +3,11 @@
 package mnstudio.apps.mnstreamx.ui.screen.player
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -21,7 +19,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mnstudio.apps.mnstreamx.R
 import mnstudio.apps.mnstreamx.data.caption.CaptionModelCatalog
-import mnstudio.apps.mnstreamx.data.caption.PolishVoskModels
 import mnstudio.apps.mnstreamx.domain.model.*
 import mnstudio.apps.mnstreamx.domain.repository.CaptionDeviceStats
 import mnstudio.apps.mnstreamx.player.caption.EmbeddedCaptions
@@ -39,7 +36,6 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
     val tracks by embedded?.tracks?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList()) }
     val loading by embedded?.loading?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(true) }
     val settings = state.settings
-    val polishVosk = settings.translationBackend == TranslationBackend.OFFLINE_POLISH_VOSK
     var newCloudKey by remember { mutableStateOf("") }
     var selectedRegion by remember(state.cloudRegion) {
         mutableStateOf(state.cloudRegion.ifBlank { "germanywestcentral" })
@@ -88,10 +84,8 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             }
                         }
                     }
-                    if (settings.translationBackend != TranslationBackend.CLOUD) item {
-                        val bytes = if (polishVosk) PolishVoskModels.downloadBytes(settings.target.tag)
-                            else CaptionModelCatalog.totalBytes(settings.target.tag, settings.source)
-                        val mb = bytes / (1024 * 1024)
+                    if (settings.translationBackend == TranslationBackend.OFFLINE) item {
+                        val mb = CaptionModelCatalog.totalBytes(settings.target.tag, settings.source) / (1024 * 1024)
                         Text(stringResource(R.string.caption_download_size, mb), style = MaterialTheme.typography.bodySmall)
                     }
                     item {
@@ -110,12 +104,6 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
                     }
                     item {
-                        AppButton((if (polishVosk) "✓ " else "") + stringResource(R.string.caption_vosk_polish), {
-                            model.save(settings.copy(mode = CaptionMode.GENERATED,
-                                translationBackend = TranslationBackend.OFFLINE_POLISH_VOSK, source = "pl"))
-                        }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
-                    }
-                    item {
                         AppButton((if (settings.translationBackend == TranslationBackend.CLOUD) "✓ " else "") +
                             stringResource(R.string.cloud_engine_online), {
                                 model.save(settings.copy(translationBackend = TranslationBackend.CLOUD))
@@ -124,16 +112,22 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                     item { Text(stringResource(R.string.cloud_audio_notice), style = MaterialTheme.typography.bodySmall) }
                     item { Text(stringResource(if (state.cloudConfigured) R.string.cloud_key_saved else
                         R.string.cloud_key_missing), style = MaterialTheme.typography.bodySmall) }
-                    item {
-                        OutlinedTextField(value = newCloudKey, onValueChange = { newCloudKey = it.take(300) },
-                            modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.cloud_key_label)) },
-                            singleLine = true, visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                    item(key = "cloud-key-input") {
+                        CaptionTvEntryField(
+                            value = newCloudKey,
+                            onValueChange = { newCloudKey = it.take(300) },
+                            label = stringResource(R.string.cloud_key_label),
+                            secret = true,
+                            modifier = Modifier.fillMaxWidth().testTag("caption-cloud-key")
+                        )
                     }
-                    item {
-                        OutlinedTextField(value = selectedRegion, onValueChange = { selectedRegion = it.take(40) },
-                            modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.cloud_region_label)) },
-                            singleLine = true)
+                    item(key = "cloud-region-input") {
+                        CaptionTvEntryField(
+                            value = selectedRegion,
+                            onValueChange = { selectedRegion = it.take(40) },
+                            label = stringResource(R.string.cloud_region_label),
+                            modifier = Modifier.fillMaxWidth().testTag("caption-cloud-region")
+                        )
                     }
                     item {
                         AppButton(stringResource(R.string.cloud_key_save), {
@@ -164,7 +158,7 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             CaptionLanguage.fromTag(settings.source)?.nativeName.orEmpty()
                         AppButton(stringResource(R.string.caption_source, label), {
                             model.save(settings.copy(source = names[(names.indexOf(settings.source) + 1) % names.size]))
-                        }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving && !polishVosk)
+                        }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
                     }
                     item {
                         val size = stringResource(when (settings.textSize) {
