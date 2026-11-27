@@ -1,0 +1,5 @@
+Polish speech recognition model for the optional offline caption mode
+vosk-model-small-pl-0.22, distributed by Alpha Cephei under Apache License 2.0.
+https://alphacephei.com/vosk/models
+The model is downloaded unmodified. The Apache License 2.0 text is included
+in caption-engine-notices.txt in this directory.

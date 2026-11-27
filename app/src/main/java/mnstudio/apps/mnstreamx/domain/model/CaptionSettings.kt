@@ -1,7 +1,7 @@
 package mnstudio.apps.mnstreamx.domain.model
 
 enum class CaptionMode { OFF, EMBEDDED, GENERATED }
-enum class TranslationBackend { OFFLINE, CLOUD }
+enum class TranslationBackend { OFFLINE, CLOUD, OFFLINE_POLISH_VOSK }
 enum class CaptionLanguage(val tag: String, val nativeName: String) {
     ARABIC("ar", "العربية"), ENGLISH("en", "English"), GERMAN("de", "Deutsch"),
     POLISH("pl", "Polski"), HINDI("hi", "हिन्दी");
@@ -21,7 +21,11 @@ data class CaptionSettings(val mode: CaptionMode = CaptionMode.OFF,
     val target: CaptionLanguage = CaptionLanguage.ARABIC, val source: String = "auto",
     val textSize: CaptionTextSize = CaptionTextSize.MEDIUM, val shaded: Boolean = true,
     val translationBackend: TranslationBackend = TranslationBackend.OFFLINE) {
-    fun normalized() = copy(source = if (source == "auto") "auto" else CaptionLanguage.fromTag(source)?.tag ?: "auto")
+    fun normalized() = copy(source = when {
+        translationBackend == TranslationBackend.OFFLINE_POLISH_VOSK -> "pl"
+        source == "auto" -> "auto"
+        else -> CaptionLanguage.fromTag(source)?.tag ?: "auto"
+    })
 }
 data class SpeechText(val language: String, val text: String, val startMillis: Long = 0, val endMillis: Long = 0,
     val languageOnly: Boolean = false)

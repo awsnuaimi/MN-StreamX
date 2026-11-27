@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mnstudio.apps.mnstreamx.R
 import mnstudio.apps.mnstreamx.data.caption.CaptionModelCatalog
+import mnstudio.apps.mnstreamx.data.caption.PolishVoskModels
 import mnstudio.apps.mnstreamx.domain.model.*
 import mnstudio.apps.mnstreamx.domain.repository.CaptionDeviceStats
 import mnstudio.apps.mnstreamx.player.caption.EmbeddedCaptions
@@ -38,6 +39,7 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
     val tracks by embedded?.tracks?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList()) }
     val loading by embedded?.loading?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(true) }
     val settings = state.settings
+    val polishVosk = settings.translationBackend == TranslationBackend.OFFLINE_POLISH_VOSK
     var newCloudKey by remember { mutableStateOf("") }
     var selectedRegion by remember(state.cloudRegion) {
         mutableStateOf(state.cloudRegion.ifBlank { "germanywestcentral" })
@@ -86,8 +88,10 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             }
                         }
                     }
-                    if (settings.translationBackend == TranslationBackend.OFFLINE) item {
-                        val mb = CaptionModelCatalog.totalBytes(settings.target.tag, settings.source) / (1024 * 1024)
+                    if (settings.translationBackend != TranslationBackend.CLOUD) item {
+                        val bytes = if (polishVosk) PolishVoskModels.downloadBytes(settings.target.tag)
+                            else CaptionModelCatalog.totalBytes(settings.target.tag, settings.source)
+                        val mb = bytes / (1024 * 1024)
                         Text(stringResource(R.string.caption_download_size, mb), style = MaterialTheme.typography.bodySmall)
                     }
                     item {
@@ -104,6 +108,12 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             stringResource(R.string.cloud_engine_offline), {
                                 model.save(settings.copy(translationBackend = TranslationBackend.OFFLINE))
                             }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
+                    }
+                    item {
+                        AppButton((if (polishVosk) "✓ " else "") + stringResource(R.string.caption_vosk_polish), {
+                            model.save(settings.copy(mode = CaptionMode.GENERATED,
+                                translationBackend = TranslationBackend.OFFLINE_POLISH_VOSK, source = "pl"))
+                        }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
                     }
                     item {
                         AppButton((if (settings.translationBackend == TranslationBackend.CLOUD) "✓ " else "") +
@@ -154,7 +164,7 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             CaptionLanguage.fromTag(settings.source)?.nativeName.orEmpty()
                         AppButton(stringResource(R.string.caption_source, label), {
                             model.save(settings.copy(source = names[(names.indexOf(settings.source) + 1) % names.size]))
-                        }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
+                        }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving && !polishVosk)
                     }
                     item {
                         val size = stringResource(when (settings.textSize) {

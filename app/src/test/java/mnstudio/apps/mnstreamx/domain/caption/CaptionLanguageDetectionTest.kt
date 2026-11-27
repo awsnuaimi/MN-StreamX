@@ -16,6 +16,7 @@ class CaptionLanguageDetectionTest {
         val languages = mutableListOf<String>()
         val opened = mutableListOf<String>()
         val closed = mutableListOf<String>()
+        val requestedBackends = mutableListOf<TranslationBackend>()
         val routes = mutableListOf<Pair<String, String>>()
         val translated = mutableListOf<String>()
         private val input = object : CaptionAudioInput {
@@ -25,6 +26,11 @@ class CaptionLanguageDetectionTest {
         private val models = object : CaptionModels {
             override suspend fun prepare(progress: (Int) -> Unit) = error("Source required")
             override suspend fun prepare(source: String, progress: (Int) -> Unit) = File(source)
+            override suspend fun prepare(source: String, backend: TranslationBackend, progress: (Int) -> Unit): File {
+                requestedBackends += backend
+                return if (backend == TranslationBackend.OFFLINE_POLISH_VOSK) File("vosk-pl")
+                    else prepare(source, progress)
+            }
         }
         val pipeline = CaptionPipeline(scope.backgroundScope, StandardTestDispatcher(scope.testScheduler), models,
             SpeechEngineFactory { file ->
@@ -45,7 +51,8 @@ class CaptionLanguageDetectionTest {
                 override fun cancel() = Unit
                 override fun close() = Unit
             } }, CaptionDevice { true })
-        fun start(source: String = "auto") = pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = source))
+        fun start(source: String = "auto", backend: TranslationBackend = TranslationBackend.OFFLINE) =
+            pipeline.start(input, CaptionSettings(mode = CaptionMode.GENERATED, source = source, translationBackend = backend))
     }
     @Test fun polishDetectionNeedsNoFakeTranscriptAndPreparesTheArabicRouteBeforeTheNextWindow() = runTest {
         val session = Session(this); session.start(); runCurrent()
@@ -60,6 +67,21 @@ class CaptionLanguageDetectionTest {
         assertEquals(listOf("Dzień dobry. Pociąg odjeżdża."), session.translated)
         assertEquals("صباح الخير. يغادر القطار.", session.pipeline.uiState.value.cue?.text)
         session.pipeline.stop(); runCurrent(); assertEquals(listOf("auto"), session.closed)
+    }
+    @Test fun offlineVoskRoutesAudioToThePolishEngineAndPublishesOnlyTheArabicResult() = runTest {
+        val session = Session(this)
+        session.start(backend = TranslationBackend.OFFLINE_POLISH_VOSK)
+        runCurrent()
+        session.windows.send(AudioWindow(FloatArray(80000), 0))
+        runCurrent()
+        assertEquals(listOf(TranslationBackend.OFFLINE_POLISH_VOSK), session.requestedBackends)
+        assertEquals(listOf("vosk-pl"), session.opened)
+        assertEquals(listOf("pl"), session.languages)
+        assertEquals(listOf("pl" to "ar"), session.routes)
+        assertEquals("صباح الخير. يغادر القطار.", session.pipeline.uiState.value.cue?.text)
+        session.pipeline.stop()
+        runCurrent()
+        assertEquals(listOf("vosk-pl"), session.closed)
     }
     @Test fun selectingPolishExplicitlySkipsDetectionAndPublishesArabic() = runTest {
         val session = Session(this); session.start("pl"); runCurrent()

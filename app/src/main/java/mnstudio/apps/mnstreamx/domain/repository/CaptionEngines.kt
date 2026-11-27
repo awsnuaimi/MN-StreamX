@@ -4,6 +4,7 @@ import mnstudio.apps.mnstreamx.domain.model.SpeechText
 import mnstudio.apps.mnstreamx.domain.model.CaptionExitReport
 import mnstudio.apps.mnstreamx.domain.caption.CaptionResourceCheck
 import mnstudio.apps.mnstreamx.domain.caption.CaptionResourcePolicy
+import mnstudio.apps.mnstreamx.domain.model.TranslationBackend
 import java.io.File
 
 interface SpeechEngine : AutoCloseable {
@@ -21,7 +22,10 @@ fun interface SpeechEngineFactory { suspend fun open(model: File): SpeechEngine 
 interface CaptionModels {
     suspend fun prepare(progress: (Int) -> Unit): File
     suspend fun prepare(source: String, progress: (Int) -> Unit): File = prepare(progress)
+    suspend fun prepare(source: String, backend: TranslationBackend, progress: (Int) -> Unit): File =
+        prepare(source, progress)
     fun memoryStage(source: String): String = CaptionResourcePolicy.SPEECH
+    fun memoryStage(source: String, backend: TranslationBackend): String = memoryStage(source)
 }
 interface CaptionTranslator : AutoCloseable {
     suspend fun download(target: String, progress: (Int) -> Unit) = Unit

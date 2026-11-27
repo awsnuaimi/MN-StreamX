@@ -43,8 +43,12 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                 stage = check.stage, systemThresholdMb = check.systemThresholdMb))
             return check.allowed
         }
-        var source = if (settings.source == "auto") CaptionLanguage.fromTag(input.languageHint)?.tag ?: "auto"
-            else CaptionLanguage.fromTag(settings.source)?.tag ?: "auto"
+        val backend = settings.translationBackend
+        var source = when {
+            backend == TranslationBackend.OFFLINE_POLISH_VOSK -> "pl"
+            settings.source == "auto" -> CaptionLanguage.fromTag(input.languageHint)?.tag ?: "auto"
+            else -> CaptionLanguage.fromTag(settings.source)?.tag ?: "auto"
+        }
         val textTarget = settings.target.tag
         status(CaptionStatus.PREPARING)
         job = scope.launch {
@@ -67,8 +71,10 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                 }
                 withContext(worker) { inferenceLock.withLock {
                     if (!device.supported()) { status(CaptionStatus.UNAVAILABLE); return@withLock }
+                    if (backend == TranslationBackend.OFFLINE_POLISH_VOSK &&
+                        !ramAllowed(models.memoryStage(source, backend))) return@withLock
                     status(CaptionStatus.DOWNLOADING, 0)
-                    val model = models.prepare(source) { status(CaptionStatus.DOWNLOADING, it) }
+                    val model = models.prepare(source, backend) { status(CaptionStatus.DOWNLOADING, it) }
                     currentCoroutineContext().ensureActive()
                     val text = translators.create()
                     translator = text
@@ -76,7 +82,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                         text.prepareRoute(source, textTarget) { status(CaptionStatus.DOWNLOADING, it) }
                         var preparedSource = source
                         currentCoroutineContext().ensureActive()
-                        if (!ramAllowed(models.memoryStage(source))) return@withLock
+                        if (!ramAllowed(models.memoryStage(source, backend))) return@withLock
                         status(CaptionStatus.LOADING)
                         var voice = speech.open(model)
                         var voiceClosed = false

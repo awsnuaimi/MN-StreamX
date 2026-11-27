@@ -29,11 +29,12 @@ object CaptionResourcePolicy {
     const val BASE_COLD = "base-cold"
     const val BASE_STATE = "base-state"
     const val VOSK_COLD = "vosk-cold"
+    const val POLISH_VOSK_COLD = "vosk-polish-cold"
     const val VOSK_STATE = "vosk-state"
     const val LOCAL_WARM = "local-warm"
     const val NATIVE_TEXT_COLD = "native-text-cold"
     private val localStages = setOf(TINY_COLD, TINY_STATE, MOONSHINE_COLD, MOONSHINE_STATE, BASE_COLD, BASE_STATE,
-        VOSK_COLD, VOSK_STATE, LOCAL_WARM, NATIVE_TEXT_COLD)
+        VOSK_COLD, POLISH_VOSK_COLD, VOSK_STATE, LOCAL_WARM, NATIVE_TEXT_COLD)
     fun memory(target: String, availableBytes: Long, systemThresholdBytes: Long,
         systemLowMemory: Boolean): CaptionResourceCheck {
         // Incremental estimates for serial inference. Keep these separate from Android's
@@ -43,6 +44,8 @@ object CaptionResourcePolicy {
             TINY_COLD -> 128L
             TINY_STATE -> 64L
             VOSK_COLD -> 176L
+            // Provisional cold budget based on Vosk's estimate for small models.
+            POLISH_VOSK_COLD -> 300L
             BASE_STATE -> 96L
             MOONSHINE_STATE -> 32L
             VOSK_STATE -> 16L
@@ -62,7 +65,7 @@ object CaptionResourcePolicy {
         val available = availableBytes.coerceAtLeast(0)
         val stage = when (target) {
             SPEECH, SPEECH_WARM, "en", TINY_COLD, TINY_STATE, MOONSHINE_COLD, MOONSHINE_STATE, BASE_COLD, BASE_STATE,
-                VOSK_COLD, VOSK_STATE, LOCAL_WARM -> CaptionStage.SPEECH
+                VOSK_COLD, POLISH_VOSK_COLD, VOSK_STATE, LOCAL_WARM -> CaptionStage.SPEECH
             else -> CaptionStage.TRANSLATION
         }
         // Android's live pressure signal remains an independent veto. A large threshold
