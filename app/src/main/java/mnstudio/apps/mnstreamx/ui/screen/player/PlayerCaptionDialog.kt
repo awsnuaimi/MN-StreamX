@@ -3,6 +3,7 @@
 package mnstudio.apps.mnstreamx.ui.screen.player
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,11 +20,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mnstudio.apps.mnstreamx.R
 import mnstudio.apps.mnstreamx.data.caption.CaptionModelCatalog
+import mnstudio.apps.mnstreamx.data.caption.PolishVoskModels
 import mnstudio.apps.mnstreamx.domain.model.*
 import mnstudio.apps.mnstreamx.domain.repository.CaptionDeviceStats
 import mnstudio.apps.mnstreamx.player.caption.EmbeddedCaptions
 import mnstudio.apps.mnstreamx.ui.component.common.AppButton
 import mnstudio.apps.mnstreamx.ui.component.common.Resume
+import mnstudio.apps.mnstreamx.ui.component.common.TvTextInput
+import mnstudio.apps.mnstreamx.ui.component.common.TvTextInputDialog
+import mnstudio.apps.mnstreamx.ui.component.common.rememberTvTextInputState
 import mnstudio.apps.mnstreamx.ui.component.common.rememberContextFocus
 import mnstudio.apps.mnstreamx.viewmodel.CaptionViewModel
 import java.text.DateFormat
@@ -36,6 +41,8 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
     val tracks by embedded?.tracks?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList()) }
     val loading by embedded?.loading?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(true) }
     val settings = state.settings
+    val polishVosk = settings.translationBackend == TranslationBackend.OFFLINE_POLISH_VOSK
+    val textEditor = rememberTvTextInputState()
     var newCloudKey by remember { mutableStateOf("") }
     var selectedRegion by remember(state.cloudRegion) {
         mutableStateOf(state.cloudRegion.ifBlank { "germanywestcentral" })
@@ -54,7 +61,7 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(stringResource(R.string.caption_title), style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.primary)
-                LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(10.dp),
+                LazyColumn(Modifier.weight(1f, fill = false).testTag("caption-options"), verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(3.dp)) {
                     item { Text(stringResource(R.string.caption_local_description), style = MaterialTheme.typography.bodySmall) }
                     device?.let { snapshot ->
@@ -84,8 +91,10 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             }
                         }
                     }
-                    if (settings.translationBackend == TranslationBackend.OFFLINE) item {
-                        val mb = CaptionModelCatalog.totalBytes(settings.target.tag, settings.source) / (1024 * 1024)
+                    if (settings.translationBackend != TranslationBackend.CLOUD) item {
+                        val bytes = if (polishVosk) PolishVoskModels.downloadBytes(settings.target.tag)
+                            else CaptionModelCatalog.totalBytes(settings.target.tag, settings.source)
+                        val mb = bytes / (1024 * 1024)
                         Text(stringResource(R.string.caption_download_size, mb), style = MaterialTheme.typography.bodySmall)
                     }
                     item {
@@ -104,6 +113,12 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
                     }
                     item {
+                        AppButton((if (polishVosk) "✓ " else "") + stringResource(R.string.caption_vosk_polish), {
+                            model.save(settings.copy(mode = CaptionMode.GENERATED,
+                                translationBackend = TranslationBackend.OFFLINE_POLISH_VOSK, source = "pl"))
+                        }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
+                    }
+                    item {
                         AppButton((if (settings.translationBackend == TranslationBackend.CLOUD) "✓ " else "") +
                             stringResource(R.string.cloud_engine_online), {
                                 model.save(settings.copy(translationBackend = TranslationBackend.CLOUD))
@@ -112,28 +127,21 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                     item { Text(stringResource(R.string.cloud_audio_notice), style = MaterialTheme.typography.bodySmall) }
                     item { Text(stringResource(if (state.cloudConfigured) R.string.cloud_key_saved else
                         R.string.cloud_key_missing), style = MaterialTheme.typography.bodySmall) }
-                    item(key = "cloud-key-input") {
-                        CaptionTvEntryField(
-                            value = newCloudKey,
-                            onValueChange = { newCloudKey = it.take(300) },
-                            label = stringResource(R.string.cloud_key_label),
-                            secret = true,
-                            modifier = Modifier.fillMaxWidth().testTag("caption-cloud-key")
-                        )
+                    item {
+                        TvTextInput(textEditor, stringResource(R.string.cloud_key_label), newCloudKey,
+                            onValueChange = { newCloudKey = it }, modifier = Modifier.testTag("caption-cloud-key"),
+                            enabled = state.loaded && !state.cloudSaving, secret = true, maxLength = 300)
                     }
-                    item(key = "cloud-region-input") {
-                        CaptionTvEntryField(
-                            value = selectedRegion,
-                            onValueChange = { selectedRegion = it.take(40) },
-                            label = stringResource(R.string.cloud_region_label),
-                            modifier = Modifier.fillMaxWidth().testTag("caption-cloud-region")
-                        )
+                    item {
+                        TvTextInput(textEditor, stringResource(R.string.cloud_region_label), selectedRegion,
+                            onValueChange = { selectedRegion = it }, modifier = Modifier.testTag("caption-cloud-region"),
+                            enabled = state.loaded && !state.cloudSaving, keyboardType = KeyboardType.Ascii, maxLength = 40)
                     }
                     item {
                         AppButton(stringResource(R.string.cloud_key_save), {
                             model.saveCloudCredentials(newCloudKey, selectedRegion)
                             newCloudKey = ""
-                        }, Modifier.fillMaxWidth(), enabled = !state.cloudSaving && newCloudKey.length >= 10)
+                        }, Modifier.fillMaxWidth().testTag("caption-cloud-save"), enabled = !state.cloudSaving && newCloudKey.length >= 10)
                     }
                     if (state.cloudConfigured) item {
                         AppButton(stringResource(R.string.cloud_key_remove), model::deleteCloudCredentials,
@@ -158,7 +166,7 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
                             CaptionLanguage.fromTag(settings.source)?.nativeName.orEmpty()
                         AppButton(stringResource(R.string.caption_source, label), {
                             model.save(settings.copy(source = names[(names.indexOf(settings.source) + 1) % names.size]))
-                        }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving)
+                        }, Modifier.fillMaxWidth(), enabled = state.loaded && !state.saving && !polishVosk)
                     }
                     item {
                         val size = stringResource(when (settings.textSize) {
@@ -199,4 +207,5 @@ internal fun PlayerCaptionDialog(model: CaptionViewModel, embedded: EmbeddedCapt
             }
         }
     }
+    TvTextInputDialog(textEditor, enabled = state.loaded && !state.cloudSaving)
 }

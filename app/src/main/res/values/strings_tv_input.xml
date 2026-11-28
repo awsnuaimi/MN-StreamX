@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tv_input_edit">تحرير</string>
+    <string name="tv_input_show">إظهار الأحرف</string>
+    <string name="tv_input_hide">إخفاء الأحرف</string>
+    <string name="tv_input_apply">اعتماد</string>
+    <string name="tv_input_cancel">إلغاء</string>
+    <string name="tv_input_keyboard">فتح لوحة المفاتيح</string>
+    <string name="tv_input_keyboard_close">إغلاق لوحة المفاتيح</string>
+    <string name="tv_input_characters">%1$d حرفًا</string>
+</resources>

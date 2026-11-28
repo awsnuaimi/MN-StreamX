@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tv_input_edit">Bearbeiten</string>
+    <string name="tv_input_show">Zeichen anzeigen</string>
+    <string name="tv_input_hide">Zeichen ausblenden</string>
+    <string name="tv_input_apply">Übernehmen</string>
+    <string name="tv_input_cancel">Abbrechen</string>
+    <string name="tv_input_keyboard">Tastatur öffnen</string>
+    <string name="tv_input_keyboard_close">Tastatur schließen</string>
+    <string name="tv_input_characters">%1$d Zeichen</string>
+</resources>

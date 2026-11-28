@@ -28,6 +28,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.shadows.ShadowDialog
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -60,9 +61,8 @@ class SubscriptionsScreenTest {
         val repository = FakeSubscriptions().apply { latency = 0 }
         screen(repository)
         compose.onNodeWithTag("subscription-add").performScrollTo().performClick()
-        compose.onNodeWithTag("subscription-name").performScrollTo().performTextReplacement("Second")
-        compose.onNode(hasSetTextAction() and hasText("M3U-Playlist-URL"))
-            .performScrollTo().performTextReplacement(FakeSubscriptions.account("B").m3uUrl)
+        edit(compose.onNodeWithTag("subscription-name"), "Second")
+        edit(compose.onNode(hasClickAction() and hasText("M3U-Playlist-URL")), FakeSubscriptions.account("B").m3uUrl)
         compose.runOnIdle { assertEquals(Subscriptions.DEFAULT_ID, repository.catalog.value.activeId); assertEquals(0, repository.saves) }
         export("red-add")
         compose.onNodeWithTag("subscription-save").performScrollTo().performClick()
@@ -78,7 +78,7 @@ class SubscriptionsScreenTest {
         val second = repository.catalog.value.activeId
         val model = screen(repository)
         compose.onNodeWithTag("subscription-remove-$second").assertDoesNotExist()
-        compose.onNodeWithTag("subscription-name").performScrollTo().performTextReplacement("Unfinished")
+        edit(compose.onNodeWithTag("subscription-name"), "Unfinished")
         compose.onNodeWithTag("subscription-use-default").performScrollTo().performClick()
         compose.runOnIdle { assertNotNull(model.uiState.value.pending) }
         compose.onNodeWithTag("subscription-confirm").assertTextContains("Fortfahren")
@@ -103,13 +103,21 @@ class SubscriptionsScreenTest {
     @Test fun leavingADirtyFormUsesLocalizedConfirmationAndDoesNotSaveTheDraft() {
         val repository = FakeSubscriptions().apply { latency = 0 }
         val model = screen(repository)
-        compose.onNodeWithTag("subscription-name").performScrollTo().performTextReplacement("Draft")
+        edit(compose.onNodeWithTag("subscription-name"), "Draft")
         compose.onNodeWithText("Zurück").performClick()
         compose.onNodeWithText("Abbrechen").performClick()
         compose.runOnIdle { assertEquals(0, returned); assertTrue(model.uiState.value.dirty) }
         compose.onNodeWithText("Zurück").performClick()
         compose.onNodeWithText("Fortfahren").performClick()
-        compose.runOnIdle { assertEquals(1, returned); assertEquals("Original", repository.catalog.value.active.name) }
+        compose.runOnIdle { assertEquals(1, returned); assertEquals("Original", repository.catalog.value.activeName) }
+    }
+
+    private fun edit(field: SemanticsNodeInteraction, value: String) {
+        field.performScrollTo().performClick()
+        compose.runOnIdle { ShadowDialog.getLatestDialog().window!!.decorView.dispatchWindowFocusChanged(true) }
+        compose.waitUntil { runCatching { compose.onNodeWithTag("tv-input-editor").assertIsFocused() }.isSuccess }
+        compose.onNodeWithTag("tv-input-editor").performTextReplacement(value)
+        compose.onNodeWithTag("tv-input-apply").performClick()
     }
 
     private fun export(name: String) {

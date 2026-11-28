@@ -6,21 +6,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import mnstudio.apps.mnstreamx.ui.component.common.TvTextInput
+import mnstudio.apps.mnstreamx.ui.component.common.TvTextInputDialog
+import mnstudio.apps.mnstreamx.ui.component.common.TvTextInputState
+import mnstudio.apps.mnstreamx.ui.component.common.rememberTvTextInputState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import mnstudio.apps.mnstreamx.domain.model.AppSettings
 import mnstudio.apps.mnstreamx.domain.model.PlaylistSource
@@ -36,6 +30,7 @@ fun SettingsInputForm(
     onPasswordChanged: (String) -> Unit,
     onEpgChanged: (String) -> Unit
 ) {
+    val editor = rememberTvTextInputState()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.ui_source))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -45,21 +40,23 @@ fun SettingsInputForm(
                 onClick = { onSourceChanged(PlaylistSource.XTREAM) }, enabled = enabled, label = { Text("Xtream Codes") })
         }
         if (settings.source == PlaylistSource.M3U) {
-            SettingsField(stringResource(R.string.ui_m3u_url), settings.m3uUrl, enabled, onM3uChanged,
+            SettingsField(editor, stringResource(R.string.ui_m3u_url), settings.m3uUrl, enabled, onM3uChanged,
                 placeholder = "https://example.com/playlist.m3u", uri = true)
         } else {
-            SettingsField(stringResource(R.string.ui_xtream_server), settings.xtreamServer, enabled, onServerChanged,
+            SettingsField(editor, stringResource(R.string.ui_xtream_server), settings.xtreamServer, enabled, onServerChanged,
                 placeholder = "https://example.com:8080", uri = true)
-            SettingsField(stringResource(R.string.ui_xtream_user), settings.xtreamUsername, enabled, onUsernameChanged)
-            SettingsField(stringResource(R.string.ui_xtream_password), settings.xtreamPassword, enabled, onPasswordChanged, password = true)
+            SettingsField(editor, stringResource(R.string.ui_xtream_user), settings.xtreamUsername, enabled, onUsernameChanged)
+            SettingsField(editor, stringResource(R.string.ui_xtream_password), settings.xtreamPassword, enabled, onPasswordChanged, password = true)
             Text(stringResource(R.string.ui_xtream_hint))
         }
-        SettingsField(stringResource(R.string.ui_epg_url), settings.epgUrl, enabled, onEpgChanged, uri = true)
+        SettingsField(editor, stringResource(R.string.ui_epg_url), settings.epgUrl, enabled, onEpgChanged, uri = true)
     }
+    TvTextInputDialog(editor, enabled)
 }
 
 @Composable
 private fun SettingsField(
+    editor: TvTextInputState,
     label: String,
     value: String,
     enabled: Boolean,
@@ -68,21 +65,7 @@ private fun SettingsField(
     uri: Boolean = false,
     password: Boolean = false
 ) {
-    val focus = LocalFocusManager.current
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        enabled = enabled,
-        label = { Text(label) },
-        placeholder = { Text(placeholder) },
-        singleLine = true,
-        textStyle = LocalTextStyle.current.copy(textDirection = if (uri || password) TextDirection.Ltr else TextDirection.Content),
-        modifier = Modifier.fillMaxWidth(),
-        visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(
-            keyboardType = when { password -> KeyboardType.Password; uri -> KeyboardType.Uri; else -> KeyboardType.Text },
-            imeAction = ImeAction.Next
-        ),
-        keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) })
-    )
+    TvTextInput(editor, label, value, onValueChange, modifier = Modifier.fillMaxWidth(),
+        enabled = enabled, secret = password, placeholder = placeholder,
+        keyboardType = if (uri) KeyboardType.Uri else KeyboardType.Text)
 }

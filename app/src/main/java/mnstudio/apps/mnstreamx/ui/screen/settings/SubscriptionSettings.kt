@@ -14,6 +14,9 @@ import mnstudio.apps.mnstreamx.domain.model.Subscription
 import mnstudio.apps.mnstreamx.domain.model.HomeLanguage
 import mnstudio.apps.mnstreamx.domain.model.Subscriptions
 import mnstudio.apps.mnstreamx.ui.component.common.AppButton
+import mnstudio.apps.mnstreamx.ui.component.common.TvTextInput
+import mnstudio.apps.mnstreamx.ui.component.common.TvTextInputDialog
+import mnstudio.apps.mnstreamx.ui.component.common.rememberTvTextInputState
 import mnstudio.apps.mnstreamx.ui.component.common.secureStorageMessage
 import mnstudio.apps.mnstreamx.ui.screen.recovery.AppResetAction
 import mnstudio.apps.mnstreamx.ui.state.*
@@ -22,6 +25,7 @@ import mnstudio.apps.mnstreamx.viewmodel.SettingsViewModel
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SubscriptionSettings(state: SettingsUiState, model: SettingsViewModel) {
+    val editor = rememberTvTextInputState()
     if (state.isLoading) {
         CircularProgressIndicator()
         Text(stringResource(R.string.ui_settings_loading))
@@ -53,9 +57,9 @@ internal fun SubscriptionSettings(state: SettingsUiState, model: SettingsViewMod
             Modifier.testTag("subscription-add"), enabled = state.enabled && state.subscriptions.size < Subscriptions.LIMIT)
         Text(stringResource(if (state.editingSubscriptionId == null) R.string.subscription_new else R.string.subscription_editing),
             style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(state.subscriptionName, model::updateSubscriptionName, Modifier.fillMaxWidth().testTag("subscription-name"),
-            enabled = state.enabled, singleLine = true, label = { Text(stringResource(R.string.subscription_name)) },
-            placeholder = { Text(stringResource(R.string.subscription_default)) })
+        TvTextInput(editor, stringResource(R.string.subscription_name), state.subscriptionName,
+            model::updateSubscriptionName, Modifier.testTag("subscription-name"), enabled = state.enabled,
+            placeholder = stringResource(R.string.subscription_default))
         SettingsInputForm(state.settings, state.enabled, model::updateSource, model::updateM3uUrl,
             model::updateXtreamServer, model::updateXtreamUsername, model::updateXtreamPassword, model::updateEpgUrl)
         if (state.editingSubscriptionId != state.activeSubscriptionId) AppButton(stringResource(R.string.subscription_cancel_edit),
@@ -86,6 +90,7 @@ internal fun SubscriptionSettings(state: SettingsUiState, model: SettingsViewMod
             confirmButton = { TextButton(onClick = model::confirmAction, modifier = Modifier.testTag("subscription-confirm")) { Text(confirm) } },
             dismissButton = { TextButton(onClick = model::dismissAction) { Text(cancel) } })
     }
+    TvTextInputDialog(editor, state.enabled)
 }
 
 @Composable
