@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="polish_worker_paused">Polnische Untertitel sind pausiert. Zum Starten „Erzeugung erneut versuchen“ wählen.</string>
+    <string name="polish_worker_stopped">Der Untertiteldienst wurde beendet. Für einen neuen Versuch die Untertitel erneut starten.</string>
+</resources>

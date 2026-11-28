@@ -33,6 +33,8 @@ internal fun captionStatusText(value: CaptionProgress): String {
         if (detail != null) return stringResource(detail, available, required, memoryStage)
     }
     val text = stringResource(when (value.status) {
+        CaptionStatus.POLISH_PAUSED -> R.string.polish_worker_paused
+        CaptionStatus.POLISH_STOPPED -> R.string.polish_worker_stopped
         CaptionStatus.OFF -> R.string.caption_off
         CaptionStatus.EMBEDDED -> R.string.caption_embedded
         CaptionStatus.PREPARING -> R.string.caption_checking

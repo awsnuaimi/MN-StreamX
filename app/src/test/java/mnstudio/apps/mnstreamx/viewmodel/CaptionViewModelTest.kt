@@ -43,7 +43,7 @@ class CaptionViewModelTest {
     private val models = object : CaptionModels {
         override suspend fun prepare(progress: (Int) -> Unit): File { modelsRead++; return File("verified") }
     }
-    private fun model(repository: Repository): CaptionViewModel {
+    private fun model(repository: Repository, runner: PolishCaptionRunner? = null): CaptionViewModel {
         val speech = SpeechEngineFactory { object : SpeechEngine {
             override suspend fun transcribe(samples: FloatArray, language: String) = SpeechText("en", "hello", 0, 1000)
             override fun cancel() = Unit
@@ -60,9 +60,36 @@ class CaptionViewModelTest {
                 override suspend fun read(): CloudCredentials? = null
                 override suspend fun save(value: CloudCredentials) = Unit
                 override suspend fun clear() = Unit
-            }, CloudCaptionSessionFactory { _, _, _ -> error("unused in offline tests") })
+            }, CloudCaptionSessionFactory { _, _, _ -> error("unused in offline tests") }, polishRunner = runner)
             .also { store.put("captions", it) }
     }
+    @Test fun restoringPolishSettingsWaitsForAnExplicitUserAction() = runTest(dispatcher) {
+        val repository = Repository().apply {
+            values.value = CaptionSettings(mode = CaptionMode.GENERATED, source = "pl",
+                translationBackend = TranslationBackend.OFFLINE_POLISH_VOSK)
+        }
+        var armed = false
+        val runner = object : PolishCaptionRunner {
+            override fun arm(): Boolean { val changed = !armed; armed = true; return changed }
+            override suspend fun run(input: CaptionAudioInput, settings: CaptionSettings,
+                publish: (CaptionPipelineState) -> Unit) {
+                publish(CaptionPipelineState(CaptionProgress(if (armed) CaptionStatus.LISTENING else CaptionStatus.POLISH_PAUSED)))
+            }
+        }
+        val vm = model(repository, runner)
+        vm.bind(Input(), "channel")
+        runCurrent()
+        assertEquals(CaptionStatus.POLISH_PAUSED, vm.generated.value.progress.status)
+        vm.save(repository.values.value.copy(shaded = false))
+        runCurrent()
+        assertFalse(armed)
+        vm.retry()
+        runCurrent()
+        assertTrue(armed)
+        assertEquals(CaptionStatus.LISTENING, vm.generated.value.progress.status)
+        assertEquals(0, modelsRead)
+    }
+
     @Test fun disabledAndEmbeddedModesNeverLoadModels() = runTest(dispatcher) {
         val repository = Repository(); val model = model(repository)
         model.bind(Input(), "channel"); runCurrent(); assertEquals(0, modelsRead)

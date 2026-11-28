@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="polish_worker_paused">الترجمة البولندية متوقفة مؤقتًا. اختر «إعادة محاولة التوليد» لتشغيلها.</string>
+    <string name="polish_worker_stopped">توقفت خدمة الترجمة. يمكنك اختيار «إعادة محاولة التوليد» لتشغيلها مجددًا.</string>
+</resources>

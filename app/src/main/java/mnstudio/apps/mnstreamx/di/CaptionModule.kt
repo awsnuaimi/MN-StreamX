@@ -1,6 +1,10 @@
 package mnstudio.apps.mnstreamx.di
 
+import android.app.Application
 import android.content.Context
+import mnstudio.apps.mnstreamx.domain.caption.CaptionStorageCoordinator
+import mnstudio.apps.mnstreamx.domain.caption.PolishCaptionRunner
+import mnstudio.apps.mnstreamx.player.caption.PolishCaptionClient
 import android.os.Process
 import mnstudio.apps.mnstreamx.data.caption.*
 import mnstudio.apps.mnstreamx.data.datastore.CaptionDataStore
@@ -36,7 +40,12 @@ object CaptionModule {
         CloudCaptionSessionFactory { credentials, source, target ->
             AzureCloudCaptionSession(credentials, source, target)
         }
-    @Provides @Singleton fun device(@ApplicationContext context: Context): CaptionDevice = CaptionDeviceInfo(context)
+    @Provides @Singleton fun device(@ApplicationContext context: Context): CaptionDevice =
+        CaptionDeviceInfo(context, reserveSystemHeadroom = Application.getProcessName() == context.packageName + ":polish_captions")
+    @Provides @Singleton fun polishRunner(@ApplicationContext context: Context): PolishCaptionRunner =
+        PolishCaptionClient(context)
+    @Provides @Singleton fun storageCoordinator(@ApplicationContext context: Context) =
+        CaptionStorageCoordinator(context.noBackupFilesDir.resolve("caption-models.lock"))
     @Provides @Singleton internal fun speech(models: SourceCaptionModels): SpeechEngineFactory = SpeechEngineFactory(models::open)
     @Provides @Singleton internal fun translators(files: BergamotModelFiles, device: CaptionDevice): CaptionTranslatorFactory =
         CaptionTranslatorFactory { BergamotCaptionTranslator(files, device, keepWarm = {

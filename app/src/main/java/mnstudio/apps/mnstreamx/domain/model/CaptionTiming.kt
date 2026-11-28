@@ -2,4 +2,4 @@ package mnstudio.apps.mnstreamx.domain.model
 
 enum class CaptionStage { SPEECH, TRANSLATION, THROUGHPUT, LAG }
 data class CaptionTiming(val audioMillis: Long, val speechMillis: Long,
-    val translationMillis: Long, val memoryMillis: Long, val totalMillis: Long)
+    val translationMillis: Long, val memoryMillis: Long, val totalMillis: Long) : java.io.Serializable

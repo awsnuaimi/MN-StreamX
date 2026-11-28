@@ -12,7 +12,7 @@ import mnstudio.apps.mnstreamx.domain.model.CaptionExitReport
 import mnstudio.apps.mnstreamx.domain.repository.CaptionDevice
 import mnstudio.apps.mnstreamx.domain.repository.CaptionDeviceStats
 
-internal class CaptionDeviceInfo(context: Context) : CaptionDevice {
+internal class CaptionDeviceInfo(context: Context, private val reserveSystemHeadroom: Boolean = false) : CaptionDevice {
     private val memory = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     private val storage = context.noBackupFilesDir
     private val packageName = context.packageName
@@ -27,7 +27,7 @@ internal class CaptionDeviceInfo(context: Context) : CaptionDevice {
     override fun assess(target: String): CaptionResourceCheck {
         if (!supported()) return CaptionResourceCheck(false, CaptionStatus.UNAVAILABLE)
         val info = ActivityManager.MemoryInfo().also(memory::getMemoryInfo)
-        return CaptionResourcePolicy.memory(target, info.availMem, info.threshold, info.lowMemory)
+        return CaptionResourcePolicy.memory(target, info.availMem, info.threshold, info.lowMemory, reserveSystemHeadroom)
     }
     override fun canRun(target: String) = assess(target).allowed
 

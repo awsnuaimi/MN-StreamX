@@ -36,7 +36,7 @@ object CaptionResourcePolicy {
     private val localStages = setOf(TINY_COLD, TINY_STATE, MOONSHINE_COLD, MOONSHINE_STATE, BASE_COLD, BASE_STATE,
         VOSK_COLD, POLISH_VOSK_COLD, VOSK_STATE, LOCAL_WARM, NATIVE_TEXT_COLD)
     fun memory(target: String, availableBytes: Long, systemThresholdBytes: Long,
-        systemLowMemory: Boolean): CaptionResourceCheck {
+        systemLowMemory: Boolean, reserveSystemHeadroom: Boolean = false): CaptionResourceCheck {
         // Incremental estimates for serial inference. Keep these separate from Android's
         // background-process reclaim threshold: that value is not an allocation by us.
         val allocationMb = when (target) {
@@ -61,15 +61,16 @@ object CaptionResourcePolicy {
         }
         val allocation = allocationMb * MIB
         // Available RAM already excludes resident playback and loaded model weights.
-        val required = (if (target in localStages) 32 * MIB else PLAYBACK_HEADROOM) + allocation
+        val headroom = if (target in localStages) 32 * MIB else PLAYBACK_HEADROOM
+        val floor = if (reserveSystemHeadroom) systemThresholdBytes.coerceAtLeast(0) else 0
+        val required = floor.coerceAtMost(Long.MAX_VALUE - headroom - allocation) + headroom + allocation
         val available = availableBytes.coerceAtLeast(0)
         val stage = when (target) {
             SPEECH, SPEECH_WARM, "en", TINY_COLD, TINY_STATE, MOONSHINE_COLD, MOONSHINE_STATE, BASE_COLD, BASE_STATE,
                 VOSK_COLD, POLISH_VOSK_COLD, VOSK_STATE, LOCAL_WARM -> CaptionStage.SPEECH
             else -> CaptionStage.TRANSLATION
         }
-        // Android's live pressure signal remains an independent veto. A large threshold
-        // must not silently inflate the caption budget (e.g. 900 + 128 = 1028 MiB).
+        // The system pressure signal also vetoes admission independently of the estimate.
         return CaptionResourceCheck(!systemLowMemory && available > required,
             if (systemLowMemory) CaptionStatus.MEMORY_PRESSURE else CaptionStatus.LOW_MEMORY,
             available / MIB, ceilingMb(required), stage, ceilingMb(systemThresholdBytes.coerceAtLeast(0)))

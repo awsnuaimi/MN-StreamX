@@ -10,7 +10,7 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.TimeoutException
 
 class CaptionPipelineState(val progress: CaptionProgress = CaptionProgress(), val cue: CaptionCue? = null,
-    val processingMillis: Long? = null, val timing: CaptionTiming? = null)
+    val processingMillis: Long? = null, val timing: CaptionTiming? = null) : java.io.Serializable
 
 /** Serial inference, one waiting window, bounded latency, and generation-checked publication. */
 class CaptionPipeline(private val scope: CoroutineScope, private val worker: CoroutineDispatcher,
@@ -19,7 +19,8 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
     private val cloudVault: CloudCredentialVault? = null,
     private val cloudFactory: CloudCaptionSessionFactory? = null,
     private val now: () -> Long = { System.nanoTime() / 1000000 },
-    private val storageCoordinator: CaptionStorageCoordinator? = null) {
+    private val storageCoordinator: CaptionStorageCoordinator? = null,
+    private val polishRunner: PolishCaptionRunner? = null) {
     private val state = MutableStateFlow(CaptionPipelineState())
     val uiState = state.asStateFlow()
     @Volatile private var generation = 0L
@@ -29,7 +30,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
     @Volatile private var translator: CaptionTranslator? = null
     @Volatile private var cloudSession: CloudCaptionSession? = null
 
-    fun start(input: CaptionAudioInput, settings: CaptionSettings) {
+    fun start(input: CaptionAudioInput, settings: CaptionSettings): Job {
         stop()
         val token = generation
         fun status(value: CaptionStatus, percent: Int? = null) {
@@ -51,8 +52,19 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
         }
         val textTarget = settings.target.tag
         status(CaptionStatus.PREPARING)
-        job = scope.launch {
-            val admitted = storageCoordinator?.beginSession() ?: true
+        val running = scope.launch {
+            val remote = polishRunner
+            if (backend == TranslationBackend.OFFLINE_POLISH_VOSK && remote != null) {
+                withContext(worker) {
+                    inferenceLock.withLock {
+                        remote.run(input, settings) { next ->
+                            if (generation == token) state.value = next
+                        }
+                    }
+                }
+                return@launch
+            }
+            val admitted = storageCoordinator?.awaitSession() ?: true
             if (!admitted) { status(CaptionStatus.UNAVAILABLE); return@launch }
             try {
                 if (settings.translationBackend == TranslationBackend.CLOUD) {
@@ -288,7 +300,7 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                 CaptionDiagnosticJournal.record("CAPTION_FAILURE", 0, "type=oom")
                 status(CaptionStatus.LOW_MEMORY)
             }
-            catch (_: UnsatisfiedLinkError) {
+            catch (_: LinkageError) {
                 CaptionDiagnosticJournal.record("CAPTION_FAILURE", 0, "type=native_link")
                 status(CaptionStatus.UNAVAILABLE)
             }
@@ -299,6 +311,8 @@ class CaptionPipeline(private val scope: CoroutineScope, private val worker: Cor
                     else CaptionStatus.FAILED)
             } finally { storageCoordinator?.endSession() }
         }
+        job = running
+        return running
     }
     /** Cancellation never waits for native work on the player thread. */
     fun stop() {

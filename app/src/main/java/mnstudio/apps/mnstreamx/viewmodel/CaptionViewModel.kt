@@ -18,11 +18,12 @@ class CaptionViewModel @Inject constructor(private val repository: CaptionReposi
     @CaptionWorker worker: CoroutineDispatcher, models: CaptionModels, speech: SpeechEngineFactory,
     translators: CaptionTranslatorFactory, private val device: CaptionDevice,
     private val vault: CloudCredentialVault, cloudFactory: CloudCaptionSessionFactory,
-    storageCoordinator: CaptionStorageCoordinator = CaptionStorageCoordinator()) : ViewModel() {
+    storageCoordinator: CaptionStorageCoordinator = CaptionStorageCoordinator(),
+    private val polishRunner: PolishCaptionRunner? = null) : ViewModel() {
     private val state = MutableStateFlow(CaptionUiState())
     val uiState = state.asStateFlow()
     private val pipeline = CaptionPipeline(viewModelScope, worker, models, speech, translators, device, vault, cloudFactory,
-        storageCoordinator = storageCoordinator)
+        storageCoordinator = storageCoordinator, polishRunner = polishRunner)
     val generated = pipeline.uiState
     private var observe: Job? = null
     private var write: Job? = null
@@ -91,9 +92,21 @@ class CaptionViewModel @Inject constructor(private val repository: CaptionReposi
     }
     fun save(value: CaptionSettings) {
         if (!state.value.loaded || state.value.saving || write?.isActive == true) return
+        val previous = state.value.settings
+        val next = value.normalized()
+        val explicitPolish = next.mode == CaptionMode.GENERATED &&
+            next.translationBackend == TranslationBackend.OFFLINE_POLISH_VOSK &&
+            (previous == next || previous.mode != next.mode || previous.translationBackend != next.translationBackend)
         state.value = state.value.copy(saving = true, saveFailed = false)
         write = viewModelScope.launch {
-            try { repository.save(value.normalized()); state.value = state.value.copy(saving = false) }
+            try {
+                repository.save(next)
+                state.value = state.value.copy(saving = false)
+                if (explicitPolish && polishRunner?.arm() == true && state.value.settings == next) {
+                    activeKey = null
+                    reconcile()
+                }
+            }
             catch (error: CancellationException) { throw error }
             catch (_: Exception) { state.value = state.value.copy(saving = false, saveFailed = true) }
         }
@@ -103,7 +116,11 @@ class CaptionViewModel @Inject constructor(private val repository: CaptionReposi
         input = source; inputKey = key
         reconcile()
     }
-    fun retry() { activeKey = null; reconcile() }
+    fun retry() {
+        if (state.value.settings.translationBackend == TranslationBackend.OFFLINE_POLISH_VOSK) polishRunner?.arm()
+        activeKey = null
+        reconcile()
+    }
     fun deviceStats(): CaptionDeviceStats? = device.snapshot()
     private fun reconcile() {
         val settings = state.value.settings

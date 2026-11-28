@@ -54,6 +54,11 @@
                 android:resource="@xml/diagnostic_paths" />
         </provider>
 
+        <service
+            android:name=".player.caption.PolishCaptionService"
+            android:exported="false"
+            android:process=":polish_captions" />
+
         <activity
             android:name=".MainActivity"
             android:banner="@drawable/mn_streamx_tv_banner"
