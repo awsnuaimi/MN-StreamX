@@ -109,7 +109,7 @@ class SubscriptionsScreenTest {
         compose.runOnIdle { assertEquals(0, returned); assertTrue(model.uiState.value.dirty) }
         compose.onNodeWithText("Zurück").performClick()
         compose.onNodeWithText("Fortfahren").performClick()
-        compose.runOnIdle { assertEquals(1, returned); assertEquals("Original", repository.catalog.value.activeName) }
+        compose.runOnIdle { assertEquals(1, returned); assertEquals("Original", repository.catalog.value.active.name) }
     }
 
     private fun edit(field: SemanticsNodeInteraction, value: String) {

@@ -62,6 +62,7 @@ internal fun CaptionTvEntryField(
     var revealed by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
     val density = LocalDensity.current
+    val imeInsets = WindowInsets.ime
 
     fun finishEditing() {
         editing = false
@@ -70,10 +71,10 @@ internal fun CaptionTvEntryField(
 
     // The IME may consume BACK before Compose sees it. When it vanishes, exit edit mode
     // so that merely revisiting this field with DPAD does not reopen the TV keyboard.
-    LaunchedEffect(editing, density) {
+    LaunchedEffect(editing, density, imeInsets) {
         if (!editing) return@LaunchedEffect
         var wasVisible = false
-        snapshotFlow { WindowInsets.ime.getBottom(density) > 0 }.collect { visible ->
+        snapshotFlow { imeInsets.getBottom(density) > 0 }.collect { visible ->
             if (visible) wasVisible = true
             else if (wasVisible) finishEditing()
         }
@@ -108,7 +109,7 @@ internal fun CaptionTvEntryField(
                 else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.None,
-                autoCorrect = false,
+                autoCorrectEnabled = false,
                 keyboardType = if (secret && !revealed) KeyboardType.Password else KeyboardType.Ascii,
                 imeAction = ImeAction.Done
             ),
